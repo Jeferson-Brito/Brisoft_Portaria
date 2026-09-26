@@ -2,24 +2,48 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { api } from '../config/api';
 
+export interface Subscription {
+  plan: 'TRIAL' | 'BASIC' | 'ENTERPRISE';
+  status: 'TRIAL' | 'ACTIVE' | 'SUSPENDED' | 'CANCELLED' | 'EXPIRED';
+  trialEndsAt: string | null;
+  currentPeriodEnd?: string | null;
+  daysRemaining: number | null;
+}
+
 export interface User {
   id: string;
   name: string;
   email: string;
-  role: 'ADMIN' | 'SUPERVISOR' | 'CONCIERGE';
+  role: 'SUPER_ADMIN' | 'ADMIN' | 'SUPERVISOR' | 'CONCIERGE';
   organizationId: string;
   organizationName: string;
+  subscription?: Subscription | null;
 }
 
 interface AuthContextData {
   user: User | null;
   token: string | null;
   isLoading: boolean;
+  isSubscriptionBlocked: boolean;
   signIn: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
+  register: (data: RegisterData) => Promise<void>;
+  refreshSubscription: () => Promise<void>;
+}
+
+export interface RegisterData {
+  organizationName: string;
+  organizationDocument?: string;
+  adminName: string;
+  adminEmail: string;
+  adminPassword: string;
+  adminPhone?: string;
 }
 
 const AuthContext = createContext<AuthContextData>({} as AuthContextData);
+
+// Status que bloqueiam o uso do app (exceto SUPER_ADMIN)
+const BLOCKED_STATUSES = ['EXPIRED', 'SUSPENDED', 'CANCELLED'];
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
@@ -46,6 +70,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     loadStorageData();
   }, []);
 
+  // Verifica se a assinatura bloqueia o uso do app
+  const isSubscriptionBlocked =
+    user?.role !== 'SUPER_ADMIN' &&
+    !!user?.subscription &&
+    BLOCKED_STATUSES.includes(user.subscription.status);
+
   const signIn = async (email: string, password: string) => {
     try {
       const response = await api.post('/auth/login', { email, password });
@@ -65,6 +95,43 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const register = async (data: RegisterData) => {
+    try {
+      const response = await api.post('/auth/register', data);
+      const { admin, token: authToken, organization, subscription } = response.data.data;
+
+      const loggedUser: User = {
+        ...admin,
+        organizationId: organization.id,
+        organizationName: organization.name,
+        subscription,
+      };
+
+      setUser(loggedUser);
+      setToken(authToken);
+
+      await AsyncStorage.setItem('@combate_portaria:token', authToken);
+      await AsyncStorage.setItem('@combate_portaria:user', JSON.stringify(loggedUser));
+    } catch (err: any) {
+      const errorMsg =
+        err.response?.data?.error?.message ||
+        'Não foi possível criar a conta. Tente novamente.';
+      throw new Error(errorMsg);
+    }
+  };
+
+  // Atualiza os dados de subscription do usuário logado
+  const refreshSubscription = async () => {
+    try {
+      const response = await api.get('/auth/me');
+      const freshUser = response.data.data.user;
+      setUser(freshUser);
+      await AsyncStorage.setItem('@combate_portaria:user', JSON.stringify(freshUser));
+    } catch (err) {
+      console.warn('Não foi possível atualizar dados da assinatura.');
+    }
+  };
+
   const signOut = async () => {
     try {
       await AsyncStorage.removeItem('@combate_portaria:token');
@@ -77,7 +144,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   return (
-    <AuthContext.Provider value={{ user, token, isLoading, signIn, signOut }}>
+    <AuthContext.Provider value={{ user, token, isLoading, isSubscriptionBlocked, signIn, signOut, register, refreshSubscription }}>
       {children}
     </AuthContext.Provider>
   );

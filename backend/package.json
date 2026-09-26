@@ -13,6 +13,7 @@
     "prisma:push": "prisma db push",
     "prisma:init": "tsx prisma/init-real-admin.ts",
     "prisma:seed": "tsx prisma/seed.ts",
+    "prisma:super-admin": "tsx prisma/init-super-admin.ts",
     "prisma:studio": "prisma studio",
     "test": "vitest run"
   },

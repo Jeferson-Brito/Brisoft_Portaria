@@ -31,8 +31,34 @@ model Organization {
   auditLogs          AuditLog[]
   systemSettings     SystemSetting[]
   packages           Package[]
+  subscription       Subscription?
 
   @@map("organizations")
+}
+
+// -------------------------------------------------------------
+// ASSINATURAS / PLANOS (SaaS Multi-Tenant)
+// Status: TRIAL | ACTIVE | SUSPENDED | CANCELLED | EXPIRED
+// Plan: TRIAL | BASIC (único plano pago por enquanto)
+// -------------------------------------------------------------
+model Subscription {
+  id                   String    @id @default(uuid())
+  organizationId       String    @unique
+  plan                 String    @default("TRIAL")  // TRIAL | BASIC
+  status               String    @default("TRIAL")  // TRIAL | ACTIVE | SUSPENDED | CANCELLED | EXPIRED
+  trialEndsAt          DateTime?
+  currentPeriodStart   DateTime  @default(now())
+  currentPeriodEnd     DateTime?
+  stripeCustomerId     String?   // Para integração futura com Stripe
+  stripeSubscriptionId String?   // ID da assinatura no Stripe
+  priceMonthly         String    @default("149.00") // SQLite não suporta Decimal
+  maxUsers             Int       @default(10)
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@map("subscriptions")
 }
 
 // -------------------------------------------------------------

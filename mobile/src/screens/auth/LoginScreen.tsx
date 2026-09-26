@@ -31,7 +31,7 @@ import { useAuth } from '../../contexts/AuthContext';
 
 const { height } = Dimensions.get('window');
 
-export const LoginScreen: React.FC = () => {
+export const LoginScreen: React.FC<{ onRegisterPress?: () => void }> = ({ onRegisterPress }) => {
   const { signIn } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -168,6 +168,16 @@ export const LoginScreen: React.FC = () => {
               </View>
             )}
           </TouchableOpacity>
+
+          {/* Link para cadastro */}
+          {onRegisterPress && (
+            <TouchableOpacity onPress={onRegisterPress} style={{ alignItems: 'center', marginTop: 16 }}>
+              <Text style={{ color: '#64748B', fontSize: 14 }}>
+                Ainda não tem conta?{' '}
+                <Text style={{ color: '#3B82F6', fontWeight: '700' }}>Criar conta grátis</Text>
+              </Text>
+            </TouchableOpacity>
+          )}
 
           {/* Rodapé institucional */}
           <Text style={styles.footerText}>

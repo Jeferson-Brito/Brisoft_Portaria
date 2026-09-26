@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, Animated, Easing } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -6,6 +6,8 @@ import { AuthProvider, useAuth } from './src/contexts/AuthContext';
 import { RealtimeProvider } from './src/contexts/RealtimeContext';
 import { RealtimeAlertBanner } from './src/components/RealtimeAlertBanner';
 import { LoginScreen } from './src/screens/auth/LoginScreen';
+import { RegisterScreen } from './src/screens/auth/RegisterScreen';
+import { SubscriptionScreen } from './src/screens/auth/SubscriptionScreen';
 import { DashboardScreen } from './src/screens/concierge/DashboardScreen';
 
 const AnimatedLoadingScreen: React.FC = () => {
@@ -144,13 +146,28 @@ const AnimatedLoadingScreen: React.FC = () => {
 };
 
 const MainNavigator: React.FC = () => {
-  const { user, isLoading } = useAuth();
+  const { user, isLoading, isSubscriptionBlocked } = useAuth();
+  const [showRegister, setShowRegister] = useState(false);
 
   if (isLoading) {
     return <AnimatedLoadingScreen />;
   }
 
-  return user ? <DashboardScreen /> : <LoginScreen />;
+  // Não logado
+  if (!user) {
+    if (showRegister) {
+      return <RegisterScreen onLoginPress={() => setShowRegister(false)} />;
+    }
+    return <LoginScreen onRegisterPress={() => setShowRegister(true)} />;
+  }
+
+  // Logado mas assinatura bloqueada (expirada, suspensa, cancelada)
+  if (isSubscriptionBlocked) {
+    return <SubscriptionScreen />;
+  }
+
+  // Logado e assinatura ok
+  return <DashboardScreen />;
 };
 
 export default function App() {

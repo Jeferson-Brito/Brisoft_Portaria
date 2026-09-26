@@ -24,6 +24,22 @@ async function main() {
 
   console.log(`🏢 Organização criada: ${org.name} (${org.id})`);
 
+  // 1.1 Cria assinatura ativa para a organização de exemplo
+  await prisma.subscription.upsert({
+    where: { organizationId: org.id },
+    update: {},
+    create: {
+      organizationId: org.id,
+      plan: 'BASIC',
+      status: 'ACTIVE',
+      maxUsers: 10,
+      currentPeriodStart: new Date(),
+      currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 dias
+    },
+  });
+
+  console.log(`✅ Assinatura ativa criada para ${org.name}`);
+
   // 2. Cria os templates padrão de WhatsApp para a organização
   await prisma.messageTemplate.upsert({
     where: {
