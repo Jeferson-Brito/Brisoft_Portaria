@@ -52,6 +52,8 @@ import { ClientsManagementScreen } from '../admin/ClientsManagementScreen';
 import { OrganizationProfileScreen } from '../admin/OrganizationProfileScreen';
 import { ReportsScreen } from '../reports/ReportsScreen';
 import { ProfileScreen } from '../profile/ProfileScreen';
+import { SettingsScreen } from '../settings/SettingsScreen';
+import { SubscriptionScreen } from '../auth/SubscriptionScreen';
 import { CustomConfirmModal } from '../../components/CustomConfirmModal';
 import { AppHeader } from '../../components/AppHeader';
 import { useRealtime, RealtimeAlert } from '../../contexts/RealtimeContext';
@@ -73,6 +75,7 @@ export const DashboardScreen: React.FC = () => {
     | 'preauthorizations'
     | 'org_profile'
     | 'profile'
+    | 'subscription'
   >('dashboard');
   const [requestFilter, setRequestFilter] = useState<'ALL' | 'PENDING' | 'AUTHORIZED' | 'ENTERED'>('ALL');
   const [confirmEntryModal, setConfirmEntryModal] = useState<{
@@ -230,137 +233,27 @@ export const DashboardScreen: React.FC = () => {
       );
     }
 
-    if (activeTab === 'settings') {
-      const isConcierge = user?.role === 'CONCIERGE';
-      const isSupervisor = user?.role === 'SUPERVISOR';
-      const isAdmin = user?.role === 'ADMIN';
+    if (activeTab === 'subscription') {
+      return (
+        <SubscriptionScreen
+          onBack={() => setActiveTab('settings')}
+        />
+      );
+    }
 
+    if (activeTab === 'settings') {
       return (
         <View style={{ flex: 1, backgroundColor: '#F8FAFC' }}>
           <AppHeader
-            title="Configurações & Cadastros"
-            subtitle="Gestão do posto, operadores, unidades e conexões"
+            title="Configurações & Gestão"
+            subtitle="Operadores, moradores, WhatsApp e empresa"
             onBack={() => setActiveTab('dashboard')}
           />
-          <ScrollView
-            style={{ flex: 1 }}
-            contentContainerStyle={{ padding: 18, paddingBottom: bottomInset + 80 }}
-            showsVerticalScrollIndicator={false}
-          >
-            {/* Card 0: Meu Perfil (Todos os usuários, inclusive Porteiro) */}
-            <TouchableOpacity
-              style={styles.menuCard}
-              onPress={() => setActiveTab('profile')}
-              activeOpacity={0.85}
-            >
-              <View style={[styles.menuIconContainer, { backgroundColor: '#DBEAFE' }]}>
-                <User size={22} color="#1D4ED8" />
-              </View>
-              <View style={{ flex: 1, marginLeft: 14 }}>
-                <Text style={styles.menuCardTitle}>Meu Perfil & Senha</Text>
-                <Text style={styles.menuCardSubtitle}>
-                  Altere sua senha de acesso e dados cadastrais.
-                </Text>
-              </View>
-              <ChevronRight size={18} color="#94A3B8" />
-            </TouchableOpacity>
-
-            {/* Apenas Administrador: Perfil da Empresa / Segmento */}
-            {isAdmin && (
-              <TouchableOpacity
-                style={styles.menuCard}
-                onPress={() => setActiveTab('org_profile')}
-                activeOpacity={0.85}
-              >
-                <View style={[styles.menuIconContainer, { backgroundColor: '#FEF3C7' }]}>
-                  <Building size={22} color="#D97706" />
-                </View>
-                <View style={{ flex: 1, marginLeft: 14 }}>
-                  <Text style={styles.menuCardTitle}>Perfil do Estabelecimento / Empresa</Text>
-                  <Text style={styles.menuCardSubtitle}>
-                    {orgProfile.companyName
-                      ? `${orgProfile.companyName} (${orgProfile.type || 'Personalizado'})`
-                      : 'Defina o segmento: Residencial, Comercial, Clínica, etc.'}
-                  </Text>
-                </View>
-                <ChevronRight size={18} color="#94A3B8" />
-              </TouchableOpacity>
-            )}
-
-            {/* Supervisor e Administrador: Gerenciar Porteiros */}
-            {(isAdmin || isSupervisor) && (
-              <TouchableOpacity
-                style={styles.menuCard}
-                onPress={() => setActiveTab('users_mgmt')}
-                activeOpacity={0.85}
-              >
-                <View style={[styles.menuIconContainer, { backgroundColor: '#EFF6FF' }]}>
-                  <UserCheck size={22} color="#2563EB" />
-                </View>
-                <View style={{ flex: 1, marginLeft: 14 }}>
-                  <Text style={styles.menuCardTitle}>Cadastrar & Gerenciar Porteiros</Text>
-                  <Text style={styles.menuCardSubtitle}>
-                    Adicione operadores, defina senhas e perfis de acesso.
-                  </Text>
-                </View>
-                <ChevronRight size={18} color="#94A3B8" />
-              </TouchableOpacity>
-            )}
-
-            {/* Supervisor e Administrador: Gerenciar Clientes / Destinos */}
-            {(isAdmin || isSupervisor) && (
-              <TouchableOpacity
-                style={styles.menuCard}
-                onPress={() => setActiveTab('clients_mgmt')}
-                activeOpacity={0.85}
-              >
-                <View style={[styles.menuIconContainer, { backgroundColor: '#DCFCE7' }]}>
-                  <Building2 size={22} color="#16A34A" />
-                </View>
-                <View style={{ flex: 1, marginLeft: 14 }}>
-                  <Text style={styles.menuCardTitle}>
-                    {orgProfile.clientLabel
-                      ? `Cadastrar & Gerenciar ${orgProfile.clientLabel}s`
-                      : 'Cadastrar & Gerenciar Moradores'}
-                  </Text>
-                  <Text style={styles.menuCardSubtitle}>
-                    Cadastre unidades, residentes e números de WhatsApp.
-                  </Text>
-                </View>
-                <ChevronRight size={18} color="#94A3B8" />
-              </TouchableOpacity>
-            )}
-
-            {/* Apenas Administrador: Conexão WhatsApp */}
-            {isAdmin && (
-              <TouchableOpacity
-                style={styles.menuCard}
-                onPress={() => setActiveTab('whatsapp')}
-                activeOpacity={0.85}
-              >
-                <View style={[styles.menuIconContainer, { backgroundColor: '#EDE9FE' }]}>
-                  <MessageSquare size={22} color="#7C3AED" />
-                </View>
-                <View style={{ flex: 1, marginLeft: 14 }}>
-                  <Text style={styles.menuCardTitle}>Conexão WhatsApp (Baileys)</Text>
-                  <Text style={styles.menuCardSubtitle}>
-                    Aparelhos conectados, QR Code ao vivo e status.
-                  </Text>
-                </View>
-                <ChevronRight size={18} color="#94A3B8" />
-              </TouchableOpacity>
-            )}
-
-            {/* Logout */}
-            <TouchableOpacity
-              style={styles.settingsLogoutBtn}
-              onPress={signOut}
-              activeOpacity={0.85}
-            >
-              <LogOut size={18} color={colors.statusDenied} />
-              <Text style={styles.settingsLogoutBtnText}>Sair da Conta</Text>
-            </TouchableOpacity>
-          </ScrollView>
+          <SettingsScreen
+            onNavigate={(screen) => setActiveTab(screen)}
+            orgProfile={orgProfile}
+            bottomInset={bottomInset}
+          />
         </View>
       );
     }
@@ -745,36 +638,35 @@ export const DashboardScreen: React.FC = () => {
             )}
           </TouchableOpacity>
 
-          {/* 4. Presentes */}
-          <TouchableOpacity
-            style={styles.tabItem}
-            onPress={() => setActiveTab('present')}
-            activeOpacity={0.8}
-          >
-            <View>
-              <Users
-                size={22}
-                color={activeTab === 'present' ? '#2563EB' : '#94A3B8'}
-              />
-              {summary.presentCount > 0 && (
-                <View style={styles.tabBadgeDot}>
-                  <Text style={styles.tabBadgeText}>{summary.presentCount}</Text>
-                </View>
-              )}
-            </View>
-            <Text
-              style={[
-                styles.tabLabel,
-                activeTab === 'present' && styles.tabLabelActive,
-              ]}
+          {/* 4. Presentes (para Portaria) ou Relatórios (para Admin/Supervisor) */}
+          {isConcierge ? (
+            <TouchableOpacity
+              style={styles.tabItem}
+              onPress={() => setActiveTab('present')}
+              activeOpacity={0.8}
             >
-              Presentes
-            </Text>
-            {activeTab === 'present' && <View style={styles.activeTabIndicator} />}
-          </TouchableOpacity>
-
-          {/* 5. Relatórios - Oculto para Porteiros (Item 3) */}
-          {!isConcierge && (
+              <View>
+                <Users
+                  size={22}
+                  color={activeTab === 'present' ? '#2563EB' : '#94A3B8'}
+                />
+                {summary.presentCount > 0 && (
+                  <View style={styles.tabBadgeDot}>
+                    <Text style={styles.tabBadgeText}>{summary.presentCount}</Text>
+                  </View>
+                )}
+              </View>
+              <Text
+                style={[
+                  styles.tabLabel,
+                  activeTab === 'present' && styles.tabLabelActive,
+                ]}
+              >
+                Presentes
+              </Text>
+              {activeTab === 'present' && <View style={styles.activeTabIndicator} />}
+            </TouchableOpacity>
+          ) : (
             <TouchableOpacity
               style={styles.tabItem}
               onPress={() => setActiveTab('reports')}
@@ -795,6 +687,41 @@ export const DashboardScreen: React.FC = () => {
               {activeTab === 'reports' && <View style={styles.activeTabIndicator} />}
             </TouchableOpacity>
           )}
+
+          {/* 5. Ajustes / Configurações (Sempre visível para todos os perfis) */}
+          {(() => {
+            const isSettingsTabActive = [
+              'settings',
+              'whatsapp',
+              'users_mgmt',
+              'clients_mgmt',
+              'org_profile',
+              'profile',
+              'subscription',
+            ].includes(activeTab);
+
+            return (
+              <TouchableOpacity
+                style={styles.tabItem}
+                onPress={() => setActiveTab('settings')}
+                activeOpacity={0.8}
+              >
+                <Settings
+                  size={22}
+                  color={isSettingsTabActive ? '#2563EB' : '#94A3B8'}
+                />
+                <Text
+                  style={[
+                    styles.tabLabel,
+                    isSettingsTabActive && styles.tabLabelActive,
+                  ]}
+                >
+                  Ajustes
+                </Text>
+                {isSettingsTabActive && <View style={styles.activeTabIndicator} />}
+              </TouchableOpacity>
+            );
+          })()}
         </View>
 
         {/* Modal Nova Solicitação */}

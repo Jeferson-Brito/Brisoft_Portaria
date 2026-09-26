@@ -25,22 +25,32 @@ const FEATURES = [
   { icon: '🔔', title: 'Notificações em tempo real', desc: 'Push e som quando o morador autoriza' },
 ];
 
-export const SubscriptionScreen: React.FC = () => {
+export const SubscriptionScreen: React.FC<{ onBack?: () => void }> = ({ onBack }) => {
   const { user, signOut, refreshSubscription } = useAuth();
   const sub = user?.subscription;
   const [isRefreshing, setIsRefreshing] = useState(false);
 
+  const isActive = sub?.status === 'ACTIVE';
+  const isTrialActive = sub?.status === 'TRIAL' && (sub?.daysRemaining ?? 0) > 0;
   const isExpiredTrial = sub?.status === 'TRIAL' && (sub?.daysRemaining ?? 0) <= 0;
   const isSuspended = sub?.status === 'SUSPENDED';
   const isCancelled = sub?.status === 'CANCELLED';
 
-  const title = isSuspended
+  const title = isActive
+    ? 'Plano Ativo'
+    : isTrialActive
+    ? 'Período de Testes'
+    : isSuspended
     ? 'Assinatura Suspensa'
     : isCancelled
     ? 'Assinatura Cancelada'
     : 'Período de Teste Expirado';
 
-  const subtitle = isSuspended
+  const subtitle = isActive
+    ? 'Seu plano profissional está ativo e liberado.'
+    : isTrialActive
+    ? `Você tem ${sub?.daysRemaining ?? 7} dias de teste gratuito.`
+    : isSuspended
     ? 'Sua assinatura foi suspensa por falta de pagamento.'
     : isCancelled
     ? 'Sua assinatura foi cancelada. Renove para continuar usando.'
@@ -66,14 +76,22 @@ export const SubscriptionScreen: React.FC = () => {
 
   return (
     <SafeAreaView style={styles.container}>
+      {/* Botão Voltar se acessado pelas configurações */}
+      {onBack && (
+        <View style={styles.topBackBar}>
+          <TouchableOpacity onPress={onBack} style={styles.backBtn} activeOpacity={0.7}>
+            <Text style={styles.backBtnText}>‹ Voltar para Configurações</Text>
+          </TouchableOpacity>
+        </View>
+      )}
       <ScrollView
         contentContainerStyle={styles.scroll}
         showsVerticalScrollIndicator={false}
       >
-        {/* Header bloqueado */}
+        {/* Header */}
         <View style={styles.lockedHeader}>
-          <View style={styles.lockIcon}>
-            <Text style={styles.lockEmoji}>🔒</Text>
+          <View style={[styles.lockIcon, (isActive || isTrialActive) && { backgroundColor: '#1E3A8A' }]}>
+            <Text style={styles.lockEmoji}>{isActive ? '💎' : isTrialActive ? '⏱️' : '🔒'}</Text>
           </View>
           <Text style={styles.lockTitle}>{title}</Text>
           <Text style={styles.lockSubtitle}>{subtitle}</Text>
@@ -292,5 +310,23 @@ const styles = StyleSheet.create({
   logoutText: {
     color: '#475569',
     fontSize: 13,
+  },
+  topBackBar: {
+    width: '100%',
+    paddingHorizontal: 20,
+    paddingTop: 10,
+    paddingBottom: 4,
+  },
+  backBtn: {
+    alignSelf: 'flex-start',
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  backBtnText: {
+    color: '#93C5FD',
+    fontSize: 13,
+    fontWeight: '700',
   },
 });
