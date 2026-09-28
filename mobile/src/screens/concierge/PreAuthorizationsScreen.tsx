@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -28,6 +28,7 @@ import { api } from '../../config/api';
 import { useRealtime } from '../../contexts/RealtimeContext';
 import { NewPreAuthorizationModal } from './NewPreAuthorizationModal';
 import { AppHeader } from '../../components/AppHeader';
+import { ScrollToTopButton } from '../../components/ScrollToTopButton';
 
 interface PreAuthorizationsScreenProps {
   onBack?: () => void;
@@ -59,6 +60,8 @@ interface PreAuthItem {
 
 export const PreAuthorizationsScreen: React.FC<PreAuthorizationsScreenProps> = ({ onBack }) => {
   const [items, setItems] = useState<PreAuthItem[]>([]);
+  const listRef = useRef<FlatList>(null);
+  const [showScrollTop, setShowScrollTop] = useState(false);
   const [search, setSearch] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -256,10 +259,13 @@ export const PreAuthorizationsScreen: React.FC<PreAuthorizationsScreenProps> = (
         </View>
       ) : (
         <FlatList
+          ref={listRef}
           data={items}
           keyExtractor={(item) => item.id}
           renderItem={renderItem}
           contentContainerStyle={styles.listContent}
+          scrollEventThrottle={16}
+          onScroll={(e) => setShowScrollTop(e.nativeEvent.contentOffset.y > 150)}
           refreshControl={
             <RefreshControl
               refreshing={isRefreshing}
@@ -281,6 +287,11 @@ export const PreAuthorizationsScreen: React.FC<PreAuthorizationsScreenProps> = (
           }
         />
       )}
+      <ScrollToTopButton
+        visible={showScrollTop}
+        onPress={() => listRef.current?.scrollToOffset({ offset: 0, animated: true })}
+        bottom={24}
+      />
 
       {/* Modal de Nova Pré-Autorização */}
       <NewPreAuthorizationModal

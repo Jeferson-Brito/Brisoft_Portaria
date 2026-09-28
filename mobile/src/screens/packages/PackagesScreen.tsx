@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -38,6 +38,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { colors } from '../../theme/colors';
 import { api } from '../../config/api';
 import { AppHeader } from '../../components/AppHeader';
+import { ScrollToTopButton } from '../../components/ScrollToTopButton';
 
 interface PackagesScreenProps {
   onBack?: () => void;
@@ -45,6 +46,8 @@ interface PackagesScreenProps {
 
 export const PackagesScreen: React.FC<PackagesScreenProps> = ({ onBack }) => {
   const [activeSubTab, setActiveSubTab] = useState<'pending' | 'history'>('pending');
+  const listRef = useRef<FlatList>(null);
+  const [showScrollTop, setShowScrollTop] = useState(false);
   const [packages, setPackages] = useState<any[]>([]);
   const [historyPackages, setHistoryPackages] = useState<any[]>([]);
   const [destinations, setDestinations] = useState<any[]>([]);
@@ -301,8 +304,11 @@ export const PackagesScreen: React.FC<PackagesScreenProps> = ({ onBack }) => {
         </View>
       ) : (
         <FlatList
+          ref={listRef}
           data={currentList}
           keyExtractor={(item) => item.id}
+          scrollEventThrottle={16}
+          onScroll={(e) => setShowScrollTop(e.nativeEvent.contentOffset.y > 150)}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
@@ -447,6 +453,11 @@ export const PackagesScreen: React.FC<PackagesScreenProps> = ({ onBack }) => {
           }}
         />
       )}
+      <ScrollToTopButton
+        visible={showScrollTop}
+        onPress={() => listRef.current?.scrollToOffset({ offset: 0, animated: true })}
+        bottom={85}
+      />
 
       {/* Modal: Receber Encomenda com Foto Obrigatória */}
       <Modal visible={isNewModalOpen} animationType="slide" transparent>

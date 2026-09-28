@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -23,6 +23,7 @@ import { colors } from '../../theme/colors';
 import { api } from '../../config/api';
 import { useRealtime } from '../../contexts/RealtimeContext';
 import { AppHeader } from '../../components/AppHeader';
+import { ScrollToTopButton } from '../../components/ScrollToTopButton';
 
 export interface PendingRequestItem {
   id: string;
@@ -61,6 +62,8 @@ export interface PendingRequestItem {
 
 export const OpenRequestsScreen: React.FC<{ hideHeader?: boolean }> = ({ hideHeader = false }) => {
   const [requests, setRequests] = useState<PendingRequestItem[]>([]);
+  const listRef = useRef<FlatList>(null);
+  const [showScrollTop, setShowScrollTop] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const { addListener, isConnected } = useRealtime();
@@ -239,9 +242,12 @@ export const OpenRequestsScreen: React.FC<{ hideHeader?: boolean }> = ({ hideHea
         />
       )}
       <FlatList
+        ref={listRef}
         data={requests}
         keyExtractor={(item) => item.id}
         scrollEnabled={!hideHeader}
+        scrollEventThrottle={16}
+        onScroll={(e) => setShowScrollTop(e.nativeEvent.contentOffset.y > 150)}
         refreshControl={
           !hideHeader ? (
             <RefreshControl
@@ -342,6 +348,11 @@ export const OpenRequestsScreen: React.FC<{ hideHeader?: boolean }> = ({ hideHea
             </View>
           </View>
         )}
+      />
+      <ScrollToTopButton
+        visible={showScrollTop}
+        onPress={() => listRef.current?.scrollToOffset({ offset: 0, animated: true })}
+        bottom={85}
       />
     </View>
   );

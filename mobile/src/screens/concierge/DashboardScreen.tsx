@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -23,6 +23,7 @@ import {
   Settings,
   User,
   ChevronRight,
+  ChevronLeft,
   ShieldCheck,
   CalendarCheck,
   BarChart3,
@@ -34,6 +35,12 @@ import {
   LogIn,
   Car,
   Building,
+  Calendar,
+  Truck,
+  Barcode,
+  CheckCircle,
+  Filter,
+  X,
 } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from '../../theme/colors';
@@ -56,11 +63,51 @@ import { SettingsScreen } from '../settings/SettingsScreen';
 import { SubscriptionScreen } from '../auth/SubscriptionScreen';
 import { CustomConfirmModal } from '../../components/CustomConfirmModal';
 import { AppHeader } from '../../components/AppHeader';
+import { ScrollToTopButton } from '../../components/ScrollToTopButton';
 import { useRealtime, RealtimeAlert } from '../../contexts/RealtimeContext';
+
+type DateFilterType = 'ALL' | 'TODAY' | 'YESTERDAY' | 'LAST_7_DAYS';
+
+const dateFilterLabels: Record<DateFilterType, string> = {
+  ALL: 'Todas as datas',
+  TODAY: 'Hoje',
+  YESTERDAY: 'Ontem',
+  LAST_7_DAYS: 'Últimos 7 dias',
+};
+
+const isSameDay = (d1: Date, d2: Date) =>
+  d1.getDate() === d2.getDate() &&
+  d1.getMonth() === d2.getMonth() &&
+  d1.getFullYear() === d2.getFullYear();
+
+const matchesDateFilter = (dateString: string, filter: DateFilterType) => {
+  if (filter === 'ALL') return true;
+  if (!dateString) return false;
+  const itemDate = new Date(dateString);
+  const now = new Date();
+  if (filter === 'TODAY') {
+    return isSameDay(itemDate, now);
+  }
+  if (filter === 'YESTERDAY') {
+    const yesterday = new Date();
+    yesterday.setDate(now.getDate() - 1);
+    return isSameDay(itemDate, yesterday);
+  }
+  if (filter === 'LAST_7_DAYS') {
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(now.getDate() - 7);
+    return itemDate.getTime() >= sevenDaysAgo.getTime();
+  }
+  return true;
+};
 
 export const DashboardScreen: React.FC = () => {
   const { user, signOut } = useAuth();
   const insets = useSafeAreaInsets();
+  const scrollRef = useRef<ScrollView>(null);
+  const [showScrollTop, setShowScrollTop] = useState(false);
+  const [showCompactActions, setShowCompactActions] = useState(false);
+
   const [activeTab, setActiveTab] = useState<
     | 'dashboard'
     | 'pending'
@@ -77,7 +124,11 @@ export const DashboardScreen: React.FC = () => {
     | 'profile'
     | 'subscription'
   >('dashboard');
-  const [requestFilter, setRequestFilter] = useState<'ALL' | 'PENDING' | 'AUTHORIZED' | 'ENTERED'>('ALL');
+  const [requestFilter, setRequestFilter] = useState<'ALL' | 'PENDING' | 'AUTHORIZED' | 'PACKAGES' | 'ENTERED'>('ALL');
+  const [dateFilter, setDateFilter] = useState<DateFilterType>('ALL');
+  const [isDateModalOpen, setIsDateModalOpen] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+
   const [confirmEntryModal, setConfirmEntryModal] = useState<{
     visible: boolean;
     requestId: string;
@@ -86,6 +137,11 @@ export const DashboardScreen: React.FC = () => {
   const [detailModal, setDetailModal] = useState<{ visible: boolean; request: any | null }>(
     { visible: false, request: null }
   );
+  const [packageDetailModal, setPackageDetailModal] = useState<{ visible: boolean; package: any | null }>({
+    visible: false,
+    package: null,
+  });
+
   const [orgProfile, setOrgProfile] = useState<{
     companyName?: string;
     unitLabel?: string;
@@ -97,6 +153,7 @@ export const DashboardScreen: React.FC = () => {
   const [isNotificationsModalOpen, setIsNotificationsModalOpen] = useState(false);
   const [notifications, setNotifications] = useState<RealtimeAlert[]>([]);
   const [recentRequests, setRecentRequests] = useState<any[]>([]);
+  const [recentPackages, setRecentPackages] = useState<any[]>([]);
   const [isLoadingRequests, setIsLoadingRequests] = useState(false);
   const [entryProcessingId, setEntryProcessingId] = useState<string | null>(null);
 
@@ -112,29 +169,37 @@ export const DashboardScreen: React.FC = () => {
   const fetchSummaryAndRequests = useCallback(async () => {
     try {
       setIsLoadingRequests(true);
-      const [summaryRes, pkgsRes, historyRes] = await Promise.allSettled([
+      const [summaryRes, pkgsPendingRes, pkgsHistoryRes, historyRes] = await Promise.allSettled([
         api.get('/visit-requests/summary'),
         api.get('/packages/pending'),
-        api.get('/visit-requests/history?limit=30'),
+        api.get('/packages/history?limit=50'),
+        api.get('/visit-requests/history?limit=50'),
       ]);
 
       if (summaryRes.status === 'fulfilled' && summaryRes.value.data?.data) {
         setSummary(summaryRes.value.data.data);
       }
-      if (pkgsRes.status === 'fulfilled' && pkgsRes.value.data?.data) {
-        setPackagesCount(pkgsRes.value.data.data.length || 0);
+      if (pkgsPendingRes.status === 'fulfilled' && pkgsPendingRes.value.data?.data) {
+        setPackagesCount(pkgsPendingRes.value.data.data.length || 0);
       }
+
+      const rawPackages: any[] = [];
+      if (pkgsPendingRes.status === 'fulfilled' && Array.isArray(pkgsPendingRes.value.data?.data)) {
+        rawPackages.push(...pkgsPendingRes.value.data.data);
+      }
+      if (pkgsHistoryRes.status === 'fulfilled' && Array.isArray(pkgsHistoryRes.value.data?.data)) {
+        const pendingIds = new Set(rawPackages.map((p) => p.id));
+        pkgsHistoryRes.value.data.data.forEach((p: any) => {
+          if (!pendingIds.has(p.id)) {
+            rawPackages.push(p);
+          }
+        });
+      }
+      setRecentPackages(rawPackages);
+
       if (historyRes.status === 'fulfilled' && historyRes.value.data?.data?.requests) {
         const list = historyRes.value.data.data.requests;
-        // Ordena: PENDING sempre no topo, depois AUTHORIZED, depois os demais
-        const sorted = [...list].sort((a: any, b: any) => {
-          if (a.status === 'PENDING' && b.status !== 'PENDING') return -1;
-          if (a.status !== 'PENDING' && b.status === 'PENDING') return 1;
-          if (a.status === 'AUTHORIZED' && b.status !== 'AUTHORIZED') return -1;
-          if (a.status !== 'AUTHORIZED' && b.status === 'AUTHORIZED') return 1;
-          return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-        });
-        setRecentRequests(sorted);
+        setRecentRequests(list);
       }
     } catch (err) {
       console.warn('Erro ao atualizar dashboard:', err);
@@ -258,22 +323,86 @@ export const DashboardScreen: React.FC = () => {
       );
     }
 
-    // Filtragem das solicitações (Item 1)
-    const filteredRequests = recentRequests.filter((req) => {
+    // Construção da lista unificada de Solicitações (Visitas + Encomendas)
+    const unifiedList = [
+      ...recentRequests.map((req) => ({
+        id: req.id,
+        kind: 'visit' as const,
+        status: req.status,
+        createdAt: req.createdAt,
+        title: req.visitor?.name || 'Visitante',
+        clientName: req.client?.name || req.client?.ownerName || 'Morador',
+        destName: req.destination?.name
+          ? `${req.destination.name}${req.destination.block ? ` - ${req.destination.block}` : ''}`
+          : '',
+        tag: req.visitReason || req.visitorType || 'Visita',
+        code: req.code,
+        raw: req,
+      })),
+      ...recentPackages.map((pkg) => ({
+        id: pkg.id,
+        kind: 'package' as const,
+        status: pkg.status, // 'PENDING' (Aguardando retirada) ou 'PICKED_UP' (Entregue)
+        createdAt: pkg.receivedAt || pkg.createdAt,
+        title: pkg.recipientName || pkg.client?.name || 'Destinatário',
+        clientName: pkg.carrier || 'Encomenda',
+        destName: pkg.destination?.name
+          ? `${pkg.destination.name}${pkg.destination.block ? ` - ${pkg.destination.block}` : ''}`
+          : '',
+        tag: `Encomenda • ${pkg.carrier || 'Correios'}`,
+        code: pkg.code,
+        raw: pkg,
+      })),
+    ];
+
+    // Ordenação: Pendentes primeiro, depois autorizados, depois os mais recentes
+    unifiedList.sort((a, b) => {
+      const aIsPending = a.status === 'PENDING';
+      const bIsPending = b.status === 'PENDING';
+      if (aIsPending && !bIsPending) return -1;
+      if (!aIsPending && bIsPending) return 1;
+
+      const aIsAuth = a.status === 'AUTHORIZED';
+      const bIsAuth = b.status === 'AUTHORIZED';
+      if (aIsAuth && !bIsAuth) return -1;
+      if (!aIsAuth && bIsAuth) return 1;
+
+      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    });
+
+    // Filtros por Categoria e Data
+    const filteredList = unifiedList.filter((item) => {
+      if (!matchesDateFilter(item.createdAt, dateFilter)) return false;
+
       if (requestFilter === 'ALL') return true;
-      if (requestFilter === 'PENDING') return req.status === 'PENDING';
-      if (requestFilter === 'AUTHORIZED') return req.status === 'AUTHORIZED';
-      if (requestFilter === 'ENTERED') return req.status === 'ENTERED';
+      if (requestFilter === 'PENDING') return item.status === 'PENDING';
+      if (requestFilter === 'AUTHORIZED') return item.kind === 'visit' && item.status === 'AUTHORIZED';
+      if (requestFilter === 'PACKAGES') return item.kind === 'package';
+      if (requestFilter === 'ENTERED') return item.kind === 'visit' && item.status === 'ENTERED';
       return true;
     });
+
+    // Contadores para os filtros
+    const pendingTotal =
+      summary.pendingCount + recentPackages.filter((p) => p.status === 'PENDING').length;
+    const packagesTotal = recentPackages.length;
+
+    // Paginação: limite de 10 por página
+    const PAGE_SIZE = 10;
+    const totalPages = Math.ceil(filteredList.length / PAGE_SIZE) || 1;
+    const currentPageSafe = Math.min(Math.max(currentPage, 1), totalPages);
+    const paginatedItems = filteredList.slice(
+      (currentPageSafe - 1) * PAGE_SIZE,
+      currentPageSafe * PAGE_SIZE
+    );
 
     // Dashboard Tab Principal com Cabeçalho FIXO no Topo (Item 5)
     return (
       <View style={{ flex: 1, backgroundColor: '#F1F5F9' }}>
-        {/* Cabeçalho FIXO no Topo - Não scrola junto com a tela */}
+        {/* Cabeçalho FIXO no Topo */}
         <View style={[styles.header, { paddingTop: topInset }]}>
           <View style={styles.headerTopRow}>
-            {/* Avatar + Saudação (Clicar vai para Meu Perfil) */}
+            {/* Avatar + Saudação */}
             <TouchableOpacity
               style={styles.userProfileRow}
               onPress={() => setActiveTab('profile')}
@@ -292,7 +421,7 @@ export const DashboardScreen: React.FC = () => {
               </View>
             </TouchableOpacity>
 
-            {/* Ações da Direita: Notificações (Sino) & Configurações (Engrenagem) */}
+            {/* Ações da Direita */}
             <View style={styles.headerActions}>
               <TouchableOpacity
                 style={styles.headerIconButton}
@@ -316,12 +445,56 @@ export const DashboardScreen: React.FC = () => {
           </View>
         </View>
 
+        {/* Barra de Ações Compacta Fixa ao Scrolar (3 botões horizontais) */}
+        {showCompactActions && (
+          <View style={styles.compactActionsBar}>
+            <TouchableOpacity
+              style={styles.compactActionBtnPrimary}
+              onPress={() => setIsModalOpen(true)}
+              activeOpacity={0.85}
+            >
+              <Plus size={15} color="#FFFFFF" strokeWidth={2.5} />
+              <Text style={styles.compactActionBtnPrimaryText}>Nova Solicitação</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.compactActionBtnSecondaryAmber}
+              onPress={() => setActiveTab('preauthorizations')}
+              activeOpacity={0.85}
+            >
+              <CalendarCheck size={15} color="#D97706" />
+              <Text style={styles.compactActionBtnTextAmber}>Agendados</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.compactActionBtnSecondaryPurple}
+              onPress={() => setActiveTab('packages')}
+              activeOpacity={0.85}
+            >
+              <Package size={15} color="#7C3AED" />
+              <Text style={styles.compactActionBtnTextPurple}>Encomendas</Text>
+              {packagesCount > 0 && (
+                <View style={styles.compactActionBadge}>
+                  <Text style={styles.compactActionBadgeText}>{packagesCount}</Text>
+                </View>
+              )}
+            </TouchableOpacity>
+          </View>
+        )}
+
         {/* Conteúdo Rolável Abaixo do Cabeçalho Fixo */}
         <ScrollView
+          ref={scrollRef}
           style={styles.scrollView}
           contentContainerStyle={[styles.scrollContent, { paddingBottom: bottomInset + 80 }]}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
+          scrollEventThrottle={16}
+          onScroll={(e) => {
+            const y = e.nativeEvent.contentOffset.y;
+            setShowScrollTop(y > 180);
+            setShowCompactActions(y > 140);
+          }}
         >
           <View style={styles.bodyContainer}>
             {/* Ação Principal Hero: Nova Solicitação em Grande Destaque */}
@@ -373,21 +546,61 @@ export const DashboardScreen: React.FC = () => {
               </TouchableOpacity>
             </View>
 
-            {/* Seção: Solicitações de Acesso com Filtro (Item 1) */}
+            {/* Seção: Solicitações com Filtro de Status e Filtro de Data */}
             <View style={styles.listSectionContainer}>
               <View style={styles.sectionHeaderRow}>
-                <Text style={styles.sectionTitle}>Solicitações de Acesso</Text>
-                <Text style={styles.sectionCountText}>
-                  {filteredRequests.length} registro(s)
-                </Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                  <Text style={styles.sectionTitle}>Solicitações</Text>
+                  <View style={styles.sectionCountBadge}>
+                    <Text style={styles.sectionCountBadgeText}>{filteredList.length}</Text>
+                  </View>
+                </View>
+
+                {/* Filtro Discreto de Data */}
+                <TouchableOpacity
+                  style={[
+                    styles.dateFilterChip,
+                    dateFilter !== 'ALL' && styles.dateFilterChipActive,
+                  ]}
+                  onPress={() => setIsDateModalOpen(true)}
+                  activeOpacity={0.75}
+                >
+                  <Calendar
+                    size={13}
+                    color={dateFilter !== 'ALL' ? '#2563EB' : '#64748B'}
+                    style={{ marginRight: 5 }}
+                  />
+                  <Text
+                    style={[
+                      styles.dateFilterText,
+                      dateFilter !== 'ALL' && styles.dateFilterTextActive,
+                    ]}
+                  >
+                    {dateFilterLabels[dateFilter]}
+                  </Text>
+                  {dateFilter !== 'ALL' && (
+                    <TouchableOpacity
+                      onPress={(e) => {
+                        e.stopPropagation?.();
+                        setDateFilter('ALL');
+                        setCurrentPage(1);
+                      }}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      style={{ marginLeft: 4 }}
+                    >
+                      <CircleX size={13} color="#2563EB" />
+                    </TouchableOpacity>
+                  )}
+                </TouchableOpacity>
               </View>
 
-              {/* Barra de Filtros: Todos, Aguardando, Autorizados, No Local (Item 1) */}
+              {/* Barra de Filtros: Todos, Aguardando, Autorizados, Encomendas, No Local */}
               <View style={styles.filterPillsRow}>
                 {[
-                  { key: 'ALL', label: 'Todos', count: recentRequests.length },
-                  { key: 'PENDING', label: 'Aguardando', count: summary.pendingCount },
+                  { key: 'ALL', label: 'Todos', count: unifiedList.length },
+                  { key: 'PENDING', label: 'Aguardando', count: pendingTotal },
                   { key: 'AUTHORIZED', label: 'Autorizados', count: summary.authorizedCount },
+                  { key: 'PACKAGES', label: 'Encomendas', count: packagesTotal },
                   { key: 'ENTERED', label: 'No Local', count: summary.presentCount },
                 ].map((pill) => {
                   const isSelected = requestFilter === pill.key;
@@ -395,7 +608,10 @@ export const DashboardScreen: React.FC = () => {
                     <TouchableOpacity
                       key={pill.key}
                       style={[styles.filterChip, isSelected && styles.filterChipActive]}
-                      onPress={() => setRequestFilter(pill.key as any)}
+                      onPress={() => {
+                        setRequestFilter(pill.key as any);
+                        setCurrentPage(1);
+                      }}
                       activeOpacity={0.8}
                     >
                       <Text
@@ -428,24 +644,144 @@ export const DashboardScreen: React.FC = () => {
                 })}
               </View>
 
-              {isLoadingRequests && recentRequests.length === 0 ? (
+              {isLoadingRequests && unifiedList.length === 0 ? (
                 <View style={styles.loadingContainer}>
                   <ActivityIndicator size="small" color="#2563EB" />
                   <Text style={styles.loadingRequestsText}>Atualizando solicitações...</Text>
                 </View>
-              ) : filteredRequests.length === 0 ? (
+              ) : filteredList.length === 0 ? (
                 <View style={styles.emptyRequestsCard}>
                   <Clock size={32} color="#94A3B8" style={{ marginBottom: 6 }} />
                   <Text style={styles.emptyRequestsTitle}>Nenhuma solicitação encontrada</Text>
                   <Text style={styles.emptyRequestsSubtitle}>
                     {requestFilter === 'ALL'
-                      ? 'Toque em "+ Nova Visita" para registrar uma nova entrada.'
-                      : 'Nenhuma solicitação neste status no momento.'}
+                      ? 'Nenhuma solicitação ou encomenda no período selecionado.'
+                      : 'Nenhum registro correspondente ao filtro ativo.'}
                   </Text>
                 </View>
               ) : (
-                /* Cards Modernos e Profissionais de Solicitações */
-                filteredRequests.map((req) => {
+                /* Cards Modernos e Profissionais (Visitas e Encomendas) */
+                paginatedItems.map((item) => {
+                  const isPackage = item.kind === 'package';
+                  const req = item.raw;
+
+                  if (isPackage) {
+                    const isPickedUp = item.status === 'PICKED_UP';
+                    const timeFormatted = new Date(item.createdAt).toLocaleTimeString('pt-BR', {
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    });
+
+                    return (
+                      <TouchableOpacity
+                        key={`pkg-${item.id}`}
+                        style={[
+                          styles.accessCard,
+                          isPickedUp ? styles.accessCardPickedUp : styles.accessCardPackage,
+                        ]}
+                        onPress={() => setPackageDetailModal({ visible: true, package: req })}
+                        activeOpacity={0.85}
+                      >
+                        {/* Lado Esquerdo: Ícone de Encomenda */}
+                        <View
+                          style={[
+                            styles.accessCardIconBox,
+                            isPickedUp
+                              ? styles.accessCardIconBoxEntered
+                              : { backgroundColor: '#EDE9FE' },
+                          ]}
+                        >
+                          {isPickedUp ? (
+                            <CheckCircle size={22} color="#16A34A" />
+                          ) : (
+                            <Package size={22} color="#7C3AED" />
+                          )}
+                        </View>
+
+                        {/* Conteúdo Central */}
+                        <View style={styles.accessCardContent}>
+                          <View style={styles.accessCardTopRow}>
+                            <Text style={styles.accessVisitorName} numberOfLines={1}>
+                              {item.title}
+                            </Text>
+
+                            <View
+                              style={[
+                                styles.accessBadge,
+                                isPickedUp
+                                  ? { backgroundColor: '#DCFCE7' }
+                                  : { backgroundColor: '#EDE9FE' },
+                              ]}
+                            >
+                              <Text
+                                style={[
+                                  styles.accessBadgeText,
+                                  isPickedUp ? { color: '#15803D' } : { color: '#7C3AED' },
+                                ]}
+                              >
+                                {isPickedUp ? 'Retirada' : 'Aguardando Retirada'}
+                              </Text>
+                            </View>
+                          </View>
+
+                          <View style={styles.accessCardMiddleRow}>
+                            {item.destName ? (
+                              <View style={styles.accessDestTag}>
+                                <Building2 size={12} color="#475569" style={{ marginRight: 4 }} />
+                                <Text style={styles.accessDestText} numberOfLines={1}>
+                                  {item.destName}
+                                </Text>
+                              </View>
+                            ) : null}
+
+                            <View style={styles.accessClientTag}>
+                              <Truck size={12} color="#64748B" style={{ marginRight: 4 }} />
+                              <Text style={styles.accessClientText} numberOfLines={1}>
+                                {req.carrier || 'Encomenda'}
+                              </Text>
+                            </View>
+
+                            {req.trackingCode ? (
+                              <View style={styles.accessClientTag}>
+                                <Barcode size={12} color="#64748B" style={{ marginRight: 3 }} />
+                                <Text style={styles.accessClientText} numberOfLines={1}>
+                                  {req.trackingCode}
+                                </Text>
+                              </View>
+                            ) : null}
+                          </View>
+
+                          <View style={styles.accessCardBottomRow}>
+                            <View style={[styles.accessReasonBadge, { backgroundColor: '#F3E8FF' }]}>
+                              <Text style={[styles.accessReasonText, { color: '#6B21A8' }]}>
+                                Encomenda
+                              </Text>
+                            </View>
+
+                            <View style={styles.accessTimeBox}>
+                              <Clock size={11} color="#94A3B8" style={{ marginRight: 3 }} />
+                              <Text style={styles.accessTimeText}>{timeFormatted}</Text>
+                            </View>
+                          </View>
+                        </View>
+
+                        {/* Botão Ação Ver Encomenda */}
+                        <TouchableOpacity
+                          style={[
+                            styles.compactEntryBtn,
+                            { backgroundColor: isPickedUp ? '#64748B' : '#7C3AED' },
+                          ]}
+                          onPress={() => setPackageDetailModal({ visible: true, package: req })}
+                          activeOpacity={0.85}
+                        >
+                          <Package size={13} color="#FFFFFF" style={{ marginRight: 4 }} />
+                          <Text style={styles.compactEntryBtnText}>VER</Text>
+                        </TouchableOpacity>
+                      </TouchableOpacity>
+                    );
+                  }
+
+                  // Card de Solicitação de Acesso (Visita)
                   const isPending = req.status === 'PENDING';
                   const isAuthorized = req.status === 'AUTHORIZED';
                   const isEntered = req.status === 'ENTERED';
@@ -465,7 +801,7 @@ export const DashboardScreen: React.FC = () => {
 
                   return (
                     <TouchableOpacity
-                      key={req.id}
+                      key={`visit-${req.id}`}
                       style={[
                         styles.accessCard,
                         isPending && styles.accessCardPending,
@@ -585,6 +921,81 @@ export const DashboardScreen: React.FC = () => {
                     </TouchableOpacity>
                   );
                 })
+              )}
+
+              {/* Paginação Discreta (10 solicitações por aba: 1, 2, 3...) */}
+              {totalPages > 1 && (
+                <View style={styles.paginationContainer}>
+                  <TouchableOpacity
+                    style={[
+                      styles.pageNavBtn,
+                      currentPageSafe === 1 && styles.pageNavBtnDisabled,
+                    ]}
+                    onPress={() => {
+                      if (currentPageSafe > 1) {
+                        setCurrentPage(currentPageSafe - 1);
+                      }
+                    }}
+                    disabled={currentPageSafe === 1}
+                    activeOpacity={0.7}
+                  >
+                    <ChevronLeft
+                      size={16}
+                      color={currentPageSafe === 1 ? '#CBD5E1' : '#1E293B'}
+                    />
+                  </TouchableOpacity>
+
+                  <View style={styles.pageNumbersRow}>
+                    {Array.from({ length: totalPages }, (_, i) => i + 1).map((pageNum) => {
+                      const isCurrent = pageNum === currentPageSafe;
+                      return (
+                        <TouchableOpacity
+                          key={pageNum}
+                          style={[
+                            styles.pageNumberBtn,
+                            isCurrent && styles.pageNumberBtnActive,
+                          ]}
+                          onPress={() => setCurrentPage(pageNum)}
+                          activeOpacity={0.75}
+                        >
+                          <Text
+                            style={[
+                              styles.pageNumberText,
+                              isCurrent && styles.pageNumberTextActive,
+                            ]}
+                          >
+                            {pageNum}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+
+                  <TouchableOpacity
+                    style={[
+                      styles.pageNavBtn,
+                      currentPageSafe === totalPages && styles.pageNavBtnDisabled,
+                    ]}
+                    onPress={() => {
+                      if (currentPageSafe < totalPages) {
+                        setCurrentPage(currentPageSafe + 1);
+                      }
+                    }}
+                    disabled={currentPageSafe === totalPages}
+                    activeOpacity={0.7}
+                  >
+                    <ChevronRight
+                      size={16}
+                      color={currentPageSafe === totalPages ? '#CBD5E1' : '#1E293B'}
+                    />
+                  </TouchableOpacity>
+                </View>
+              )}
+
+              {filteredList.length > 0 && (
+                <Text style={styles.paginationSummaryText}>
+                  Página {currentPageSafe} de {totalPages} • Total de {filteredList.length} registro(s)
+                </Text>
               )}
             </View>
           </View>
@@ -912,6 +1323,158 @@ export const DashboardScreen: React.FC = () => {
             </View>
           </View>
         </Modal>
+
+        {/* Modal Detalhes da Encomenda */}
+        <Modal
+          visible={packageDetailModal.visible}
+          transparent
+          animationType="slide"
+          onRequestClose={() => setPackageDetailModal({ visible: false, package: null })}
+        >
+          <View style={styles.detailOverlay}>
+            <View style={styles.detailSheet}>
+              <View style={styles.detailHandle} />
+
+              {packageDetailModal.package && (() => {
+                const pkg = packageDetailModal.package;
+                const isPickedUp = pkg.status === 'PICKED_UP';
+                const createdDate = new Date(pkg.receivedAt || pkg.createdAt);
+                const dateStr = createdDate.toLocaleDateString('pt-BR');
+                const timeStr = createdDate.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+                const clientName = pkg.client?.name || pkg.recipientName || 'Morador';
+                const destName = pkg.destination?.name
+                  ? `${pkg.destination.name}${pkg.destination.block ? ` - ${pkg.destination.block}` : ''}`
+                  : '—';
+
+                return (
+                  <>
+                    <View style={styles.detailHeaderRow}>
+                      <Text style={styles.detailTitle}>Detalhes da Encomenda</Text>
+                      <TouchableOpacity
+                        onPress={() => setPackageDetailModal({ visible: false, package: null })}
+                        style={styles.detailCloseBtn}
+                      >
+                        <CircleX size={24} color="#64748B" />
+                      </TouchableOpacity>
+                    </View>
+
+                    <View
+                      style={[
+                        styles.detailStatusBadge,
+                        { backgroundColor: isPickedUp ? '#DCFCE7' : '#EDE9FE' },
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.detailStatusText,
+                          { color: isPickedUp ? '#15803D' : '#7C3AED' },
+                        ]}
+                      >
+                        {isPickedUp ? 'RETIRADA' : 'AGUARDANDO RETIRADA'}
+                      </Text>
+                    </View>
+
+                    <View style={styles.detailRow}>
+                      <Text style={styles.detailLabel}>Destinatário</Text>
+                      <Text style={styles.detailValue}>{pkg.recipientName || clientName}</Text>
+                    </View>
+
+                    <View style={styles.detailRow}>
+                      <Text style={styles.detailLabel}>Transportadora</Text>
+                      <Text style={styles.detailValue}>{pkg.carrier || 'Encomenda'}</Text>
+                    </View>
+
+                    <View style={styles.detailRow}>
+                      <Text style={styles.detailLabel}>Destino</Text>
+                      <Text style={styles.detailValue}>{destName}</Text>
+                    </View>
+
+                    {pkg.trackingCode && (
+                      <View style={styles.detailRow}>
+                        <Text style={styles.detailLabel}>Código Rastreio</Text>
+                        <Text style={styles.detailValue}>{pkg.trackingCode}</Text>
+                      </View>
+                    )}
+
+                    <View style={styles.detailRow}>
+                      <Text style={styles.detailLabel}>Recebimento</Text>
+                      <Text style={styles.detailValue}>{dateStr} às {timeStr}</Text>
+                    </View>
+
+                    {pkg.code && (
+                      <View style={styles.detailRow}>
+                        <Text style={styles.detailLabel}>Identificador</Text>
+                        <Text style={styles.detailValue}>{pkg.code}</Text>
+                      </View>
+                    )}
+
+                    <TouchableOpacity
+                      style={[styles.detailEntryBtn, { backgroundColor: '#7C3AED' }]}
+                      onPress={() => {
+                        setPackageDetailModal({ visible: false, package: null });
+                        setActiveTab('packages');
+                      }}
+                      activeOpacity={0.85}
+                    >
+                      <Package size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
+                      <Text style={styles.detailEntryBtnText}>Abrir na aba Encomendas</Text>
+                    </TouchableOpacity>
+                  </>
+                );
+              })()}
+            </View>
+          </View>
+        </Modal>
+
+        {/* Modal Discreto: Seletor de Data */}
+        <Modal
+          visible={isDateModalOpen}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setIsDateModalOpen(false)}
+        >
+          <TouchableOpacity
+            style={styles.modalBackdrop}
+            activeOpacity={1}
+            onPress={() => setIsDateModalOpen(false)}
+          >
+            <View style={styles.datePickerSheet}>
+              <Text style={styles.datePickerTitle}>Filtrar Solicitações por Data</Text>
+              {(['ALL', 'TODAY', 'YESTERDAY', 'LAST_7_DAYS'] as DateFilterType[]).map((f) => (
+                <TouchableOpacity
+                  key={f}
+                  style={[
+                    styles.dateOptionItem,
+                    dateFilter === f && styles.dateOptionItemActive,
+                  ]}
+                  onPress={() => {
+                    setDateFilter(f);
+                    setCurrentPage(1);
+                    setIsDateModalOpen(false);
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <Text
+                    style={[
+                      styles.dateOptionText,
+                      dateFilter === f && styles.dateOptionTextActive,
+                    ]}
+                  >
+                    {dateFilterLabels[f]}
+                  </Text>
+                  {dateFilter === f && <CircleCheck size={18} color="#2563EB" />}
+                </TouchableOpacity>
+              ))}
+            </View>
+          </TouchableOpacity>
+        </Modal>
+
+        {/* Botão Flutuante Voltar ao Topo */}
+        <ScrollToTopButton
+          visible={showScrollTop && activeTab === 'dashboard'}
+          onPress={() => scrollRef.current?.scrollTo({ y: 0, animated: true })}
+          bottom={bottomInset + 65}
+        />
       </View>
     </SafeAreaView>
   );
@@ -1603,4 +2166,239 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
 
+  // Barra de Ações Compacta Fixa ao Scrolar
+  compactActionsBar: {
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
+    elevation: 3,
+    zIndex: 10,
+  },
+  compactActionBtnPrimary: {
+    flex: 1.2,
+    backgroundColor: '#2563EB',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+  },
+  compactActionBtnPrimaryText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '700',
+    marginLeft: 4,
+  },
+  compactActionBtnSecondaryAmber: {
+    flex: 1,
+    backgroundColor: '#FEF3C7',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+  },
+  compactActionBtnTextAmber: {
+    color: '#92400E',
+    fontSize: 12,
+    fontWeight: '600',
+    marginLeft: 4,
+  },
+  compactActionBtnSecondaryPurple: {
+    flex: 1,
+    backgroundColor: '#EDE9FE',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+  },
+  compactActionBtnTextPurple: {
+    color: '#5B21B6',
+    fontSize: 12,
+    fontWeight: '600',
+    marginLeft: 4,
+  },
+  compactActionBadge: {
+    backgroundColor: '#7C3AED',
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    borderRadius: 8,
+    marginLeft: 4,
+  },
+  compactActionBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: '800',
+  },
+
+  // Filtro de Data & Badges
+  sectionCountBadge: {
+    backgroundColor: '#E2E8F0',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 10,
+    marginLeft: 8,
+  },
+  sectionCountBadgeText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#334155',
+  },
+  dateFilterChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 14,
+  },
+  dateFilterChipActive: {
+    borderColor: '#93C5FD',
+    backgroundColor: '#EFF6FF',
+  },
+  dateFilterText: {
+    fontSize: 12,
+    color: '#64748B',
+    fontWeight: '600',
+  },
+  dateFilterTextActive: {
+    color: '#1D4ED8',
+    fontWeight: '700',
+  },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.45)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  datePickerSheet: {
+    width: '100%',
+    maxWidth: 340,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 10,
+    elevation: 8,
+  },
+  datePickerTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#0F172A',
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  dateOptionItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: 10,
+    marginBottom: 6,
+    backgroundColor: '#F8FAFC',
+  },
+  dateOptionItemActive: {
+    backgroundColor: '#EFF6FF',
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+  },
+  dateOptionText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#334155',
+  },
+  dateOptionTextActive: {
+    color: '#1D4ED8',
+    fontWeight: '700',
+  },
+
+  // Paginação
+  paginationContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginTop: 18,
+    marginBottom: 8,
+  },
+  pageNavBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pageNavBtnDisabled: {
+    backgroundColor: '#F1F5F9',
+    borderColor: '#E2E8F0',
+  },
+  pageNumbersRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  pageNumberBtn: {
+    minWidth: 36,
+    height: 36,
+    paddingHorizontal: 8,
+    borderRadius: 10,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pageNumberBtnActive: {
+    backgroundColor: '#2563EB',
+    borderColor: '#2563EB',
+  },
+  pageNumberText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#475569',
+  },
+  pageNumberTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '800',
+  },
+  paginationSummaryText: {
+    fontSize: 11,
+    color: '#94A3B8',
+    textAlign: 'center',
+    marginTop: 4,
+    marginBottom: 10,
+  },
+
+  // Cores de Borda de Pacote
+  accessCardPackage: {
+    borderLeftColor: '#7C3AED',
+  },
+  accessCardPickedUp: {
+    borderLeftColor: '#10B981',
+  },
+
 });
+

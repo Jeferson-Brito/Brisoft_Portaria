@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -25,8 +25,11 @@ import {
 } from 'lucide-react-native';
 import { colors } from '../../theme/colors';
 import { api } from '../../config/api';
+import { ScrollToTopButton } from '../../components/ScrollToTopButton';
 
 export const ReportsScreen: React.FC = () => {
+  const scrollRef = useRef<ScrollView>(null);
+  const [showScrollTop, setShowScrollTop] = useState(false);
   const [days, setDays] = useState<number>(7);
   const [activeSubTab, setActiveSubTab] = useState<'metrics' | 'audit'>('metrics');
   const [loading, setLoading] = useState(true);
@@ -96,9 +99,12 @@ export const ReportsScreen: React.FC = () => {
       </View>
 
       <ScrollView
+        ref={scrollRef}
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
+        scrollEventThrottle={16}
+        onScroll={(e) => setShowScrollTop(e.nativeEvent.contentOffset.y > 150)}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[colors.primary]} />}
       >
         {loading ? (
@@ -348,6 +354,11 @@ export const ReportsScreen: React.FC = () => {
           </>
         )}
       </ScrollView>
+      <ScrollToTopButton
+        visible={showScrollTop}
+        onPress={() => scrollRef.current?.scrollTo({ y: 0, animated: true })}
+        bottom={85}
+      />
     </View>
   );
 };

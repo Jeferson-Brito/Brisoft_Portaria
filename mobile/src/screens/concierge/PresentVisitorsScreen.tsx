@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -25,6 +25,7 @@ import { colors } from '../../theme/colors';
 import { api } from '../../config/api';
 import { useRealtime } from '../../contexts/RealtimeContext';
 import { AppHeader } from '../../components/AppHeader';
+import { ScrollToTopButton } from '../../components/ScrollToTopButton';
 
 interface PresentVisitorItem {
   id: string;
@@ -63,6 +64,8 @@ interface PresentVisitorItem {
 
 export const PresentVisitorsScreen: React.FC = () => {
   const [visitors, setVisitors] = useState<PresentVisitorItem[]>([]);
+  const listRef = useRef<FlatList>(null);
+  const [showScrollTop, setShowScrollTop] = useState(false);
   const [search, setSearch] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -271,10 +274,13 @@ export const PresentVisitorsScreen: React.FC = () => {
         </View>
       ) : (
         <FlatList
+          ref={listRef}
           data={visitors}
           keyExtractor={(item) => item.id}
           renderItem={renderItem}
           contentContainerStyle={styles.listContent}
+          scrollEventThrottle={16}
+          onScroll={(e) => setShowScrollTop(e.nativeEvent.contentOffset.y > 150)}
           refreshControl={
             <RefreshControl
               refreshing={isRefreshing}
@@ -296,6 +302,11 @@ export const PresentVisitorsScreen: React.FC = () => {
           }
         />
       )}
+      <ScrollToTopButton
+        visible={showScrollTop}
+        onPress={() => listRef.current?.scrollToOffset({ offset: 0, animated: true })}
+        bottom={85}
+      />
     </View>
   );
 };

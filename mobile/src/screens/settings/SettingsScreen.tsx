@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -10,6 +10,7 @@ import {
   Platform,
   RefreshControl,
 } from 'react-native';
+import { ScrollToTopButton } from '../../components/ScrollToTopButton';
 import {
   User,
   Users,
@@ -60,6 +61,8 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
   bottomInset,
 }) => {
   const { user, signOut, refreshSubscription } = useAuth();
+  const scrollRef = useRef<ScrollView>(null);
+  const [showScrollTop, setShowScrollTop] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [whatsappStatus, setWhatsappStatus] = useState<
     'CONNECTED' | 'DISCONNECTED' | 'CONNECTING' | 'LOADING'
@@ -156,19 +159,23 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
     : 'U';
 
   return (
-    <ScrollView
-      style={styles.container}
-      contentContainerStyle={[styles.content, { paddingBottom: bottomInset + 80 }]}
-      showsVerticalScrollIndicator={false}
-      refreshControl={
-        <RefreshControl
-          refreshing={refreshing}
-          onRefresh={onRefresh}
-          tintColor="#2563EB"
-          colors={['#2563EB']}
-        />
-      }
-    >
+    <View style={{ flex: 1 }}>
+      <ScrollView
+        ref={scrollRef}
+        style={styles.container}
+        contentContainerStyle={[styles.content, { paddingBottom: bottomInset + 80 }]}
+        showsVerticalScrollIndicator={false}
+        scrollEventThrottle={16}
+        onScroll={(e) => setShowScrollTop(e.nativeEvent.contentOffset.y > 150)}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor="#2563EB"
+            colors={['#2563EB']}
+          />
+        }
+      >
       {/* 1. CARD HERO DO USUÁRIO & ESTABELECIMENTO */}
       <View style={styles.profileCard}>
         <View style={styles.profileTopRow}>
@@ -508,6 +515,12 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
         </Text>
       </View>
     </ScrollView>
+    <ScrollToTopButton
+      visible={showScrollTop}
+      onPress={() => scrollRef.current?.scrollTo({ y: 0, animated: true })}
+      bottom={85}
+    />
+  </View>
   );
 };
 

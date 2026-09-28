@@ -10,7 +10,7 @@
     "noEmit": true,
     "isolatedModules": true,
     "strict": false,
-    "moduleResolution": "node",
+    "moduleResolution": "bundler",
     "resolveJsonModule": true,
     "allowSyntheticDefaultImports": true,
     "esModuleInterop": true,
