@@ -8,9 +8,9 @@ const whatsAppController = new WhatsAppController();
 export async function whatsAppRoutes(app: FastifyInstance) {
   app.addHook('preHandler', authMiddleware);
 
-  // Status da conexão do WhatsApp (Admin e Supervisor)
+  // Status da conexão do WhatsApp (Admin, Supervisor e Porteiro)
   app.get('/status', {
-    preHandler: [requireRole(['ADMIN', 'SUPERVISOR'])],
+    preHandler: [requireRole(['ADMIN', 'SUPERVISOR', 'CONCIERGE'])],
     handler: whatsAppController.getStatus.bind(whatsAppController),
   });
 

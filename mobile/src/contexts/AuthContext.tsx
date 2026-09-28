@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { api } from '../config/api';
+import { api, setOnUnauthorizedCallback } from '../config/api';
 
 export interface Subscription {
   plan: 'TRIAL' | 'BASIC' | 'ENTERPRISE';
@@ -51,6 +51,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
+    setOnUnauthorizedCallback(() => {
+      setUser(null);
+      setToken(null);
+    });
+
     async function loadStorageData() {
       try {
         const storedToken = await AsyncStorage.getItem('@combate_portaria:token');

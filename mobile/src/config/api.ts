@@ -70,14 +70,27 @@ api.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
+let onUnauthorizedCallback: (() => void) | null = null;
+
+export const setOnUnauthorizedCallback = (cb: () => void) => {
+  onUnauthorizedCallback = cb;
+};
+
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
     if (error.response?.status === 401) {
-      // Sessão expirada
-      await AsyncStorage.removeItem('@combate_portaria:token');
-      await AsyncStorage.removeItem('@combate_portaria:user');
+      // Sessão expirada ou token inválido
+      try {
+        await AsyncStorage.removeItem('@combate_portaria:token');
+        await AsyncStorage.removeItem('@combate_portaria:refreshToken');
+        await AsyncStorage.removeItem('@combate_portaria:user');
+      } catch {}
+      if (onUnauthorizedCallback) {
+        onUnauthorizedCallback();
+      }
     }
     return Promise.reject(error);
   }
 );
+
