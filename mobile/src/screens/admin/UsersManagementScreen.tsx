@@ -147,7 +147,7 @@ export const UsersManagementScreen: React.FC<UsersManagementScreenProps> = ({ on
           onPress={() => setIsModalOpen(true)}
           activeOpacity={0.85}
         >
-          <Plus size={18} color="#0F203D" style={{ marginRight: 6 }} />
+          <Plus size={18} color="#165337" style={{ marginRight: 6 }} />
           <Text style={styles.addBtnText}>Cadastrar Novo Porteiro</Text>
         </TouchableOpacity>
       </View>
@@ -333,7 +333,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#F8FAFC',
   },
   header: {
-    backgroundColor: '#0F203D',
+    backgroundColor: '#165337',
     paddingHorizontal: 16,
     paddingTop: 16,
     paddingBottom: 18,
@@ -381,7 +381,7 @@ const styles = StyleSheet.create({
   addBtnText: {
     fontSize: 14,
     fontWeight: '700',
-    color: '#0F203D',
+    color: '#165337',
   },
   listContent: {
     padding: 16,
@@ -511,8 +511,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#F8FAFC',
   },
   roleOptionSelected: {
-    backgroundColor: '#0F203D',
-    borderColor: '#0F203D',
+    backgroundColor: '#165337',
+    borderColor: '#165337',
   },
   roleOptionText: {
     fontSize: 13,
@@ -544,7 +544,7 @@ const styles = StyleSheet.create({
   },
   saveBtn: {
     flex: 1.5,
-    backgroundColor: '#0F203D',
+    backgroundColor: '#165337',
     alignItems: 'center',
     justifyContent: 'center',
     height: 46,

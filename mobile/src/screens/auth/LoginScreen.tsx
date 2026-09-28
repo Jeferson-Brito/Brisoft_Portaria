@@ -12,7 +12,6 @@ import {
   StatusBar,
   ImageBackground,
   Dimensions,
-  Image,
 } from 'react-native';
 import {
   ShieldCheck,
@@ -21,9 +20,7 @@ import {
   Eye,
   EyeOff,
   User,
-  Settings,
   ArrowRight,
-  Shield,
   Check,
 } from 'lucide-react-native';
 import { colors } from '../../theme/colors';
@@ -36,6 +33,7 @@ export const LoginScreen: React.FC<{ onRegisterPress?: () => void }> = ({ onRegi
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [rememberMe, setRememberMe] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -56,12 +54,6 @@ export const LoginScreen: React.FC<{ onRegisterPress?: () => void }> = ({ onRegi
     }
   };
 
-  const fillQuickCredentials = (userEmail: string, pass: string) => {
-    setEmail(userEmail);
-    setPassword(pass);
-    setErrorMessage(null);
-  };
-
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -74,20 +66,21 @@ export const LoginScreen: React.FC<{ onRegisterPress?: () => void }> = ({ onRegi
         keyboardShouldPersistTaps="handled"
         bounces={false}
       >
-        {/* Metade Superior: Imagem Arquitetônica com Overlay Escuro */}
+        {/* Metade Superior: Imagem com Overlay Verde Floresta Profundo */}
         <ImageBackground
           source={require('../../../assets/condo_gatehouse.jpg')}
           style={styles.heroBackground}
           resizeMode="cover"
         >
           <View style={styles.heroOverlay}>
-            {/* Logo Oficial Combate Portaria */}
-            <Image
-              source={require('../../../assets/logo.png')}
-              style={{ width: 240, height: 115, marginBottom: 6 }}
-              resizeMode="contain"
-            />
-            <Text style={styles.brandSubtitle}>Controle de Acesso Inteligente</Text>
+            {/* Badge Central Oficial: Escudo de Segurança Verde */}
+            <View style={styles.logoBadge}>
+              <ShieldCheck size={42} color="#FFFFFF" strokeWidth={2.2} />
+            </View>
+            <Text style={styles.brandTitle}>Bem-vindo!</Text>
+            <Text style={styles.brandSubtitle}>
+              Faça login para acessar o sistema de controle de acesso.
+            </Text>
           </View>
         </ImageBackground>
 
@@ -100,17 +93,14 @@ export const LoginScreen: React.FC<{ onRegisterPress?: () => void }> = ({ onRegi
           )}
 
           {/* Campo E-mail */}
-          <View style={styles.inputGroup}>
-            <View style={styles.fieldLabelRow}>
-              <Mail size={16} color={colors.textPrimary} style={{ marginRight: 6 }} />
+          <View style={styles.inputBox}>
+            <Mail size={18} color="#64748B" style={styles.inputIcon} />
+            <View style={styles.inputContent}>
               <Text style={styles.fieldLabel}>E-mail ou Usuário</Text>
-            </View>
-            <View style={styles.inputBox}>
-              <Mail size={18} color={colors.textMuted} style={styles.inputPrefixIcon} />
               <TextInput
-                style={styles.input}
-                placeholder="ex: porteiro@exemple.com"
-                placeholderTextColor={colors.textMuted}
+                style={styles.textInput}
+                placeholder="ex: portaria@exemplo.com"
+                placeholderTextColor="#94A3B8"
                 value={email}
                 onChangeText={setEmail}
                 keyboardType="email-address"
@@ -122,34 +112,49 @@ export const LoginScreen: React.FC<{ onRegisterPress?: () => void }> = ({ onRegi
           </View>
 
           {/* Campo Senha */}
-          <View style={styles.inputGroup}>
-            <View style={styles.fieldLabelRow}>
-              <Lock size={16} color={colors.textPrimary} style={{ marginRight: 6 }} />
-              <Text style={styles.fieldLabel}>Senha de Acesso</Text>
-            </View>
-            <View style={styles.inputBox}>
-              <Lock size={18} color={colors.textMuted} style={styles.inputPrefixIcon} />
+          <View style={styles.inputBox}>
+            <Lock size={18} color="#64748B" style={styles.inputIcon} />
+            <View style={[styles.inputContent, { paddingRight: 40 }]}>
+              <Text style={styles.fieldLabel}>Senha</Text>
               <TextInput
-                style={styles.input}
+                style={styles.textInput}
                 placeholder="Digite sua senha"
-                placeholderTextColor={colors.textMuted}
+                placeholderTextColor="#94A3B8"
                 value={password}
                 onChangeText={setPassword}
                 secureTextEntry={!showPassword}
                 editable={!isLoading}
               />
-              <TouchableOpacity
-                onPress={() => setShowPassword(!showPassword)}
-                style={styles.eyeButton}
-                activeOpacity={0.7}
-              >
-                {showPassword ? (
-                  <EyeOff size={20} color={colors.textSecondary} />
-                ) : (
-                  <Eye size={20} color={colors.textSecondary} />
-                )}
-              </TouchableOpacity>
             </View>
+            <TouchableOpacity
+              onPress={() => setShowPassword(!showPassword)}
+              style={styles.eyeBtn}
+              activeOpacity={0.7}
+            >
+              {showPassword ? (
+                <EyeOff size={18} color="#64748B" />
+              ) : (
+                <Eye size={18} color="#64748B" />
+              )}
+            </TouchableOpacity>
+          </View>
+
+          {/* Linha Lembrar de mim & Esqueceu a senha */}
+          <View style={styles.optionsRow}>
+            <TouchableOpacity
+              style={styles.rememberMeRow}
+              onPress={() => setRememberMe(!rememberMe)}
+              activeOpacity={0.8}
+            >
+              <View style={[styles.checkbox, rememberMe && styles.checkboxActive]}>
+                {rememberMe && <Check size={13} color="#FFFFFF" strokeWidth={3} />}
+              </View>
+              <Text style={styles.rememberMeText}>Lembrar de mim</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity activeOpacity={0.7}>
+              <Text style={styles.forgotPasswordText}>Esqueceu a senha?</Text>
+            </TouchableOpacity>
           </View>
 
           {/* Botão Entrar no Sistema */}
@@ -160,24 +165,44 @@ export const LoginScreen: React.FC<{ onRegisterPress?: () => void }> = ({ onRegi
             activeOpacity={0.88}
           >
             {isLoading ? (
-              <ActivityIndicator color={colors.white} />
+              <ActivityIndicator color="#FFFFFF" />
             ) : (
               <View style={styles.loginBtnContent}>
                 <Text style={styles.loginBtnText}>Entrar no Sistema</Text>
-                <ArrowRight size={18} color={colors.white} style={{ marginLeft: 8 }} />
+                <ArrowRight size={18} color="#FFFFFF" style={{ marginLeft: 8 }} />
               </View>
             )}
           </TouchableOpacity>
 
-          {/* Link para cadastro */}
+          {/* Divisor "ou" */}
+          <View style={styles.dividerRow}>
+            <View style={styles.dividerLine} />
+            <Text style={styles.dividerText}>ou</Text>
+            <View style={styles.dividerLine} />
+          </View>
+
+          {/* Botão Criar Conta Grátis */}
           {onRegisterPress && (
-            <TouchableOpacity onPress={onRegisterPress} style={{ alignItems: 'center', marginTop: 16 }}>
-              <Text style={{ color: '#64748B', fontSize: 14 }}>
-                Ainda não tem conta?{' '}
-                <Text style={{ color: '#3B82F6', fontWeight: '700' }}>Criar conta grátis</Text>
-              </Text>
+            <TouchableOpacity
+              style={styles.registerBtn}
+              onPress={onRegisterPress}
+              activeOpacity={0.88}
+            >
+              <User size={18} color="#165337" style={{ marginRight: 8 }} />
+              <Text style={styles.registerBtnText}>Criar conta grátis</Text>
             </TouchableOpacity>
           )}
+
+          {/* Banner de Segurança & Criptografia */}
+          <View style={styles.securityBanner}>
+            <ShieldCheck size={20} color="#165337" style={{ marginRight: 10 }} />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.securityBannerTitle}>Seus dados estão seguros e protegidos.</Text>
+              <Text style={styles.securityBannerDesc}>
+                Utilizamos tecnologias modernas de criptografia.
+              </Text>
+            </View>
+          </View>
 
           {/* Rodapé institucional */}
           <Text style={styles.footerText}>
@@ -192,158 +217,167 @@ export const LoginScreen: React.FC<{ onRegisterPress?: () => void }> = ({ onRegi
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0F203D',
+    backgroundColor: '#165337',
   },
   scrollContent: {
     flexGrow: 1,
-    backgroundColor: '#0F203D',
+    backgroundColor: '#165337',
   },
   heroBackground: {
     width: '100%',
-    height: height * 0.44,
+    height: height * 0.40,
     justifyContent: 'center',
     alignItems: 'center',
   },
   heroOverlay: {
     ...StyleSheet.absoluteFill,
-    backgroundColor: 'rgba(8, 20, 45, 0.72)',
+    backgroundColor: 'rgba(10, 42, 28, 0.84)',
     justifyContent: 'center',
     alignItems: 'center',
-    paddingTop: 30,
+    paddingTop: 40,
+    paddingHorizontal: 28,
   },
-  logoBadgeWrapper: {
-    position: 'relative',
-    marginBottom: 12,
-  },
-  shieldIconContainer: {
-    width: 64,
-    height: 64,
-    borderRadius: 16,
+  logoBadge: {
+    width: 76,
+    height: 76,
+    borderRadius: 22,
+    backgroundColor: '#1E6A47',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.25,
+    shadowRadius: 10,
+    elevation: 8,
     borderWidth: 2,
-    borderColor: 'rgba(255,255,255,0.4)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(15, 32, 61, 0.65)',
+    borderColor: 'rgba(255, 255, 255, 0.2)',
   },
-  innerShieldGraphic: {
-    position: 'absolute',
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  innerBar: {
-    width: 3,
-    height: 14,
-    backgroundColor: colors.white,
-    borderRadius: 2,
-  },
-  verifiedCheckBadge: {
-    position: 'absolute',
-    bottom: -4,
-    right: -6,
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    backgroundColor: '#2563EB',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: '#0F203D',
-  },
-  brandTitleCombate: {
+  brandTitle: {
+    color: '#FFFFFF',
     fontSize: 26,
-    fontWeight: '900',
-    color: colors.white,
-    letterSpacing: 2,
-    textAlign: 'center',
-  },
-  brandTitlePortaria: {
-    fontSize: 19,
-    fontWeight: '700',
-    color: '#CBD5E1',
-    letterSpacing: 4,
-    marginTop: -2,
+    fontWeight: '800',
+    letterSpacing: -0.5,
+    marginBottom: 6,
     textAlign: 'center',
   },
   brandSubtitle: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: '#94A3B8',
-    marginTop: 6,
-    letterSpacing: 0.5,
+    color: 'rgba(255, 255, 255, 0.85)',
+    fontSize: 14,
+    textAlign: 'center',
+    lineHeight: 20,
+    maxWidth: 280,
   },
   sheetCard: {
-    flex: 1,
-    backgroundColor: colors.white,
+    backgroundColor: '#FFFFFF',
     borderTopLeftRadius: 30,
     borderTopRightRadius: 30,
-    marginTop: -24,
-    paddingHorizontal: 22,
-    paddingTop: 26,
-    paddingBottom: 24,
+    paddingHorizontal: 24,
+    paddingTop: 30,
+    paddingBottom: 36,
+    marginTop: -20,
+    minHeight: height * 0.62,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.12,
-    shadowRadius: 10,
-    elevation: 8,
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 10,
   },
   errorBox: {
     backgroundColor: '#FEE2E2',
+    borderRadius: 12,
     padding: 12,
-    borderRadius: 8,
-    borderLeftWidth: 4,
-    borderLeftColor: colors.statusDenied,
     marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#FCA5A5',
   },
   errorText: {
-    color: '#B91C1C',
+    color: '#DC2626',
     fontSize: 13,
     fontWeight: '500',
-  },
-  inputGroup: {
-    marginBottom: 16,
-  },
-  fieldLabelRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 6,
-  },
-  fieldLabel: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: colors.textPrimary,
+    textAlign: 'center',
   },
   inputBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    height: 48,
+    borderRadius: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    marginBottom: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    position: 'relative',
   },
-  inputPrefixIcon: {
-    marginRight: 8,
+  inputIcon: {
+    marginRight: 12,
   },
-  input: {
+  inputContent: {
     flex: 1,
-    fontSize: 14,
-    color: colors.textPrimary,
   },
-  eyeButton: {
+  fieldLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#64748B',
+    marginBottom: 2,
+  },
+  textInput: {
+    fontSize: 14,
+    color: '#0F172A',
+    fontWeight: '500',
+    padding: 0,
+  },
+  eyeBtn: {
+    position: 'absolute',
+    right: 14,
     padding: 6,
   },
-  loginBtn: {
-    backgroundColor: '#0F203D',
-    borderRadius: 12,
-    height: 50,
+  optionsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
+    marginTop: 4,
+    marginBottom: 22,
+  },
+  rememberMeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  checkbox: {
+    width: 20,
+    height: 20,
+    borderRadius: 5,
+    borderWidth: 1.5,
+    borderColor: '#CBD5E1',
+    backgroundColor: '#FFFFFF',
     justifyContent: 'center',
-    marginTop: 8,
-    shadowColor: '#0F203D',
+    alignItems: 'center',
+    marginRight: 8,
+  },
+  checkboxActive: {
+    backgroundColor: '#165337',
+    borderColor: '#165337',
+  },
+  rememberMeText: {
+    fontSize: 13,
+    color: '#475569',
+    fontWeight: '500',
+  },
+  forgotPasswordText: {
+    fontSize: 13,
+    color: '#165337',
+    fontWeight: '600',
+  },
+  loginBtn: {
+    backgroundColor: '#165337',
+    borderRadius: 14,
+    height: 52,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#165337',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.25,
-    shadowRadius: 6,
+    shadowRadius: 8,
     elevation: 4,
   },
   loginBtnContent: {
@@ -352,10 +386,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   loginBtnText: {
+    color: '#FFFFFF',
     fontSize: 15,
     fontWeight: '700',
-    color: colors.white,
-    letterSpacing: 0.3,
+    letterSpacing: 0.2,
   },
   dividerRow: {
     flexDirection: 'row',
@@ -368,39 +402,52 @@ const styles = StyleSheet.create({
     backgroundColor: '#E2E8F0',
   },
   dividerText: {
-    fontSize: 10,
-    fontWeight: '700',
+    marginHorizontal: 12,
     color: '#94A3B8',
-    paddingHorizontal: 8,
-    letterSpacing: 0.8,
+    fontSize: 13,
+    fontWeight: '500',
   },
-  quickButtonsRow: {
+  registerBtn: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1.5,
+    borderColor: '#165337',
+    borderRadius: 14,
+    height: 50,
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent: 'center',
+    alignItems: 'center',
     marginBottom: 20,
   },
-  quickBtn: {
-    flex: 1,
+  registerBtnText: {
+    color: '#165337',
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  securityBanner: {
+    backgroundColor: '#EDF7ED',
+    borderWidth: 1,
+    borderColor: '#C8E6C9',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    height: 40,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 8,
-    marginHorizontal: 4,
-    backgroundColor: '#FFFFFF',
+    marginBottom: 24,
   },
-  quickBtnText: {
+  securityBannerTitle: {
     fontSize: 12,
-    fontWeight: '600',
-    color: colors.textPrimary,
+    fontWeight: '700',
+    color: '#165337',
+  },
+  securityBannerDesc: {
+    fontSize: 11,
+    color: '#2A7350',
+    marginTop: 1,
   },
   footerText: {
     textAlign: 'center',
-    fontSize: 11,
     color: '#94A3B8',
-    marginTop: 'auto',
-    paddingTop: 8,
+    fontSize: 12,
+    marginTop: 4,
   },
 });

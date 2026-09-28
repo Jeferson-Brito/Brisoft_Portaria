@@ -9,7 +9,7 @@
     "splash": {
       "image": "./assets/splash.png",
       "resizeMode": "contain",
-      "backgroundColor": "#0F203D"
+      "backgroundColor": "#165337"
     },
     "ios": {
       "supportsTablet": true,
@@ -22,7 +22,7 @@
       "softwareKeyboardLayoutMode": "pan",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#0F203D"
+        "backgroundColor": "#165337"
       },
       "package": "com.grupocombate.portaria",
       "permissions": [
@@ -48,7 +48,7 @@
         "expo-notifications",
         {
           "icon": "./assets/icon.png",
-          "color": "#0F203D"
+          "color": "#165337"
         }
       ]
     ],

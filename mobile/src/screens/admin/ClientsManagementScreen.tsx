@@ -195,7 +195,7 @@ export const ClientsManagementScreen: React.FC<ClientsManagementScreenProps> = (
             onPress={() => setIsClientModalOpen(true)}
             activeOpacity={0.85}
           >
-            <Plus size={16} color="#0F203D" style={{ marginRight: 4 }} />
+            <Plus size={16} color="#165337" style={{ marginRight: 4 }} />
             <Text style={styles.addClientBtnText}>+ Morador</Text>
           </TouchableOpacity>
 
@@ -458,7 +458,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#F8FAFC',
   },
   header: {
-    backgroundColor: '#0F203D',
+    backgroundColor: '#165337',
     paddingHorizontal: 16,
     paddingTop: 16,
     paddingBottom: 16,
@@ -512,7 +512,7 @@ const styles = StyleSheet.create({
   addClientBtnText: {
     fontSize: 13,
     fontWeight: '700',
-    color: '#0F203D',
+    color: '#165337',
   },
   addDestBtn: {
     flex: 1,
@@ -687,8 +687,8 @@ const styles = StyleSheet.create({
     borderColor: '#E2E8F0',
   },
   destChipSelected: {
-    backgroundColor: '#0F203D',
-    borderColor: '#0F203D',
+    backgroundColor: '#165337',
+    borderColor: '#165337',
   },
   destChipText: {
     fontSize: 12,
@@ -720,7 +720,7 @@ const styles = StyleSheet.create({
   },
   saveBtn: {
     flex: 1.5,
-    backgroundColor: '#0F203D',
+    backgroundColor: '#165337',
     alignItems: 'center',
     justifyContent: 'center',
     height: 46,

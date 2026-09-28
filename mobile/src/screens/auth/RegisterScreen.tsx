@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -10,11 +10,26 @@ import {
   Platform,
   ActivityIndicator,
   Alert,
-  Animated,
-  Easing,
+  StatusBar,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import {
+  ArrowLeft,
+  ArrowRight,
+  User,
+  Mail,
+  Phone,
+  Lock,
+  Eye,
+  EyeOff,
+  Building,
+  FileText,
+  ShieldCheck,
+  CheckCircle2,
+  Sparkles,
+} from 'lucide-react-native';
 import { useAuth, RegisterData } from '../../contexts/AuthContext';
+import { colors } from '../../theme/colors';
 
 interface RegisterScreenProps {
   onLoginPress: () => void;
@@ -22,51 +37,28 @@ interface RegisterScreenProps {
 
 export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onLoginPress }) => {
   const { register } = useAuth();
-  const [step, setStep] = useState(1); // 1 = Empresa | 2 = Responsável
+  const [step, setStep] = useState<1 | 2 | 3>(1); // 1 = Dados Pessoais | 2 = Empresa | 3 = Confirmação
   const [isLoading, setIsLoading] = useState(false);
-  const slideAnim = useRef(new Animated.Value(0)).current;
 
-  // Campos empresa
-  const [orgName, setOrgName] = useState('');
-  const [orgDocument, setOrgDocument] = useState('');
-
-  // Campos admin
+  // Campos Responsável (Dados Pessoais)
   const [adminName, setAdminName] = useState('');
   const [adminEmail, setAdminEmail] = useState('');
   const [adminPhone, setAdminPhone] = useState('');
   const [adminPassword, setAdminPassword] = useState('');
   const [adminConfirmPassword, setAdminConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
-  const goToStep2 = () => {
-    if (!orgName.trim()) {
-      Alert.alert('Atenção', 'Informe o nome do estabelecimento.');
-      return;
-    }
-    Animated.timing(slideAnim, {
-      toValue: -400,
-      duration: 300,
-      easing: Easing.out(Easing.cubic),
-      useNativeDriver: true,
-    }).start(() => setStep(2));
-  };
+  // Campos Empresa
+  const [orgName, setOrgName] = useState('');
+  const [orgDocument, setOrgDocument] = useState('');
 
-  const goToStep1 = () => {
-    setStep(1);
-    Animated.timing(slideAnim, {
-      toValue: 0,
-      duration: 300,
-      easing: Easing.out(Easing.cubic),
-      useNativeDriver: true,
-    }).start();
-  };
-
-  const handleRegister = async () => {
+  const handleNextFromStep1 = () => {
     if (!adminName.trim()) {
       Alert.alert('Atenção', 'Informe seu nome completo.');
       return;
     }
-    if (!adminEmail.trim()) {
+    if (!adminEmail.trim() || !adminEmail.includes('@')) {
       Alert.alert('Atenção', 'Informe um e-mail válido.');
       return;
     }
@@ -78,7 +70,18 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onLoginPress }) 
       Alert.alert('Atenção', 'As senhas não coincidem.');
       return;
     }
+    setStep(2);
+  };
 
+  const handleNextFromStep2 = () => {
+    if (!orgName.trim()) {
+      Alert.alert('Atenção', 'Informe o nome do condomínio ou empresa.');
+      return;
+    }
+    setStep(3);
+  };
+
+  const handleFinalRegister = async () => {
     setIsLoading(true);
     try {
       const data: RegisterData = {
@@ -90,7 +93,6 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onLoginPress }) 
         adminPhone: adminPhone.trim() || undefined,
       };
       await register(data);
-      // Após registro bem-sucedido o AuthContext muda o user e o App navega automaticamente
     } catch (err: any) {
       Alert.alert('Erro ao criar conta', err.message);
     } finally {
@@ -98,191 +100,337 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onLoginPress }) 
     }
   };
 
-  const renderStep1 = () => (
-    <View style={styles.stepContainer}>
-      <View style={styles.stepHeader}>
-        <Text style={styles.stepLabel}>PASSO 1 DE 2</Text>
-        <Text style={styles.stepTitle}>Sobre seu estabelecimento</Text>
-        <Text style={styles.stepDesc}>
-          Residencial, condomínio, clínica ou empresa — o sistema se adapta ao seu negócio.
-        </Text>
-      </View>
-
-      <View style={styles.inputGroup}>
-        <Text style={styles.label}>Nome do Estabelecimento *</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="Ex: Residencial Parque das Flores"
-          placeholderTextColor="#64748B"
-          value={orgName}
-          onChangeText={setOrgName}
-          autoCapitalize="words"
-        />
-      </View>
-
-      <View style={styles.inputGroup}>
-        <Text style={styles.label}>CNPJ (opcional)</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="00.000.000/0001-00"
-          placeholderTextColor="#64748B"
-          value={orgDocument}
-          onChangeText={setOrgDocument}
-          keyboardType="numeric"
-        />
-      </View>
-
-      {/* Banner de trial */}
-      <View style={styles.trialBanner}>
-        <Text style={styles.trialIcon}>🎉</Text>
-        <View>
-          <Text style={styles.trialTitle}>7 dias grátis, sem cartão</Text>
-          <Text style={styles.trialDesc}>Após o período, apenas R$149/mês com acesso completo.</Text>
-        </View>
-      </View>
-
-      <TouchableOpacity style={styles.primaryButton} onPress={goToStep2}>
-        <Text style={styles.primaryButtonText}>Continuar →</Text>
-      </TouchableOpacity>
-    </View>
-  );
-
-  const renderStep2 = () => (
-    <View style={styles.stepContainer}>
-      <TouchableOpacity onPress={goToStep1} style={styles.backButton}>
-        <Text style={styles.backButtonText}>← Voltar</Text>
-      </TouchableOpacity>
-
-      <View style={styles.stepHeader}>
-        <Text style={styles.stepLabel}>PASSO 2 DE 2</Text>
-        <Text style={styles.stepTitle}>Sua conta de acesso</Text>
-        <Text style={styles.stepDesc}>
-          Você será o administrador responsável pela assinatura.
-        </Text>
-      </View>
-
-      <View style={styles.inputGroup}>
-        <Text style={styles.label}>Seu Nome Completo *</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="Ex: João Silva"
-          placeholderTextColor="#64748B"
-          value={adminName}
-          onChangeText={setAdminName}
-          autoCapitalize="words"
-        />
-      </View>
-
-      <View style={styles.inputGroup}>
-        <Text style={styles.label}>E-mail *</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="seu@email.com"
-          placeholderTextColor="#64748B"
-          value={adminEmail}
-          onChangeText={setAdminEmail}
-          keyboardType="email-address"
-          autoCapitalize="none"
-        />
-      </View>
-
-      <View style={styles.inputGroup}>
-        <Text style={styles.label}>WhatsApp / Telefone</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="(11) 99999-9999"
-          placeholderTextColor="#64748B"
-          value={adminPhone}
-          onChangeText={setAdminPhone}
-          keyboardType="phone-pad"
-        />
-      </View>
-
-      <View style={styles.inputGroup}>
-        <Text style={styles.label}>Senha *</Text>
-        <View style={styles.inputRow}>
-          <TextInput
-            style={[styles.input, { flex: 1 }]}
-            placeholder="Mín. 8 caracteres"
-            placeholderTextColor="#64748B"
-            value={adminPassword}
-            onChangeText={setAdminPassword}
-            secureTextEntry={!showPassword}
-          />
-          <TouchableOpacity
-            style={styles.eyeButton}
-            onPress={() => setShowPassword(!showPassword)}
-          >
-            <Text style={styles.eyeText}>{showPassword ? '🙈' : '👁️'}</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-
-      <View style={styles.inputGroup}>
-        <Text style={styles.label}>Confirmar Senha *</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="Repita a senha"
-          placeholderTextColor="#64748B"
-          value={adminConfirmPassword}
-          onChangeText={setAdminConfirmPassword}
-          secureTextEntry={!showPassword}
-        />
-      </View>
-
-      <Text style={styles.termsText}>
-        Ao criar sua conta, você concorda com os{' '}
-        <Text style={styles.termsLink}>Termos de Uso</Text> e{' '}
-        <Text style={styles.termsLink}>Política de Privacidade</Text>.
-      </Text>
-
-      <TouchableOpacity
-        style={[styles.primaryButton, isLoading && styles.buttonDisabled]}
-        onPress={handleRegister}
-        disabled={isLoading}
-      >
-        {isLoading ? (
-          <ActivityIndicator color="#FFF" />
-        ) : (
-          <Text style={styles.primaryButtonText}>Criar Conta Grátis 🚀</Text>
-        )}
-      </TouchableOpacity>
-    </View>
-  );
-
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
+      <StatusBar barStyle="dark-content" backgroundColor="#F4F7F5" />
+
+      {/* Onda suave orgânica no topo direito */}
+      <View style={styles.topRightWave} />
+
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={{ flex: 1 }}
       >
         <ScrollView
-          contentContainerStyle={styles.scroll}
+          contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          {/* Header */}
-          <View style={styles.header}>
-            <Text style={styles.brand}>Combate Portaria</Text>
-            <Text style={styles.tagline}>Controle de Acesso Profissional</Text>
+          {/* Header Superior: Botão Voltar */}
+          <View style={styles.topBar}>
+            <TouchableOpacity
+              onPress={() => {
+                if (step === 3) setStep(2);
+                else if (step === 2) setStep(1);
+                else onLoginPress();
+              }}
+              style={styles.backButton}
+              activeOpacity={0.7}
+            >
+              <ArrowLeft size={22} color="#0F172A" />
+            </TouchableOpacity>
           </View>
 
-          {/* Indicador de progresso */}
-          <View style={styles.progressContainer}>
-            <View style={[styles.progressDot, step >= 1 && styles.progressDotActive]} />
-            <View style={[styles.progressLine, step >= 2 && styles.progressLineActive]} />
-            <View style={[styles.progressDot, step >= 2 && styles.progressDotActive]} />
+          {/* Logo / Badge Central Oficial */}
+          <View style={styles.logoBadgeContainer}>
+            <View style={styles.logoBadge}>
+              <ShieldCheck size={38} color="#FFFFFF" strokeWidth={2.2} />
+            </View>
           </View>
 
-          {/* Conteúdo do step */}
-          {step === 1 ? renderStep1() : renderStep2()}
+          {/* Títulos */}
+          <Text style={styles.title}>Criar sua conta</Text>
+          <Text style={styles.subtitle}>
+            Preencha os dados abaixo para começar a usar o sistema.
+          </Text>
 
-          {/* Link para login */}
-          <TouchableOpacity onPress={onLoginPress} style={styles.loginLink}>
-            <Text style={styles.loginLinkText}>
-              Já tem uma conta? <Text style={styles.loginLinkBold}>Fazer login</Text>
-            </Text>
-          </TouchableOpacity>
+          {/* Stepper com 3 Passos */}
+          <View style={styles.stepperContainer}>
+            {/* Passo 1: Dados Pessoais */}
+            <View style={styles.stepItem}>
+              <View style={[styles.stepCircle, step >= 1 && styles.stepCircleActive]}>
+                <Text style={[styles.stepNumber, step >= 1 && styles.stepNumberActive]}>1</Text>
+              </View>
+              <Text style={[styles.stepLabel, step >= 1 && styles.stepLabelActive]}>
+                Dados Pessoais
+              </Text>
+            </View>
+
+            {/* Linha Conectora 1 -> 2 */}
+            <View style={[styles.stepLine, step >= 2 && styles.stepLineActive]} />
+
+            {/* Passo 2: Empresa */}
+            <View style={styles.stepItem}>
+              <View style={[styles.stepCircle, step >= 2 && styles.stepCircleActive]}>
+                <Text style={[styles.stepNumber, step >= 2 && styles.stepNumberActive]}>2</Text>
+              </View>
+              <Text style={[styles.stepLabel, step >= 2 && styles.stepLabelActive]}>
+                Empresa
+              </Text>
+            </View>
+
+            {/* Linha Conectora 2 -> 3 */}
+            <View style={[styles.stepLine, step >= 3 && styles.stepLineActive]} />
+
+            {/* Passo 3: Confirmação */}
+            <View style={styles.stepItem}>
+              <View style={[styles.stepCircle, step >= 3 && styles.stepCircleActive]}>
+                <Text style={[styles.stepNumber, step >= 3 && styles.stepNumberActive]}>3</Text>
+              </View>
+              <Text style={[styles.stepLabel, step >= 3 && styles.stepLabelActive]}>
+                Confirmação
+              </Text>
+            </View>
+          </View>
+
+          {/* CONTEÚDO DE CADA PASSO */}
+
+          {/* PASSO 1: DADOS PESSOAIS */}
+          {step === 1 && (
+            <View style={styles.formContainer}>
+              {/* Nome Completo */}
+              <View style={styles.inputBox}>
+                <User size={18} color="#64748B" style={styles.inputIcon} />
+                <View style={styles.inputContent}>
+                  <Text style={styles.fieldLabel}>Nome completo</Text>
+                  <TextInput
+                    style={styles.textInput}
+                    placeholder="Digite seu nome completo"
+                    placeholderTextColor="#94A3B8"
+                    value={adminName}
+                    onChangeText={setAdminName}
+                    autoCapitalize="words"
+                  />
+                </View>
+              </View>
+
+              {/* E-mail */}
+              <View style={styles.inputBox}>
+                <Mail size={18} color="#64748B" style={styles.inputIcon} />
+                <View style={styles.inputContent}>
+                  <Text style={styles.fieldLabel}>E-mail</Text>
+                  <TextInput
+                    style={styles.textInput}
+                    placeholder="ex: usuario@exemplo.com"
+                    placeholderTextColor="#94A3B8"
+                    value={adminEmail}
+                    onChangeText={setAdminEmail}
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                  />
+                </View>
+              </View>
+
+              {/* Telefone / WhatsApp */}
+              <View style={styles.inputBox}>
+                <Phone size={18} color="#64748B" style={styles.inputIcon} />
+                <View style={styles.inputContent}>
+                  <Text style={styles.fieldLabel}>Telefone / WhatsApp</Text>
+                  <TextInput
+                    style={styles.textInput}
+                    placeholder="(00) 00000-0000"
+                    placeholderTextColor="#94A3B8"
+                    value={adminPhone}
+                    onChangeText={setAdminPhone}
+                    keyboardType="phone-pad"
+                  />
+                </View>
+              </View>
+
+              {/* Senha */}
+              <View style={styles.inputBox}>
+                <Lock size={18} color="#64748B" style={styles.inputIcon} />
+                <View style={[styles.inputContent, { paddingRight: 40 }]}>
+                  <Text style={styles.fieldLabel}>Senha</Text>
+                  <TextInput
+                    style={styles.textInput}
+                    placeholder="Digite sua senha (mín. 8 caracteres)"
+                    placeholderTextColor="#94A3B8"
+                    value={adminPassword}
+                    onChangeText={setAdminPassword}
+                    secureTextEntry={!showPassword}
+                  />
+                </View>
+                <TouchableOpacity
+                  style={styles.eyeBtn}
+                  onPress={() => setShowPassword(!showPassword)}
+                >
+                  {showPassword ? <EyeOff size={18} color="#64748B" /> : <Eye size={18} color="#64748B" />}
+                </TouchableOpacity>
+              </View>
+
+              {/* Confirmar Senha */}
+              <View style={styles.inputBox}>
+                <Lock size={18} color="#64748B" style={styles.inputIcon} />
+                <View style={[styles.inputContent, { paddingRight: 40 }]}>
+                  <Text style={styles.fieldLabel}>Confirmar senha</Text>
+                  <TextInput
+                    style={styles.textInput}
+                    placeholder="Repita sua senha"
+                    placeholderTextColor="#94A3B8"
+                    value={adminConfirmPassword}
+                    onChangeText={setAdminConfirmPassword}
+                    secureTextEntry={!showConfirmPassword}
+                  />
+                </View>
+                <TouchableOpacity
+                  style={styles.eyeBtn}
+                  onPress={() => setShowConfirmPassword(!showConfirmPassword)}
+                >
+                  {showConfirmPassword ? <EyeOff size={18} color="#64748B" /> : <Eye size={18} color="#64748B" />}
+                </TouchableOpacity>
+              </View>
+
+              {/* Card de Aviso / Segurança */}
+              <View style={styles.securityAlertCard}>
+                <ShieldCheck size={20} color="#165337" style={{ marginRight: 10 }} />
+                <Text style={styles.securityAlertText}>
+                  Sua conta será aprovada pela administração do condomínio.
+                </Text>
+              </View>
+
+              {/* Botão Continuar */}
+              <TouchableOpacity
+                style={styles.primaryBtn}
+                onPress={handleNextFromStep1}
+                activeOpacity={0.88}
+              >
+                <Text style={styles.primaryBtnText}>Continuar</Text>
+                <ArrowRight size={18} color="#FFFFFF" style={{ marginLeft: 8 }} />
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {/* PASSO 2: DADOS DA EMPRESA */}
+          {step === 2 && (
+            <View style={styles.formContainer}>
+              {/* Nome do Condomínio / Empresa */}
+              <View style={styles.inputBox}>
+                <Building size={18} color="#64748B" style={styles.inputIcon} />
+                <View style={styles.inputContent}>
+                  <Text style={styles.fieldLabel}>Nome do Condomínio ou Empresa</Text>
+                  <TextInput
+                    style={styles.textInput}
+                    placeholder="Ex: Residencial Parque das Flores"
+                    placeholderTextColor="#94A3B8"
+                    value={orgName}
+                    onChangeText={setOrgName}
+                    autoCapitalize="words"
+                  />
+                </View>
+              </View>
+
+              {/* CNPJ ou Documento */}
+              <View style={styles.inputBox}>
+                <FileText size={18} color="#64748B" style={styles.inputIcon} />
+                <View style={styles.inputContent}>
+                  <Text style={styles.fieldLabel}>CNPJ (opcional)</Text>
+                  <TextInput
+                    style={styles.textInput}
+                    placeholder="00.000.000/0001-00"
+                    placeholderTextColor="#94A3B8"
+                    value={orgDocument}
+                    onChangeText={setOrgDocument}
+                    keyboardType="numeric"
+                  />
+                </View>
+              </View>
+
+              {/* Card de Benefício dos 7 dias */}
+              <View style={styles.securityAlertCard}>
+                <Sparkles size={20} color="#165337" style={{ marginRight: 10 }} />
+                <Text style={styles.securityAlertText}>
+                  Aproveite 7 dias de teste grátis com todas as funcionalidades liberadas, sem necessidade de cartão de crédito.
+                </Text>
+              </View>
+
+              {/* Botão Continuar */}
+              <TouchableOpacity
+                style={styles.primaryBtn}
+                onPress={handleNextFromStep2}
+                activeOpacity={0.88}
+              >
+                <Text style={styles.primaryBtnText}>Continuar</Text>
+                <ArrowRight size={18} color="#FFFFFF" style={{ marginLeft: 8 }} />
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.secondaryBackBtn}
+                onPress={() => setStep(1)}
+              >
+                <Text style={styles.secondaryBackBtnText}>← Voltar aos dados pessoais</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {/* PASSO 3: CONFIRMAÇÃO */}
+          {step === 3 && (
+            <View style={styles.formContainer}>
+              <View style={styles.summaryCard}>
+                <Text style={styles.summaryTitle}>Resumo do Cadastro</Text>
+
+                <View style={styles.summaryRow}>
+                  <Text style={styles.summaryLabel}>Administrador:</Text>
+                  <Text style={styles.summaryValue}>{adminName}</Text>
+                </View>
+
+                <View style={styles.summaryRow}>
+                  <Text style={styles.summaryLabel}>E-mail:</Text>
+                  <Text style={styles.summaryValue}>{adminEmail}</Text>
+                </View>
+
+                <View style={styles.summaryRow}>
+                  <Text style={styles.summaryLabel}>Telefone:</Text>
+                  <Text style={styles.summaryValue}>{adminPhone || 'Não informado'}</Text>
+                </View>
+
+                <View style={styles.summaryRow}>
+                  <Text style={styles.summaryLabel}>Empresa:</Text>
+                  <Text style={styles.summaryValue}>{orgName}</Text>
+                </View>
+
+                <View style={[styles.summaryRow, { borderBottomWidth: 0 }]}>
+                  <Text style={styles.summaryLabel}>Período de Teste:</Text>
+                  <Text style={[styles.summaryValue, { color: '#165337', fontWeight: '700' }]}>
+                    7 dias grátis
+                  </Text>
+                </View>
+              </View>
+
+              {/* Botão Finalizar */}
+              <TouchableOpacity
+                style={[styles.primaryBtn, isLoading && { opacity: 0.7 }]}
+                onPress={handleFinalRegister}
+                disabled={isLoading}
+                activeOpacity={0.88}
+              >
+                {isLoading ? (
+                  <ActivityIndicator color="#FFFFFF" />
+                ) : (
+                  <>
+                    <Text style={styles.primaryBtnText}>Finalizar e Criar Conta</Text>
+                    <CheckCircle2 size={18} color="#FFFFFF" style={{ marginLeft: 8 }} />
+                  </>
+                )}
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.secondaryBackBtn}
+                onPress={() => setStep(2)}
+                disabled={isLoading}
+              >
+                <Text style={styles.secondaryBackBtnText}>← Voltar</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {/* Link para Fazer Login */}
+          <View style={styles.footerLinkRow}>
+            <Text style={styles.footerText}>Já tem uma conta? </Text>
+            <TouchableOpacity onPress={onLoginPress}>
+              <Text style={styles.loginLinkHighlight}>Fazer login</Text>
+            </TouchableOpacity>
+          </View>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -292,183 +440,248 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onLoginPress }) 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0B1A30',
+    backgroundColor: '#F4F7F5',
   },
-  scroll: {
+  topRightWave: {
+    position: 'absolute',
+    top: 0,
+    right: -40,
+    width: 200,
+    height: 200,
+    borderRadius: 100,
+    backgroundColor: 'rgba(180, 222, 196, 0.25)',
+  },
+  scrollContent: {
     flexGrow: 1,
     paddingHorizontal: 24,
     paddingBottom: 40,
   },
-  header: {
-    alignItems: 'center',
-    paddingTop: 32,
-    paddingBottom: 24,
+  topBar: {
+    marginTop: 8,
+    marginBottom: 8,
   },
-  brand: {
-    color: '#FFFFFF',
+  backButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  logoBadgeContainer: {
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  logoBadge: {
+    width: 72,
+    height: 72,
+    borderRadius: 22,
+    backgroundColor: '#165337',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#165337',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.25,
+    shadowRadius: 10,
+    elevation: 6,
+  },
+  title: {
     fontSize: 24,
     fontWeight: '800',
-    letterSpacing: 0.5,
+    color: '#0F172A',
+    textAlign: 'center',
+    marginBottom: 6,
   },
-  tagline: {
+  subtitle: {
+    fontSize: 14,
     color: '#64748B',
-    fontSize: 13,
-    marginTop: 4,
+    textAlign: 'center',
+    paddingHorizontal: 20,
+    marginBottom: 26,
+    lineHeight: 20,
   },
-  progressContainer: {
+  stepperContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 32,
-    gap: 8,
-  },
-  progressDot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    backgroundColor: '#1E3A5F',
-    borderWidth: 2,
-    borderColor: '#334155',
-  },
-  progressDotActive: {
-    backgroundColor: '#3B82F6',
-    borderColor: '#3B82F6',
-  },
-  progressLine: {
-    flex: 1,
-    maxWidth: 80,
-    height: 2,
-    backgroundColor: '#1E3A5F',
-  },
-  progressLineActive: {
-    backgroundColor: '#3B82F6',
-  },
-  stepContainer: {
-    flex: 1,
-  },
-  stepHeader: {
     marginBottom: 28,
   },
-  stepLabel: {
-    color: '#3B82F6',
-    fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 1.2,
+  stepItem: {
+    alignItems: 'center',
+  },
+  stepCircle: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#E2E8F0',
+    justifyContent: 'center',
+    alignItems: 'center',
     marginBottom: 6,
   },
-  stepTitle: {
-    color: '#FFFFFF',
-    fontSize: 22,
-    fontWeight: '800',
-    marginBottom: 8,
+  stepCircleActive: {
+    backgroundColor: '#165337',
   },
-  stepDesc: {
-    color: '#94A3B8',
+  stepNumber: {
     fontSize: 14,
-    lineHeight: 20,
+    fontWeight: '700',
+    color: '#64748B',
   },
-  backButton: {
+  stepNumberActive: {
+    color: '#FFFFFF',
+  },
+  stepLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#94A3B8',
+  },
+  stepLabelActive: {
+    color: '#165337',
+    fontWeight: '700',
+  },
+  stepLine: {
+    width: 44,
+    height: 2,
+    backgroundColor: '#E2E8F0',
+    marginHorizontal: 8,
+    marginBottom: 18,
+  },
+  stepLineActive: {
+    backgroundColor: '#165337',
+  },
+  formContainer: {
+    width: '100%',
+  },
+  inputBox: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    marginBottom: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    position: 'relative',
+  },
+  inputIcon: {
+    marginRight: 12,
+  },
+  inputContent: {
+    flex: 1,
+  },
+  fieldLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#64748B',
+    marginBottom: 2,
+  },
+  textInput: {
+    fontSize: 14,
+    color: '#0F172A',
+    fontWeight: '500',
+    padding: 0,
+  },
+  eyeBtn: {
+    position: 'absolute',
+    right: 14,
+    padding: 6,
+  },
+  securityAlertCard: {
+    backgroundColor: '#EDF7ED',
+    borderWidth: 1,
+    borderColor: '#C8E6C9',
+    borderRadius: 12,
+    padding: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 6,
     marginBottom: 20,
   },
-  backButtonText: {
-    color: '#3B82F6',
+  securityAlertText: {
+    flex: 1,
+    fontSize: 12,
+    color: '#165337',
+    fontWeight: '500',
+    lineHeight: 18,
+  },
+  primaryBtn: {
+    backgroundColor: '#165337',
+    borderRadius: 14,
+    height: 52,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#165337',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.22,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  primaryBtnText: {
+    color: '#FFFFFF',
     fontSize: 15,
+    fontWeight: '700',
+  },
+  secondaryBackBtn: {
+    alignItems: 'center',
+    paddingVertical: 12,
+    marginTop: 6,
+  },
+  secondaryBackBtnText: {
+    fontSize: 13,
+    color: '#64748B',
     fontWeight: '600',
   },
-  inputGroup: {
-    marginBottom: 16,
+  summaryCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 18,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    marginBottom: 22,
   },
-  label: {
-    color: '#CBD5E1',
+  summaryTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#0F172A',
+    marginBottom: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+    paddingBottom: 8,
+  },
+  summaryRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F8FAFC',
+  },
+  summaryLabel: {
+    fontSize: 13,
+    color: '#64748B',
+  },
+  summaryValue: {
     fontSize: 13,
     fontWeight: '600',
-    marginBottom: 6,
+    color: '#0F172A',
+    maxWidth: '60%',
+    textAlign: 'right',
   },
-  input: {
-    backgroundColor: '#1E3A5F',
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    color: '#FFFFFF',
-    fontSize: 15,
-    borderWidth: 1,
-    borderColor: '#334155',
-  },
-  inputRow: {
+  footerLinkRow: {
     flexDirection: 'row',
+    justifyContent: 'center',
     alignItems: 'center',
-    gap: 8,
+    marginTop: 24,
   },
-  eyeButton: {
-    backgroundColor: '#1E3A5F',
-    borderRadius: 12,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: '#334155',
-  },
-  eyeText: {
-    fontSize: 18,
-  },
-  trialBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(59,130,246,0.12)',
-    borderRadius: 14,
-    padding: 16,
-    marginVertical: 20,
-    borderWidth: 1,
-    borderColor: 'rgba(59,130,246,0.3)',
-    gap: 12,
-  },
-  trialIcon: {
-    fontSize: 28,
-  },
-  trialTitle: {
-    color: '#FFFFFF',
-    fontSize: 15,
-    fontWeight: '700',
-    marginBottom: 3,
-  },
-  trialDesc: {
-    color: '#94A3B8',
-    fontSize: 12,
-  },
-  primaryButton: {
-    backgroundColor: '#3B82F6',
-    borderRadius: 14,
-    paddingVertical: 16,
-    alignItems: 'center',
-    marginTop: 20,
-  },
-  buttonDisabled: {
-    opacity: 0.6,
-  },
-  primaryButtonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  termsText: {
-    color: '#64748B',
-    fontSize: 12,
-    textAlign: 'center',
-    lineHeight: 18,
-    marginTop: 16,
-  },
-  termsLink: {
-    color: '#3B82F6',
-    textDecorationLine: 'underline',
-  },
-  loginLink: {
-    alignItems: 'center',
-    marginTop: 32,
-  },
-  loginLinkText: {
-    color: '#64748B',
+  footerText: {
     fontSize: 14,
+    color: '#64748B',
   },
-  loginLinkBold: {
-    color: '#3B82F6',
+  loginLinkHighlight: {
+    fontSize: 14,
     fontWeight: '700',
+    color: '#165337',
   },
 });

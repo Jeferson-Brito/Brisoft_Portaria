@@ -52,7 +52,7 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
 
 const styles = StyleSheet.create({
   header: {
-    backgroundColor: '#0F203D',
+    backgroundColor: '#165337',
     paddingHorizontal: 18,
     paddingBottom: 16,
     borderBottomLeftRadius: 20,

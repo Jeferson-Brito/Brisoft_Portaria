@@ -23,19 +23,19 @@ export const RealtimeAlertBanner: React.FC = () => {
     ? '#064E3B' // Verde Esmeralda Profundo
     : isDeny
     ? '#7F1D1D' // Vermelho Rubi Escuro
-    : '#0F203D'; // Azul Marinho Profundo Combate
+    : '#165337'; // Verde Floresta Profundo Combate
 
   const borderColor = isAuth
     ? '#10B981'
     : isDeny
     ? '#EF4444'
-    : '#3B82F6';
+    : '#34D399';
 
   const iconColor = isAuth
     ? '#34D399'
     : isDeny
     ? '#F87171'
-    : '#60A5FA';
+    : '#6EE7B7';
 
   return (
     <View style={styles.container} pointerEvents="box-none">

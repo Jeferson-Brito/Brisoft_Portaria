@@ -41,12 +41,12 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: '#0F203D',
+    backgroundColor: '#165337',
     justifyContent: 'center',
     alignItems: 'center',
     zIndex: 999,
     borderWidth: 1.5,
-    borderColor: '#334155',
+    borderColor: '#23734C',
     ...Platform.select({
       ios: {
         shadowColor: '#000',

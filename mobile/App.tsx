@@ -193,7 +193,7 @@ export default function App() {
 const styles = StyleSheet.create({
   loadingContainer: {
     flex: 1,
-    backgroundColor: '#0F203D',
+    backgroundColor: '#165337',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -210,7 +210,7 @@ const styles = StyleSheet.create({
     height: 170,
     borderRadius: 85,
     borderWidth: 2,
-    borderColor: 'rgba(59,130,246,0.7)',
+    borderColor: 'rgba(52, 211, 153, 0.45)',
   },
   loadingLogo: {
     width: 120,
@@ -224,7 +224,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   loadingTagline: {
-    color: '#94A3B8',
+    color: '#D1FAE5',
     fontSize: 13,
     fontWeight: '500',
     letterSpacing: 0.3,
@@ -233,13 +233,13 @@ const styles = StyleSheet.create({
   progressTrack: {
     width: 190,
     height: 3,
-    backgroundColor: 'rgba(255,255,255,0.12)',
+    backgroundColor: 'rgba(255,255,255,0.18)',
     borderRadius: 2,
     overflow: 'hidden',
   },
   progressBar: {
     height: 3,
-    backgroundColor: '#3B82F6',
+    backgroundColor: '#34D399',
     borderRadius: 2,
   },
 });

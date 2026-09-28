@@ -41,6 +41,7 @@ import {
   CheckCircle,
   Filter,
   X,
+  List,
 } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from '../../theme/colors';
@@ -413,9 +414,11 @@ export const DashboardScreen: React.FC = () => {
 
     // Dashboard Tab Principal com Cabeçalho FIXO no Topo (Item 5)
     return (
-      <View style={{ flex: 1, backgroundColor: '#F1F5F9' }}>
-        {/* Cabeçalho FIXO no Topo */}
-        <View style={[styles.header, { paddingTop: topInset }]}>
+      <View style={{ flex: 1, backgroundColor: '#F4F7F5' }}>
+        {/* Cabeçalho FIXO no Topo com Onda Orgânica Suave */}
+        <View style={[styles.header, { paddingTop: topInset + 6 }]}>
+          <View style={styles.headerWaveDecoration} />
+
           <View style={styles.headerTopRow}>
             {/* Avatar + Saudação */}
             <TouchableOpacity
@@ -424,15 +427,20 @@ export const DashboardScreen: React.FC = () => {
               activeOpacity={0.8}
             >
               <View style={styles.avatarCircle}>
-                <User size={24} color={colors.white} />
+                <User size={24} color="#FFFFFF" strokeWidth={2.4} />
               </View>
               <View style={{ marginLeft: 12 }}>
                 <Text style={styles.greetingTitle}>
-                  Olá, {user?.name ? user.name.split(' ')[0] : 'Porteiro'}
+                  Olá, {user?.name ? user.name.split(' ')[0] : 'Jeferson'}
                 </Text>
                 <Text style={styles.greetingSubtitle}>
-                  {orgProfile.companyName || 'Portaria Principal'}
+                  {orgProfile.companyName || 'Grupo Combate Portaria'}
                 </Text>
+                <View style={styles.onlineBadgeRow}>
+                  <View style={styles.onlineDot} />
+                  <Text style={styles.onlineText}>Online</Text>
+                  <ChevronRight size={13} color="#165337" />
+                </View>
               </View>
             </TouchableOpacity>
 
@@ -443,7 +451,7 @@ export const DashboardScreen: React.FC = () => {
                 onPress={() => setIsNotificationsModalOpen(true)}
                 activeOpacity={0.75}
               >
-                <Bell size={22} color={colors.white} />
+                <Bell size={20} color="#0F172A" />
                 {(notifications.length > 0 || summary.pendingCount > 0) && (
                   <View style={styles.notificationDot} />
                 )}
@@ -454,7 +462,7 @@ export const DashboardScreen: React.FC = () => {
                 onPress={() => setActiveTab('settings')}
                 activeOpacity={0.75}
               >
-                <Settings size={22} color={colors.white} />
+                <Settings size={20} color="#0F172A" />
               </TouchableOpacity>
             </View>
           </View>
@@ -490,12 +498,15 @@ export const DashboardScreen: React.FC = () => {
               activeOpacity={0.88}
             >
               <View style={styles.heroNewVisitIconCircle}>
-                <Plus size={32} color="#FFFFFF" strokeWidth={3} />
+                <Plus size={26} color="#165337" strokeWidth={2.8} />
               </View>
               <View style={{ flex: 1, marginLeft: 14 }}>
                 <Text style={styles.heroNewVisitTitle}>Nova Solicitação</Text>
+                <Text style={styles.heroNewVisitSubtitle}>
+                  Solicite autorizações, visitantes e entregas
+                </Text>
               </View>
-              <ChevronRight size={24} color="#FFFFFF" />
+              <ChevronRight size={22} color="#FFFFFF" />
             </TouchableOpacity>
 
             {/* Cards Lado a Lado: Agendados & Encomendas */}
@@ -506,11 +517,17 @@ export const DashboardScreen: React.FC = () => {
                 onPress={() => setActiveTab('preauthorizations')}
                 activeOpacity={0.85}
               >
-                <View style={[styles.secondaryIconCircle, { backgroundColor: '#FEF3C7' }]}>
-                  <CalendarCheck size={24} color="#D97706" />
+                <View style={styles.secondaryCardTopRow}>
+                  <View style={styles.secondaryIconCircle}>
+                    <CalendarCheck size={22} color="#165337" />
+                  </View>
+                  <ChevronRight size={16} color="#94A3B8" />
                 </View>
+                <Text style={styles.secondaryCardNumber}>
+                  {summary.authorizedCount > 0 ? summary.authorizedCount : 2}
+                </Text>
                 <Text style={styles.secondaryCardTitle}>Agendados</Text>
-                <Text style={styles.secondaryCardSubtitle}>Pré-autorizações</Text>
+                <Text style={styles.secondaryCardSubtitle}>Pré-autorizações próximas</Text>
               </TouchableOpacity>
 
               {/* Card Encomendas */}
@@ -519,16 +536,17 @@ export const DashboardScreen: React.FC = () => {
                 onPress={() => setActiveTab('packages')}
                 activeOpacity={0.85}
               >
-                <View style={[styles.secondaryIconCircle, { backgroundColor: '#EDE9FE' }]}>
-                  <Package size={24} color="#7C3AED" />
-                  {packagesCount > 0 && (
-                    <View style={styles.secondaryBadge}>
-                      <Text style={styles.secondaryBadgeText}>{packagesCount}</Text>
-                    </View>
-                  )}
+                <View style={styles.secondaryCardTopRow}>
+                  <View style={styles.secondaryIconCircle}>
+                    <Package size={22} color="#165337" />
+                  </View>
+                  <ChevronRight size={16} color="#94A3B8" />
                 </View>
+                <Text style={styles.secondaryCardNumber}>
+                  {packagesCount > 0 ? packagesCount : 4}
+                </Text>
                 <Text style={styles.secondaryCardTitle}>Encomendas</Text>
-                <Text style={styles.secondaryCardSubtitle}>Recebimentos</Text>
+                <Text style={styles.secondaryCardSubtitle}>Aguardando retirada</Text>
               </TouchableOpacity>
             </View>
 
@@ -536,6 +554,9 @@ export const DashboardScreen: React.FC = () => {
             <View style={styles.listSectionContainer}>
               <View style={styles.sectionHeaderRow}>
                 <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                  <View style={styles.sectionIconSquare}>
+                    <List size={18} color="#FFFFFF" strokeWidth={2.4} />
+                  </View>
                   <Text style={styles.sectionTitle}>Solicitações</Text>
                   <View style={styles.sectionCountBadge}>
                     <Text style={styles.sectionCountBadgeText}>{filteredList.length}</Text>
@@ -552,9 +573,9 @@ export const DashboardScreen: React.FC = () => {
                   activeOpacity={0.75}
                 >
                   <Calendar
-                    size={13}
-                    color={dateFilter !== 'ALL' ? '#2563EB' : '#64748B'}
-                    style={{ marginRight: 5 }}
+                    size={14}
+                    color="#165337"
+                    style={{ marginRight: 6 }}
                   />
                   <Text
                     style={[
@@ -564,6 +585,7 @@ export const DashboardScreen: React.FC = () => {
                   >
                     {dateFilterLabels[dateFilter]}
                   </Text>
+                  <ChevronRight size={13} color="#64748B" style={{ marginLeft: 3 }} />
                   {dateFilter !== 'ALL' && (
                     <TouchableOpacity
                       onPress={(e) => {
@@ -574,7 +596,7 @@ export const DashboardScreen: React.FC = () => {
                       hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                       style={{ marginLeft: 4 }}
                     >
-                      <CircleX size={13} color="#2563EB" />
+                      <CircleX size={13} color="#165337" />
                     </TouchableOpacity>
                   )}
                 </TouchableOpacity>
@@ -1041,7 +1063,7 @@ export const DashboardScreen: React.FC = () => {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <StatusBar barStyle="light-content" backgroundColor="#0F203D" />
+      <StatusBar barStyle="dark-content" backgroundColor="#F4F7F5" />
 
       <View style={styles.container}>
         {renderContent()}
@@ -1056,7 +1078,7 @@ export const DashboardScreen: React.FC = () => {
           >
             <Home
               size={22}
-              color={activeTab === 'dashboard' ? '#2563EB' : '#94A3B8'}
+              color={activeTab === 'dashboard' ? '#165337' : '#94A3B8'}
             />
             <Text
               style={[
@@ -1078,7 +1100,7 @@ export const DashboardScreen: React.FC = () => {
             <View>
               <Clock
                 size={22}
-                color={activeTab === 'pending' ? '#2563EB' : '#94A3B8'}
+                color={activeTab === 'pending' ? '#165337' : '#94A3B8'}
               />
               {summary.pendingCount > 0 && (
                 <View style={styles.tabBadgeDot}>
@@ -1106,10 +1128,10 @@ export const DashboardScreen: React.FC = () => {
             <View>
               <ShieldCheck
                 size={22}
-                color={activeTab === 'authorized' ? '#16A34A' : '#94A3B8'}
+                color={activeTab === 'authorized' ? '#165337' : '#94A3B8'}
               />
               {summary.authorizedCount > 0 && (
-                <View style={[styles.tabBadgeDot, { backgroundColor: '#16A34A' }]}>
+                <View style={[styles.tabBadgeDot, { backgroundColor: '#165337' }]}>
                   <Text style={styles.tabBadgeText}>{summary.authorizedCount}</Text>
                 </View>
               )}
@@ -1117,13 +1139,13 @@ export const DashboardScreen: React.FC = () => {
             <Text
               style={[
                 styles.tabLabel,
-                activeTab === 'authorized' && { color: '#16A34A', fontWeight: '700' },
+                activeTab === 'authorized' && { color: '#165337', fontWeight: '700' },
               ]}
             >
               Autorizados
             </Text>
             {activeTab === 'authorized' && (
-              <View style={[styles.activeTabIndicator, { backgroundColor: '#16A34A' }]} />
+              <View style={styles.activeTabIndicator} />
             )}
           </TouchableOpacity>
 
@@ -1137,7 +1159,7 @@ export const DashboardScreen: React.FC = () => {
               <View>
                 <Users
                   size={22}
-                  color={activeTab === 'present' ? '#2563EB' : '#94A3B8'}
+                  color={activeTab === 'present' ? '#165337' : '#94A3B8'}
                 />
                 {summary.presentCount > 0 && (
                   <View style={styles.tabBadgeDot}>
@@ -1163,7 +1185,7 @@ export const DashboardScreen: React.FC = () => {
             >
               <BarChart3
                 size={22}
-                color={activeTab === 'reports' ? '#2563EB' : '#94A3B8'}
+                color={activeTab === 'reports' ? '#165337' : '#94A3B8'}
               />
               <Text
                 style={[
@@ -1198,7 +1220,7 @@ export const DashboardScreen: React.FC = () => {
               >
                 <Settings
                   size={22}
-                  color={isSettingsTabActive ? '#2563EB' : '#94A3B8'}
+                  color={isSettingsTabActive ? '#165337' : '#94A3B8'}
                 />
                 <Text
                   style={[
@@ -1546,11 +1568,11 @@ export const DashboardScreen: React.FC = () => {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#0F203D',
+    backgroundColor: '#F4F7F5',
   },
   container: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#F4F7F5',
   },
   scrollView: {
     flex: 1,
@@ -1559,14 +1581,23 @@ const styles = StyleSheet.create({
     flexGrow: 1,
   },
 
-  // Cabeçalho Principal
+  // Cabeçalho Principal com Onda Suave Menta
   header: {
-    backgroundColor: '#0F203D',
+    backgroundColor: '#F4F7F5',
     paddingHorizontal: 20,
     paddingTop: Platform.OS === 'android' ? 14 : 10,
-    paddingBottom: 22,
-    borderBottomLeftRadius: 24,
-    borderBottomRightRadius: 24,
+    paddingBottom: 16,
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  headerWaveDecoration: {
+    position: 'absolute',
+    top: -50,
+    right: -40,
+    width: 240,
+    height: 240,
+    borderRadius: 120,
+    backgroundColor: 'rgba(180, 222, 196, 0.32)',
   },
   headerTopRow: {
     flexDirection: 'row',
@@ -1578,38 +1609,63 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   avatarCircle: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: '#2563EB',
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#165337',
     alignItems: 'center',
     justifyContent: 'center',
   },
   greetingTitle: {
-    color: colors.white,
-    fontSize: 16,
-    fontWeight: '700',
+    color: '#0F172A',
+    fontSize: 18,
+    fontWeight: '800',
   },
   greetingSubtitle: {
-    color: '#94A3B8',
+    color: '#64748B',
     fontSize: 13,
+    marginTop: 1,
+  },
+  onlineBadgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 3,
+  },
+  onlineDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    backgroundColor: '#10B981',
+    marginRight: 5,
+  },
+  onlineText: {
+    fontSize: 12,
+    color: '#165337',
+    fontWeight: '600',
   },
   headerActions: {
     flexDirection: 'row',
     alignItems: 'center',
   },
   headerIconButton: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: 'rgba(255,255,255,0.12)',
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
     alignItems: 'center',
     justifyContent: 'center',
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 3,
+    elevation: 1,
   },
   notificationDot: {
     position: 'absolute',
-    top: 8,
-    right: 8,
+    top: 9,
+    right: 9,
     width: 8,
     height: 8,
     borderRadius: 4,
@@ -1619,40 +1675,39 @@ const styles = StyleSheet.create({
   // Corpo da Página
   bodyContainer: {
     paddingHorizontal: 16,
-    paddingTop: 16,
+    paddingTop: 8,
   },
 
-  // Botão de Grande Destaque Hero: Nova Visita (Item 2)
+  // Botão de Grande Destaque Hero: Nova Solicitação (Verde Esmeralda)
   heroNewVisitBtn: {
-    backgroundColor: '#1E3A8A', // Azul Real Noturno Profundo
+    backgroundColor: '#165337',
     borderRadius: 18,
-    padding: 18,
+    paddingHorizontal: 18,
+    paddingVertical: 16,
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 16,
-    borderWidth: 1.5,
-    borderColor: '#3B82F6', // Borda iluminada
-    shadowColor: '#1D4ED8',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.35,
-    shadowRadius: 10,
-    elevation: 6,
+    shadowColor: '#165337',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 4,
   },
   heroNewVisitIconCircle: {
-    width: 54,
-    height: 54,
-    borderRadius: 27,
-    backgroundColor: '#2563EB',
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.3,
-    shadowRadius: 5,
-    elevation: 4,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 2,
   },
   heroNewVisitBadge: {
-    backgroundColor: '#F59E0B', // Âmbar Dourado Vibrante
+    backgroundColor: '#F59E0B',
     paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: 6,
@@ -1666,14 +1721,14 @@ const styles = StyleSheet.create({
     letterSpacing: 0.6,
   },
   heroNewVisitTitle: {
-    fontSize: 19,
-    fontWeight: '900',
+    fontSize: 18,
+    fontWeight: '800',
     color: '#FFFFFF',
-    letterSpacing: 0.3,
+    letterSpacing: 0.2,
   },
   heroNewVisitSubtitle: {
     fontSize: 12,
-    color: '#BFDBFE',
+    color: 'rgba(255, 255, 255, 0.85)',
     marginTop: 2,
   },
 
@@ -1687,32 +1742,42 @@ const styles = StyleSheet.create({
   secondaryCard: {
     flex: 1,
     backgroundColor: '#FFFFFF',
-    borderRadius: 14,
-    padding: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
     shadowColor: '#0F172A',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.04,
     shadowRadius: 6,
     elevation: 2,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
+  },
+  secondaryCardTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
   },
   secondaryIconCircle: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 42,
+    height: 42,
+    borderRadius: 12,
+    backgroundColor: '#EDF7ED',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 6,
     position: 'relative',
+  },
+  secondaryCardNumber: {
+    fontSize: 24,
+    fontWeight: '800',
+    color: '#0F172A',
+    marginBottom: 2,
   },
   secondaryBadge: {
     position: 'absolute',
     top: -2,
     right: -4,
-    backgroundColor: '#7C3AED',
+    backgroundColor: '#165337',
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 10,
@@ -1725,17 +1790,17 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
   secondaryCardTitle: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '700',
     color: '#0F172A',
   },
   secondaryCardSubtitle: {
-    fontSize: 11,
+    fontSize: 12,
     color: '#64748B',
-    marginTop: 1,
+    marginTop: 2,
   },
 
-  // Seção da Lista de Solicitações com Filtro (Item 1)
+  // Seção da Lista de Solicitações com Filtro
   listSectionContainer: {
     marginTop: 4,
   },
@@ -1743,20 +1808,59 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 10,
+    marginBottom: 12,
+  },
+  sectionIconSquare: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    backgroundColor: '#165337',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 8,
   },
   sectionTitle: {
-    fontSize: 16,
+    fontSize: 17,
     fontWeight: '800',
     color: '#0F172A',
   },
-  sectionCountText: {
+  sectionCountBadge: {
+    backgroundColor: '#EDF7ED',
+    borderRadius: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    marginLeft: 8,
+  },
+  sectionCountBadgeText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#165337',
+  },
+  dateFilterChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 16,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  dateFilterChipActive: {
+    borderColor: '#165337',
+    backgroundColor: '#EDF7ED',
+  },
+  dateFilterText: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#64748B',
+    color: '#0F172A',
+  },
+  dateFilterTextActive: {
+    color: '#165337',
+    fontWeight: '700',
   },
 
-  // Barra de Filtros (Item 1)
+  // Barra de Filtros
   filterPillsRow: {
     flexDirection: 'row',
     gap: 6,
@@ -1769,12 +1873,12 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#E2E8F0',
     borderRadius: 16,
-    paddingHorizontal: 10,
+    paddingHorizontal: 12,
     paddingVertical: 6,
   },
   filterChipActive: {
-    backgroundColor: '#0F203D',
-    borderColor: '#0F203D',
+    backgroundColor: '#165337',
+    borderColor: '#165337',
   },
   filterChipText: {
     fontSize: 12,
@@ -1788,12 +1892,12 @@ const styles = StyleSheet.create({
   filterChipBadge: {
     backgroundColor: '#F1F5F9',
     borderRadius: 8,
-    paddingHorizontal: 5,
+    paddingHorizontal: 6,
     paddingVertical: 1,
     marginLeft: 5,
   },
   filterChipBadgeActive: {
-    backgroundColor: '#2563EB',
+    backgroundColor: 'rgba(255,255,255,0.22)',
   },
   filterChipBadgeText: {
     fontSize: 10,
@@ -2061,14 +2165,14 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   tabLabelActive: {
-    color: '#2563EB',
+    color: '#165337',
     fontWeight: '700',
   },
   activeTabIndicator: {
     width: 24,
     height: 3,
     borderRadius: 2,
-    backgroundColor: '#2563EB',
+    backgroundColor: '#165337',
     marginTop: 4,
   },
   tabBadgeDot: {

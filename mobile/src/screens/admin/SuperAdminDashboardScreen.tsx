@@ -1951,7 +1951,7 @@ const styles = StyleSheet.create({
 
   // Hero Card de Faturamento
   heroFinanceCard: {
-    backgroundColor: '#0F203D',
+    backgroundColor: '#165337',
     margin: 16,
     borderRadius: 20,
     padding: 20,
@@ -2427,8 +2427,8 @@ const styles = StyleSheet.create({
     borderColor: '#E2E8F0',
   },
   orgFilterChipActive: {
-    backgroundColor: '#0F203D',
-    borderColor: '#0F203D',
+    backgroundColor: '#165337',
+    borderColor: '#165337',
   },
   orgFilterChipText: {
     fontSize: 12,
@@ -2545,7 +2545,7 @@ const styles = StyleSheet.create({
 
   // Financeiro (Aba 4)
   financeSummaryCard: {
-    backgroundColor: '#0F203D',
+    backgroundColor: '#165337',
     margin: 16,
     borderRadius: 20,
     padding: 20,
@@ -2635,7 +2635,7 @@ const styles = StyleSheet.create({
 
   // Perfil Super Admin (Aba 5)
   profileMasterCard: {
-    backgroundColor: '#0F203D',
+    backgroundColor: '#165337',
     margin: 16,
     borderRadius: 20,
     padding: 24,
@@ -2721,7 +2721,7 @@ const styles = StyleSheet.create({
   // Barra de Navegação Inferior
   bottomBar: {
     flexDirection: 'row',
-    backgroundColor: '#0F203D',
+    backgroundColor: '#165337',
     borderTopWidth: 1,
     borderTopColor: 'rgba(255,255,255,0.1)',
     paddingTop: 10,
