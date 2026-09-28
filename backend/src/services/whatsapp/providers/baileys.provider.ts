@@ -591,10 +591,36 @@ export class BaileysProvider implements IWhatsAppProvider {
       }
     }
 
+    let thumbnailBuffer: Buffer | undefined = undefined;
+    if (imageContent instanceof Buffer) {
+      try {
+        const sharpModule = await import('sharp');
+        const sharp = sharpModule.default || sharpModule;
+        // 1. Otimiza a foto para Web (reduz de ~500KB para ~70KB para tráfego instantâneo)
+        const optimized = await sharp(imageContent)
+          .resize({ width: 1024, height: 1024, fit: 'inside', withoutEnlargement: true })
+          .jpeg({ quality: 75, progressive: true })
+          .toBuffer();
+        imageContent = optimized;
+        mimeType = 'image/jpeg';
+
+        // 2. Gera thumbnail minúsculo (~1KB) embutido diretamente no frame criptográfico
+        // Isso permite que o app do WhatsApp renderize o preview imediatamente sem travar em "Aguardando mensagem"
+        thumbnailBuffer = await sharp(imageContent)
+          .resize(72, 72, { fit: 'inside' })
+          .jpeg({ quality: 40 })
+          .toBuffer();
+        console.log(`⚡ [Baileys] Foto otimizada com sharp (${optimized.length} bytes, thumb: ${thumbnailBuffer.length} bytes)`);
+      } catch (sharpErr: any) {
+        console.warn('⚠️ [Baileys] Erro ao otimizar imagem com sharp:', sharpErr?.message || sharpErr);
+      }
+    }
+
     const sent = await this.sock.sendMessage(jid, {
       image: imageContent,
       mimetype: mimeType,
       caption: caption || '',
+      jpegThumbnail: thumbnailBuffer,
     });
     if (sent?.key?.id && sent.message) {
       this.saveMessageToStore(sent.key.id, sent.message);
