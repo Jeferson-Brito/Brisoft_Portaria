@@ -9,6 +9,7 @@ import { LoginScreen } from './src/screens/auth/LoginScreen';
 import { RegisterScreen } from './src/screens/auth/RegisterScreen';
 import { SubscriptionScreen } from './src/screens/auth/SubscriptionScreen';
 import { DashboardScreen } from './src/screens/concierge/DashboardScreen';
+import { SuperAdminDashboardScreen } from './src/screens/admin/SuperAdminDashboardScreen';
 
 const AnimatedLoadingScreen: React.FC = () => {
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -164,6 +165,11 @@ const MainNavigator: React.FC = () => {
   // Logado mas assinatura bloqueada (expirada, suspensa, cancelada)
   if (isSubscriptionBlocked) {
     return <SubscriptionScreen />;
+  }
+
+  // Super Administrador: Painel exclusivo de Gestão SaaS Master
+  if (user.role === 'SUPER_ADMIN') {
+    return <SuperAdminDashboardScreen />;
   }
 
   // Logado e assinatura ok

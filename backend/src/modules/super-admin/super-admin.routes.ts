@@ -10,20 +10,20 @@ export async function superAdminRoutes(app: FastifyInstance) {
   app.addHook('preHandler', authMiddleware);
   app.addHook('preHandler', requireSuperAdmin());
 
-  // ─── Dashboard ───────────────────────────────────────────────
+  // ─── Dashboard SaaS Master ──────────────────────────────────
   app.get('/dashboard', async (_req, reply) => {
     const metrics = await service.getDashboardMetrics();
     return reply.send({ success: true, data: metrics });
   });
 
-  // ─── Organizações ────────────────────────────────────────────
+  // ─── Organizações (Empresas / Condomínios) ───────────────────
   app.get('/organizations', async (req: FastifyRequest, reply: FastifyReply) => {
     const { search, status, page, limit } = req.query as any;
     const result = await service.listOrganizations({
       search,
       status,
       page: page ? parseInt(page) : 1,
-      limit: limit ? parseInt(limit) : 20,
+      limit: limit ? parseInt(limit) : 50,
     });
     return reply.send({ success: true, ...result });
   });
@@ -40,24 +40,76 @@ export async function superAdminRoutes(app: FastifyInstance) {
     return reply.status(201).send({ success: true, data: result });
   });
 
+  app.put('/organizations/:id', async (req: FastifyRequest, reply: FastifyReply) => {
+    const { id } = req.params as { id: string };
+    const body = req.body as any;
+    const updated = await service.updateOrganization(id, body);
+    return reply.send({ success: true, message: 'Empresa atualizada com sucesso.', data: updated });
+  });
+
   app.patch('/organizations/:id/toggle-active', async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
     const updated = await service.toggleOrganizationActive(id);
     return reply.send({
       success: true,
-      message: `Organização ${updated.isActive ? 'ativada' : 'desativada'} com sucesso.`,
+      message: `Empresa ${updated.isActive ? 'ativada' : 'suspensa'} com sucesso.`,
       data: updated,
     });
   });
 
-  // ─── Assinaturas ─────────────────────────────────────────────
+  app.delete('/organizations/:id', async (req: FastifyRequest, reply: FastifyReply) => {
+    const { id } = req.params as { id: string };
+    const result = await service.deleteOrganization(id);
+    return reply.send(result);
+  });
+
+  // ─── Usuários Multi-empresa ─────────────────────────────────
+  app.get('/users', async (req: FastifyRequest, reply: FastifyReply) => {
+    const { search, organizationId, role, page, limit } = req.query as any;
+    const result = await service.listUsers({
+      search,
+      organizationId,
+      role,
+      page: page ? parseInt(page) : 1,
+      limit: limit ? parseInt(limit) : 50,
+    });
+    return reply.send({ success: true, ...result });
+  });
+
+  app.post('/users', async (req: FastifyRequest, reply: FastifyReply) => {
+    const body = req.body as any;
+    const user = await service.createUser(body);
+    return reply.status(201).send({ success: true, message: 'Usuário criado com sucesso.', data: user });
+  });
+
+  app.put('/users/:id', async (req: FastifyRequest, reply: FastifyReply) => {
+    const { id } = req.params as { id: string };
+    const body = req.body as any;
+    const updated = await service.updateUser(id, body);
+    return reply.send({ success: true, message: 'Usuário atualizado com sucesso.', data: updated });
+  });
+
+  app.patch('/users/:id/password', async (req: FastifyRequest, reply: FastifyReply) => {
+    const { id } = req.params as { id: string };
+    const { newPassword } = req.body as { newPassword: string };
+    const result = await service.updateUserPassword(id, newPassword);
+    return reply.send(result);
+  });
+
+  app.delete('/users/:id', async (req: FastifyRequest, reply: FastifyReply) => {
+    const { id } = req.params as { id: string };
+    const result = await service.deleteUser(id);
+    return reply.send(result);
+  });
+
+  // ─── Assinaturas & Financeiro ───────────────────────────────
   app.get('/subscriptions', async (req: FastifyRequest, reply: FastifyReply) => {
     const { status, plan, page, limit } = req.query as any;
     const result = await service.listSubscriptions({
       status,
       plan,
       page: page ? parseInt(page) : 1,
-      limit: limit ? parseInt(limit) : 20,
+      limit: limit ? parseInt(limit) : 50,
     });
     return reply.send({ success: true, ...result });
   });
@@ -66,14 +118,14 @@ export async function superAdminRoutes(app: FastifyInstance) {
     const { orgId } = req.params as { orgId: string };
     const body = req.body as any;
     const updated = await service.updateSubscription(orgId, body);
-    return reply.send({ success: true, message: 'Assinatura atualizada.', data: updated });
+    return reply.send({ success: true, message: 'Assinatura atualizada com sucesso.', data: updated });
   });
 
   app.post('/subscriptions/:orgId/activate', async (req: FastifyRequest, reply: FastifyReply) => {
     const { orgId } = req.params as { orgId: string };
     const { periodDays } = req.body as { periodDays?: number };
     const updated = await service.activateSubscription(orgId, periodDays || 30);
-    return reply.send({ success: true, message: 'Assinatura ativada com sucesso!', data: updated });
+    return reply.send({ success: true, message: 'Assinatura ativada / renovada com sucesso!', data: updated });
   });
 
   app.post('/subscriptions/:orgId/suspend', async (req: FastifyRequest, reply: FastifyReply) => {

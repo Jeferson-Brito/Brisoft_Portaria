@@ -8,7 +8,7 @@ export class SuperAdminService {
 
   async listOrganizations(filters: { search?: string; status?: string; page?: number; limit?: number }) {
     const page = filters.page || 1;
-    const limit = filters.limit || 20;
+    const limit = filters.limit || 50;
     const skip = (page - 1) * limit;
 
     const where: any = {};
@@ -22,12 +22,15 @@ export class SuperAdminService {
       ];
     }
 
-    const [organizations, total] = await Promise.all([
+    const [organizationsRaw, total] = await Promise.all([
       prisma.organization.findMany({
         where,
         include: {
+          whatsappConnection: {
+            select: { status: true, phoneConnected: true, lastConnectedAt: true, updatedAt: true },
+          },
           _count: {
-            select: { users: true, visitRequests: true },
+            select: { users: true, visitRequests: true, clients: true, destinations: true },
           },
         },
         orderBy: { createdAt: 'desc' },
@@ -36,6 +39,33 @@ export class SuperAdminService {
       }),
       prisma.organization.count({ where }),
     ]);
+
+    const organizations = organizationsRaw.map((org) => {
+      let settings: any = {};
+      try {
+        settings = org.settings ? JSON.parse(org.settings) : {};
+      } catch (e) {}
+
+      const createdTime = new Date(org.createdAt).getTime();
+      const now = Date.now();
+      const trialDurationMs = (settings.trialDays || 7) * 24 * 60 * 60 * 1000;
+      const trialEndsAt = settings.trialEndsAt ? new Date(settings.trialEndsAt) : new Date(createdTime + trialDurationMs);
+      const isTrial = settings.paymentStatus === 'TRIAL' || (!settings.paymentStatus && now < trialEndsAt.getTime());
+      
+      const paymentStatus = settings.paymentStatus || (isTrial ? 'TRIAL' : (org.isActive ? 'ACTIVE' : 'SUSPENDED'));
+      const monthlyPrice = typeof settings.monthlyPrice === 'number' ? settings.monthlyPrice : 149.90;
+      const plan = settings.plan || 'PRO';
+
+      return {
+        ...org,
+        plan,
+        monthlyPrice,
+        paymentStatus,
+        trialEndsAt: trialEndsAt.toISOString(),
+        isTrial,
+        whatsappStatus: org.whatsappConnection?.status || 'DISCONNECTED',
+      };
+    });
 
     return {
       organizations,
@@ -47,107 +77,44 @@ export class SuperAdminService {
     const org = await prisma.organization.findUnique({
       where: { id: orgId },
       include: {
+        whatsappConnection: {
+          select: { status: true, phoneConnected: true, lastConnectedAt: true, updatedAt: true },
+        },
         users: {
           where: { deletedAt: null },
-          select: { id: true, name: true, email: true, role: true, isActive: true, lastLoginAt: true, createdAt: true },
+          select: { id: true, name: true, email: true, phone: true, role: true, isActive: true, lastLoginAt: true, createdAt: true },
           orderBy: { role: 'asc' },
         },
         _count: {
-          select: { visitRequests: true, clients: true, visitors: true, packages: true },
+          select: { visitRequests: true, clients: true, visitors: true, packages: true, destinations: true },
         },
       },
     });
 
     if (!org) throw new AppError('Organização não encontrada.', 404, 'NOT_FOUND');
-    return org;
-  }
 
-  async toggleOrganizationActive(orgId: string) {
-    const org = await prisma.organization.findUnique({ where: { id: orgId } });
-    if (!org) throw new AppError('Organização não encontrada.', 404, 'NOT_FOUND');
+    let settings: any = {};
+    try {
+      settings = org.settings ? JSON.parse(org.settings) : {};
+    } catch (e) {}
 
-    const updated = await prisma.organization.update({
-      where: { id: orgId },
-      data: { isActive: !org.isActive },
-    });
+    const trialDurationMs = (settings.trialDays || 7) * 24 * 60 * 60 * 1000;
+    const trialEndsAt = settings.trialEndsAt ? new Date(settings.trialEndsAt) : new Date(new Date(org.createdAt).getTime() + trialDurationMs);
+    const isTrial = settings.paymentStatus === 'TRIAL' || (!settings.paymentStatus && Date.now() < trialEndsAt.getTime());
+    const paymentStatus = settings.paymentStatus || (isTrial ? 'TRIAL' : (org.isActive ? 'ACTIVE' : 'SUSPENDED'));
 
-    invalidateSubscriptionCache(orgId);
-    return updated;
-  }
-
-  // ─── Assinaturas ────────────────────────────────────────────
-
-  async listSubscriptions(filters: { status?: string; plan?: string; page?: number; limit?: number }) {
-    const page = filters.page || 1;
-    const limit = filters.limit || 20;
     return {
-      subscriptions: [],
-      meta: { total: 0, page, limit, totalPages: 0 },
+      ...org,
+      plan: settings.plan || 'PRO',
+      monthlyPrice: typeof settings.monthlyPrice === 'number' ? settings.monthlyPrice : 149.90,
+      paymentStatus,
+      trialEndsAt: trialEndsAt.toISOString(),
+      isTrial,
+      settingsParsed: settings,
+      whatsappStatus: org.whatsappConnection?.status || 'DISCONNECTED',
     };
   }
 
-  async updateSubscription(
-    orgId: string,
-    data: {
-      plan?: string;
-      status?: string;
-      trialEndsAt?: string;
-      currentPeriodEnd?: string;
-      maxUsers?: number;
-      stripeCustomerId?: string;
-      stripeSubscriptionId?: string;
-    }
-  ) {
-    return { id: orgId, organizationId: orgId, plan: data.plan || 'ACTIVE', status: data.status || 'ACTIVE' };
-  }
-
-  // Ativa manualmente uma assinatura (ex: após confirmar pagamento manual)
-  async activateSubscription(orgId: string, periodDays = 30) {
-    return { id: orgId, organizationId: orgId, plan: 'BASIC', status: 'ACTIVE' };
-  }
-
-  // Suspende uma assinatura (ex: inadimplência)
-  async suspendSubscription(orgId: string) {
-    return { id: orgId, organizationId: orgId, plan: 'BASIC', status: 'SUSPENDED' };
-  }
-
-  // ─── Métricas do SaaS ───────────────────────────────────────
-
-  async getDashboardMetrics() {
-    const [
-      totalOrgs,
-      activeOrgs,
-      trialOrgs,
-      activeSubscriptions,
-      suspendedSubscriptions,
-      expiredSubscriptions,
-      totalUsers,
-      totalVisitRequests,
-    ] = await Promise.all([
-      prisma.organization.count(),
-      prisma.organization.count({ where: { isActive: true } }),
-      Promise.resolve(0), // prisma.subscription.count({ where: { status: 'TRIAL' } }),
-      Promise.resolve(0), // prisma.subscription.count({ where: { status: 'ACTIVE' } }),
-      Promise.resolve(0), // prisma.subscription.count({ where: { status: 'SUSPENDED' } }),
-      Promise.resolve(0), // prisma.subscription.count({ where: { status: 'EXPIRED' } }),
-      prisma.user.count({ where: { deletedAt: null } }),
-      prisma.visitRequest.count(),
-    ]);
-
-    return {
-      organizations: { total: totalOrgs, active: activeOrgs },
-      subscriptions: {
-        trial: trialOrgs,
-        active: activeSubscriptions,
-        suspended: suspendedSubscriptions,
-        expired: expiredSubscriptions,
-        mrr: activeSubscriptions * 149, // R$149 por assinatura ativa
-      },
-      usage: { totalUsers, totalVisitRequests },
-    };
-  }
-
-  // Cria uma organização manualmente (pelo SUPER_ADMIN)
   async createOrganizationManually(data: {
     organizationName: string;
     organizationDocument?: string;
@@ -156,9 +123,10 @@ export class SuperAdminService {
     adminPassword: string;
     adminPhone?: string;
     plan?: string;
+    monthlyPrice?: number;
     trialDays?: number;
+    paymentStatus?: string;
   }) {
-    // Reutiliza a mesma lógica do register público
     const { AuthService } = await import('../auth/auth.service.js');
     const authService = new AuthService();
     const result = await authService.register({
@@ -170,8 +138,468 @@ export class SuperAdminService {
       adminPhone: data.adminPhone,
     });
 
-    // Assinaturas removidas temporariamente.
+    // Configura os metadados de assinatura / gestão no settings da organização
+    const trialDays = data.trialDays ?? 7;
+    const trialEndsAt = new Date(Date.now() + trialDays * 24 * 60 * 60 * 1000);
+    const initialSettings = {
+      plan: data.plan || 'PRO',
+      monthlyPrice: data.monthlyPrice ?? 149.90,
+      trialDays,
+      trialEndsAt: trialEndsAt.toISOString(),
+      paymentStatus: data.paymentStatus || 'TRIAL',
+    };
+
+    await prisma.organization.update({
+      where: { id: result.organization.id },
+      data: {
+        settings: JSON.stringify(initialSettings),
+      },
+    });
 
     return result;
+  }
+
+  async updateOrganization(
+    orgId: string,
+    data: {
+      name?: string;
+      document?: string;
+      slug?: string;
+      isActive?: boolean;
+      plan?: string;
+      monthlyPrice?: number;
+      paymentStatus?: string;
+      trialEndsAt?: string;
+      settings?: Record<string, any>;
+    }
+  ) {
+    const current = await prisma.organization.findUnique({ where: { id: orgId } });
+    if (!current) throw new AppError('Organização não encontrada.', 404, 'NOT_FOUND');
+
+    let currentSettings: any = {};
+    try {
+      currentSettings = current.settings ? JSON.parse(current.settings) : {};
+    } catch (e) {}
+
+    const updatedSettings = {
+      ...currentSettings,
+      ...(data.settings || {}),
+      ...(data.plan ? { plan: data.plan } : {}),
+      ...(typeof data.monthlyPrice === 'number' ? { monthlyPrice: data.monthlyPrice } : {}),
+      ...(data.paymentStatus ? { paymentStatus: data.paymentStatus } : {}),
+      ...(data.trialEndsAt ? { trialEndsAt: data.trialEndsAt } : {}),
+    };
+
+    const updated = await prisma.organization.update({
+      where: { id: orgId },
+      data: {
+        ...(data.name ? { name: data.name } : {}),
+        ...(data.document !== undefined ? { document: data.document } : {}),
+        ...(data.slug ? { slug: data.slug } : {}),
+        ...(typeof data.isActive === 'boolean' ? { isActive: data.isActive } : {}),
+        settings: JSON.stringify(updatedSettings),
+      },
+    });
+
+    invalidateSubscriptionCache(orgId);
+    return updated;
+  }
+
+  async toggleOrganizationActive(orgId: string) {
+    const org = await prisma.organization.findUnique({ where: { id: orgId } });
+    if (!org) throw new AppError('Organização não encontrada.', 404, 'NOT_FOUND');
+
+    const newActiveState = !org.isActive;
+
+    let settings: any = {};
+    try {
+      settings = org.settings ? JSON.parse(org.settings) : {};
+    } catch (e) {}
+
+    settings.paymentStatus = newActiveState ? (settings.paymentStatus === 'SUSPENDED' ? 'ACTIVE' : settings.paymentStatus || 'ACTIVE') : 'SUSPENDED';
+
+    const updated = await prisma.organization.update({
+      where: { id: orgId },
+      data: {
+        isActive: newActiveState,
+        settings: JSON.stringify(settings),
+      },
+    });
+
+    invalidateSubscriptionCache(orgId);
+    return updated;
+  }
+
+  async deleteOrganization(orgId: string) {
+    const org = await prisma.organization.findUnique({ where: { id: orgId } });
+    if (!org) throw new AppError('Organização não encontrada.', 404, 'NOT_FOUND');
+
+    // Remove toda estrutura da organização
+    await prisma.organization.delete({
+      where: { id: orgId },
+    });
+
+    invalidateSubscriptionCache(orgId);
+    return { success: true, message: `Organização ${org.name} excluída com sucesso.` };
+  }
+
+  // ─── Usuários Multi-empresa ─────────────────────────────────
+
+  async listUsers(filters: { search?: string; organizationId?: string; role?: string; page?: number; limit?: number }) {
+    const page = filters.page || 1;
+    const limit = filters.limit || 50;
+    const skip = (page - 1) * limit;
+
+    const where: any = { deletedAt: null };
+    if (filters.organizationId) where.organizationId = filters.organizationId;
+    if (filters.role) where.role = filters.role;
+    if (filters.search) {
+      where.OR = [
+        { name: { contains: filters.search, mode: 'insensitive' } },
+        { email: { contains: filters.search, mode: 'insensitive' } },
+        { phone: { contains: filters.search } },
+      ];
+    }
+
+    const [users, total] = await Promise.all([
+      prisma.user.findMany({
+        where,
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          phone: true,
+          role: true,
+          isActive: true,
+          lastLoginAt: true,
+          createdAt: true,
+          organizationId: true,
+          organization: {
+            select: { id: true, name: true, slug: true },
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: limit,
+      }),
+      prisma.user.count({ where }),
+    ]);
+
+    return {
+      users,
+      meta: { total, page, limit, totalPages: Math.ceil(total / limit) },
+    };
+  }
+
+  async createUser(data: {
+    organizationId: string;
+    name: string;
+    email: string;
+    password: string;
+    role?: string;
+    phone?: string;
+  }) {
+    const org = await prisma.organization.findUnique({ where: { id: data.organizationId } });
+    if (!org) throw new AppError('Organização não encontrada.', 404, 'NOT_FOUND');
+
+    const existingUser = await prisma.user.findUnique({ where: { email: data.email.toLowerCase().trim() } });
+    if (existingUser) throw new AppError('Este e-mail já está cadastrado no sistema.', 409, 'CONFLICT');
+
+    const passwordHash = await bcrypt.hash(data.password, 12);
+
+    const user = await prisma.user.create({
+      data: {
+        organizationId: data.organizationId,
+        name: data.name.trim(),
+        email: data.email.toLowerCase().trim(),
+        passwordHash,
+        role: data.role || 'CONCIERGE',
+        phone: data.phone?.trim() || null,
+        isActive: true,
+      },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        phone: true,
+        role: true,
+        isActive: true,
+        organizationId: true,
+        createdAt: true,
+        organization: { select: { id: true, name: true } },
+      },
+    });
+
+    return user;
+  }
+
+  async updateUser(
+    userId: string,
+    data: {
+      name?: string;
+      email?: string;
+      phone?: string;
+      role?: string;
+      isActive?: boolean;
+      organizationId?: string;
+    }
+  ) {
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user) throw new AppError('Usuário não encontrado.', 404, 'NOT_FOUND');
+
+    if (data.email && data.email.toLowerCase().trim() !== user.email) {
+      const emailTaken = await prisma.user.findUnique({ where: { email: data.email.toLowerCase().trim() } });
+      if (emailTaken) throw new AppError('Este e-mail já está em uso por outro usuário.', 409, 'CONFLICT');
+    }
+
+    const updated = await prisma.user.update({
+      where: { id: userId },
+      data: {
+        ...(data.name ? { name: data.name.trim() } : {}),
+        ...(data.email ? { email: data.email.toLowerCase().trim() } : {}),
+        ...(data.phone !== undefined ? { phone: data.phone?.trim() || null } : {}),
+        ...(data.role ? { role: data.role } : {}),
+        ...(typeof data.isActive === 'boolean' ? { isActive: data.isActive } : {}),
+        ...(data.organizationId ? { organizationId: data.organizationId } : {}),
+      },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        phone: true,
+        role: true,
+        isActive: true,
+        organizationId: true,
+        updatedAt: true,
+        organization: { select: { id: true, name: true } },
+      },
+    });
+
+    return updated;
+  }
+
+  async updateUserPassword(userId: string, newPassword: string) {
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user) throw new AppError('Usuário não encontrado.', 404, 'NOT_FOUND');
+
+    if (!newPassword || newPassword.length < 6) {
+      throw new AppError('A nova senha deve ter no mínimo 6 caracteres.', 400, 'BAD_REQUEST');
+    }
+
+    const passwordHash = await bcrypt.hash(newPassword, 12);
+
+    await prisma.user.update({
+      where: { id: userId },
+      data: { passwordHash },
+    });
+
+    return { success: true, message: `Senha do usuário ${user.name} alterada com sucesso.` };
+  }
+
+  async deleteUser(userId: string) {
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user) throw new AppError('Usuário não encontrado.', 404, 'NOT_FOUND');
+
+    await prisma.user.update({
+      where: { id: userId },
+      data: { deletedAt: new Date(), isActive: false },
+    });
+
+    return { success: true, message: `Usuário ${user.name} excluído com sucesso.` };
+  }
+
+  // ─── Assinaturas & Financeiro ───────────────────────────────
+
+  async listSubscriptions(filters: { status?: string; plan?: string; page?: number; limit?: number }) {
+    const orgsResult = await this.listOrganizations({ limit: 100 });
+    let subs = orgsResult.organizations;
+
+    if (filters.status) {
+      subs = subs.filter((s) => s.paymentStatus.toLowerCase() === filters.status?.toLowerCase());
+    }
+    if (filters.plan) {
+      subs = subs.filter((s) => s.plan.toLowerCase() === filters.plan?.toLowerCase());
+    }
+
+    return {
+      subscriptions: subs,
+      meta: { total: subs.length, page: 1, limit: 100, totalPages: 1 },
+    };
+  }
+
+  async updateSubscription(
+    orgId: string,
+    data: {
+      plan?: string;
+      paymentStatus?: string;
+      monthlyPrice?: number;
+      trialDays?: number;
+      trialEndsAt?: string;
+    }
+  ) {
+    return this.updateOrganization(orgId, {
+      plan: data.plan,
+      paymentStatus: data.paymentStatus,
+      monthlyPrice: data.monthlyPrice,
+      trialEndsAt: data.trialEndsAt,
+    });
+  }
+
+  async activateSubscription(orgId: string, periodDays = 30) {
+    const nextDueDate = new Date(Date.now() + periodDays * 24 * 60 * 60 * 1000);
+    return this.updateOrganization(orgId, {
+      isActive: true,
+      paymentStatus: 'ACTIVE',
+      settings: {
+        paidAt: new Date().toISOString(),
+        currentPeriodEnd: nextDueDate.toISOString(),
+      },
+    });
+  }
+
+  async suspendSubscription(orgId: string) {
+    return this.updateOrganization(orgId, {
+      isActive: false,
+      paymentStatus: 'SUSPENDED',
+    });
+  }
+
+  // ─── Métricas do SaaS Master ────────────────────────────────
+
+  async getDashboardMetrics() {
+    const now = Date.now();
+    const thirtyDaysAgo = new Date(now - 30 * 24 * 60 * 60 * 1000);
+
+    const [allOrgs, totalUsers, totalVisits, newOrgsLast30Days] = await Promise.all([
+      prisma.organization.findMany({
+        include: {
+          whatsappConnection: {
+            select: { status: true, phoneConnected: true, updatedAt: true },
+          },
+          users: {
+            where: { role: 'ADMIN' },
+            select: { name: true, email: true, phone: true },
+            take: 1,
+          },
+          _count: {
+            select: { users: true, clients: true, visitRequests: true },
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+      }),
+      prisma.user.count({ where: { deletedAt: null } }),
+      prisma.visitRequest.count(),
+      prisma.organization.count({ where: { createdAt: { gte: thirtyDaysAgo } } }),
+    ]);
+
+    let trialCount = 0;
+    let paidActiveCount = 0;
+    let pendingPaymentCount = 0;
+    let suspendedCount = 0;
+    let totalMRR = 0;
+    let trialMRR = 0;
+
+    const whatsappDisconnectedAlerts: any[] = [];
+    const pendingPaymentAlerts: any[] = [];
+
+    allOrgs.forEach((org) => {
+      let settings: any = {};
+      try {
+        settings = org.settings ? JSON.parse(org.settings) : {};
+      } catch (e) {}
+
+      const createdTime = new Date(org.createdAt).getTime();
+      const trialDurationMs = (settings.trialDays || 7) * 24 * 60 * 60 * 1000;
+      const trialEndsAt = settings.trialEndsAt ? new Date(settings.trialEndsAt) : new Date(createdTime + trialDurationMs);
+      const isTrial = settings.paymentStatus === 'TRIAL' || (!settings.paymentStatus && now < trialEndsAt.getTime());
+      const paymentStatus = settings.paymentStatus || (isTrial ? 'TRIAL' : (org.isActive ? 'ACTIVE' : 'SUSPENDED'));
+      const monthlyPrice = typeof settings.monthlyPrice === 'number' ? settings.monthlyPrice : 149.90;
+
+      if (!org.isActive || paymentStatus === 'SUSPENDED') {
+        suspendedCount++;
+      } else if (paymentStatus === 'PENDING') {
+        pendingPaymentCount++;
+        pendingPaymentAlerts.push({
+          id: org.id,
+          name: org.name,
+          slug: org.slug,
+          monthlyPrice,
+          admin: org.users[0] || null,
+        });
+      } else if (paymentStatus === 'TRIAL' || isTrial) {
+        trialCount++;
+        trialMRR += monthlyPrice;
+      } else {
+        paidActiveCount++;
+        totalMRR += monthlyPrice;
+      }
+
+      // WhatsApp Status Check
+      const waStatus = org.whatsappConnection?.status || 'DISCONNECTED';
+      if (waStatus !== 'CONNECTED') {
+        whatsappDisconnectedAlerts.push({
+          id: org.id,
+          name: org.name,
+          slug: org.slug,
+          status: waStatus,
+          phoneConnected: org.whatsappConnection?.phoneConnected || null,
+          admin: org.users[0] || null,
+        });
+      }
+    });
+
+    const recentOrganizations = allOrgs.slice(0, 6).map((org) => {
+      let settings: any = {};
+      try {
+        settings = org.settings ? JSON.parse(org.settings) : {};
+      } catch (e) {}
+      return {
+        id: org.id,
+        name: org.name,
+        slug: org.slug,
+        document: org.document,
+        createdAt: org.createdAt,
+        isActive: org.isActive,
+        plan: settings.plan || 'PRO',
+        monthlyPrice: settings.monthlyPrice ?? 149.90,
+        paymentStatus: settings.paymentStatus || 'TRIAL',
+        admin: org.users[0] || null,
+        usersCount: org._count.users,
+        clientsCount: org._count.clients,
+        whatsappStatus: org.whatsappConnection?.status || 'DISCONNECTED',
+      };
+    });
+
+    return {
+      organizations: {
+        total: allOrgs.length,
+        active: allOrgs.filter((o) => o.isActive).length,
+        suspended: suspendedCount,
+        newLast30Days: newOrgsLast30Days,
+      },
+      subscriptions: {
+        paidActive: paidActiveCount,
+        trial: trialCount,
+        pending: pendingPaymentCount,
+        suspended: suspendedCount,
+        totalMRR,
+        trialMRR,
+      },
+      whatsapp: {
+        total: allOrgs.length,
+        connected: allOrgs.length - whatsappDisconnectedAlerts.length,
+        disconnected: whatsappDisconnectedAlerts.length,
+        disconnectedList: whatsappDisconnectedAlerts,
+      },
+      alerts: {
+        whatsappDisconnected: whatsappDisconnectedAlerts,
+        pendingPayments: pendingPaymentAlerts,
+      },
+      recentOrganizations,
+      usage: {
+        totalUsers,
+        totalVisits,
+      },
+    };
   }
 }
