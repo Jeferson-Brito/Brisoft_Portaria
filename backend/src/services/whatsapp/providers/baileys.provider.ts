@@ -6,6 +6,7 @@ import makeWASocket, {
   useMultiFileAuthState,
   fetchLatestBaileysVersion,
   proto,
+  Browsers,
 } from '@whiskeysockets/baileys';
 import pino from 'pino';
 import {
@@ -23,6 +24,14 @@ import {
 import { env } from '../../../config/env.js';
 import { prisma } from '../../../lib/prisma.js';
 
+class MemoryCache {
+  private cache = new Map<string, any>();
+  get(key: string) { return this.cache.get(key); }
+  set(key: string, val: any) { this.cache.set(key, val); return true; }
+  del(key: string) { return this.cache.delete(key); }
+  flushAll() { this.cache.clear(); }
+}
+
 export class BaileysProvider implements IWhatsAppProvider {
   private sock: any = null;
   private statusInfo: WhatsAppStatusInfo = {
@@ -32,6 +41,17 @@ export class BaileysProvider implements IWhatsAppProvider {
   private baseSessionDir: string;
   private saveTimeout: NodeJS.Timeout | null = null;
   private isConnecting = false;
+  private messageStore = new Map<string, proto.IMessage>();
+  private msgRetryCounterCache = new MemoryCache();
+
+  private saveMessageToStore(id: string, message: proto.IMessage) {
+    if (!id || !message) return;
+    this.messageStore.set(id, message);
+    if (this.messageStore.size > 1000) {
+      const firstKey = this.messageStore.keys().next().value;
+      if (firstKey) this.messageStore.delete(firstKey);
+    }
+  }
 
   constructor(sessionDir?: string) {
     this.baseSessionDir = sessionDir || env.WHATSAPP_SESSION_PATH;
@@ -141,6 +161,13 @@ export class BaileysProvider implements IWhatsAppProvider {
     const { state, saveCreds } = await useMultiFileAuthState(orgSessionPath);
     const { version } = await fetchLatestBaileysVersion();
 
+    // Hook para salvar no banco sempre que qualquer chave (sessão, pre-key) for criada/atualizada
+    const originalKeysSet = state.keys.set;
+    state.keys.set = async (data: any) => {
+      await originalKeysSet(data);
+      this.debounceSaveToDb(organizationId, orgSessionPath);
+    };
+
     const logger = pino({ level: 'silent' });
 
     this.sock = makeWASocket({
@@ -148,8 +175,15 @@ export class BaileysProvider implements IWhatsAppProvider {
       logger,
       auth: state,
       printQRInTerminal: false,
-      browser: ['Combate Portaria', 'Chrome', '1.0.0'],
+      browser: Browsers.ubuntu('Chrome'),
       syncFullHistory: false,
+      msgRetryCounterCache: this.msgRetryCounterCache,
+      getMessage: async (key: proto.IMessageKey) => {
+        if (key.id && this.messageStore.has(key.id)) {
+          return this.messageStore.get(key.id);
+        }
+        return undefined;
+      },
     });
 
     this.isConnecting = false;
@@ -204,6 +238,9 @@ export class BaileysProvider implements IWhatsAppProvider {
     // Escuta mensagens recebidas (respostas dos moradores)
     this.sock.ev.on('messages.upsert', async ({ messages }: { messages: proto.IWebMessageInfo[] }) => {
       for (const msg of messages) {
+        if (msg.key?.id && msg.message) {
+          this.saveMessageToStore(msg.key.id, msg.message);
+        }
         if (!msg.message || msg.key.fromMe) continue;
 
         const remoteJid = msg.key.remoteJid || '';
@@ -316,15 +353,31 @@ export class BaileysProvider implements IWhatsAppProvider {
 
     if (this.sock) {
       try {
-        // 1. Tenta verificar o número original informado
+        // 1. Para números brasileiros com 13 dígitos (55 + DDD + 9 dígitos):
+        // No WhatsApp, contas de quase todos os DDDs fora de SP (DDD > 28) são registradas internamente sem o 9º dígito (12 dígitos).
+        // Se enviarmos para o JID de 13 dígitos, o WhatsApp entrega mas o celular não consegue descriptografar ("Aguardando mensagem").
+        // Portanto, para DDDs > 28, verificamos primeiro a existência do JID canônico sem o 9º dígito!
+        if (clean.startsWith('55') && clean.length === 13 && clean[4] === '9') {
+          const ddd = parseInt(clean.slice(2, 4), 10);
+          const withoutNine = `${clean.slice(0, 4)}${clean.slice(5)}`;
+
+          if (ddd > 28) {
+            const [resWithout] = (await this.sock.onWhatsApp(withoutNine)) || [];
+            if (resWithout && resWithout.exists) {
+              console.log(`📱 [Baileys] JID canônico sem 9º dígito resolvido (${withoutNine}): ${resWithout.jid}`);
+              return resWithout.jid;
+            }
+          }
+        }
+
+        // 2. Tenta verificar o número original informado
         const [direct] = (await this.sock.onWhatsApp(clean)) || [];
         if (direct && direct.exists) {
           console.log(`📱 [Baileys] JID verificado para ${clean}: ${direct.jid}`);
           return direct.jid;
         }
 
-        // 2. Se for número do Brasil com 13 dígitos (55 + DDD + 9 dígitos, ex: 5583993858515)
-        // No WhatsApp de muitos DDDs do Brasil (como 83, 81, 71, etc.), o JID é registrado sem o 9º dígito (12 dígitos)
+        // 3. Fallback se não resolveu direto: tenta sem o 9º dígito
         if (clean.startsWith('55') && clean.length === 13 && clean[4] === '9') {
           const withoutNine = `${clean.slice(0, 4)}${clean.slice(5)}`;
           const [resWithout] = (await this.sock.onWhatsApp(withoutNine)) || [];
@@ -334,7 +387,7 @@ export class BaileysProvider implements IWhatsAppProvider {
           }
         }
 
-        // 3. Se foi informado com 12 dígitos (sem o 9º dígito), tenta com o 9º dígito
+        // 4. Se foi informado com 12 dígitos (sem o 9º dígito), tenta com o 9º dígito
         if (clean.startsWith('55') && clean.length === 12) {
           const withNine = `${clean.slice(0, 4)}9${clean.slice(4)}`;
           const [resWith] = (await this.sock.onWhatsApp(withNine)) || [];
@@ -382,6 +435,9 @@ export class BaileysProvider implements IWhatsAppProvider {
 
     console.log(`🚀 [Baileys] Enviando mensagem de autorização para ${data.clientName} (JID: ${jid})...`);
     const sent = await this.sock.sendMessage(jid, { text });
+    if (sent?.key?.id && sent.message) {
+      this.saveMessageToStore(sent.key.id, sent.message);
+    }
     console.log(`✅ [Baileys] Mensagem enviada com sucesso! ID: ${sent?.key?.id}`);
     return { messageId: sent.key.id || '' };
   }
@@ -403,6 +459,9 @@ export class BaileysProvider implements IWhatsAppProvider {
 
     console.log(`🚀 [Baileys] Enviando lembrete para ${data.clientName} (JID: ${jid})...`);
     const sent = await this.sock.sendMessage(jid, { text });
+    if (sent?.key?.id && sent.message) {
+      this.saveMessageToStore(sent.key.id, sent.message);
+    }
     console.log(`✅ [Baileys] Lembrete enviado com sucesso! ID: ${sent?.key?.id}`);
     return { messageId: sent.key.id || '' };
   }
@@ -415,6 +474,9 @@ export class BaileysProvider implements IWhatsAppProvider {
     const jid = toPhone.includes('@') ? toPhone : await this.resolveJid(toPhone);
     console.log(`🚀 [Baileys] Enviando mensagem de texto para JID: ${jid}...`);
     const sent = await this.sock.sendMessage(jid, { text });
+    if (sent?.key?.id && sent.message) {
+      this.saveMessageToStore(sent.key.id, sent.message);
+    }
     console.log(`✅ [Baileys] Mensagem enviada com sucesso! ID: ${sent?.key?.id}`);
     return { messageId: sent?.key.id || `msg_${Date.now()}` };
   }
@@ -441,6 +503,9 @@ export class BaileysProvider implements IWhatsAppProvider {
       image: imageContent,
       caption: caption || '',
     });
+    if (sent?.key?.id && sent.message) {
+      this.saveMessageToStore(sent.key.id, sent.message);
+    }
     console.log(`✅ [Baileys] Imagem enviada com sucesso! ID: ${sent?.key?.id}`);
     return { messageId: sent?.key.id || `img_${Date.now()}` };
   }
