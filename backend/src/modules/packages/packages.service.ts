@@ -1,6 +1,7 @@
 import { prisma } from '../../lib/prisma.js';
 import { realtimeService } from '../../services/realtime/realtime.service.js';
 import { whatsappService } from '../../services/whatsapp/whatsapp.service.js';
+import { getStorageService } from '../../services/storage/storage.service.js';
 
 export interface CreatePackageDTO {
   destinationId: string;
@@ -67,6 +68,19 @@ export class PackagesService {
     const code = await this.generatePackageCode(data.organizationId);
     const pickupCode = this.generatePickupCode();
 
+    // Processa upload para Supabase Storage se a foto da encomenda foi enviada em Base64
+    let finalPhotoUrl = data.photoUrl || null;
+    if (data.photoUrl && (data.photoUrl.startsWith('data:image') || data.photoUrl.length > 500)) {
+      try {
+        const storageService = getStorageService();
+        const cleanBase64 = data.photoUrl.replace(/^data:image\/\w+;base64,/, '');
+        const buffer = Buffer.from(cleanBase64, 'base64');
+        finalPhotoUrl = await storageService.upload('package_photo.jpg', buffer, 'image/jpeg');
+      } catch (e) {
+        console.warn('Erro ao salvar foto da encomenda no Supabase Storage:', e);
+      }
+    }
+
     // 3. Salva no banco de dados
     const pkg = await prisma.package.create({
       data: {
@@ -78,7 +92,7 @@ export class PackagesService {
         carrier: data.carrier || 'Encomenda',
         recipientName: data.recipientName || client?.name || destination.name,
         sender: data.sender,
-        photoUrl: data.photoUrl,
+        photoUrl: finalPhotoUrl,
         notes: data.notes,
         pickupCode,
         status: 'RECEIVED',

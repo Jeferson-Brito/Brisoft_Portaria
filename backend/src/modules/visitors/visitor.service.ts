@@ -56,6 +56,18 @@ export class VisitorService {
         })
       : null;
 
+    // Processa upload para Supabase Storage se a foto foi enviada em Base64
+    let finalPhotoUrl = photoUrl || null;
+    if (photoUrl && (photoUrl.startsWith('data:image') || photoUrl.length > 500)) {
+      try {
+        const cleanBase64 = photoUrl.replace(/^data:image\/\w+;base64,/, '');
+        const buffer = Buffer.from(cleanBase64, 'base64');
+        finalPhotoUrl = await this.storageService.upload('visitor_photo.jpg', buffer, 'image/jpeg');
+      } catch (e) {
+        console.warn('Erro ao salvar foto do visitante no Supabase Storage:', e);
+      }
+    }
+
     if (visitor) {
       // Atualiza dados cadastrais
       visitor = await prisma.visitor.update({
@@ -65,7 +77,7 @@ export class VisitorService {
           documentType: documentType || visitor.documentType,
           phone: phone ? phone.trim() : visitor.phone,
           company: company ? company.trim() : visitor.company,
-          photoUrl: photoUrl || visitor.photoUrl,
+          photoUrl: finalPhotoUrl || visitor.photoUrl,
           notes: notes ? notes.trim() : visitor.notes,
         },
         include: { vehicles: true },
@@ -80,7 +92,7 @@ export class VisitorService {
           documentNumber: cleanDoc,
           phone: phone ? phone.trim() : null,
           company: company ? company.trim() : null,
-          photoUrl: photoUrl || null,
+          photoUrl: finalPhotoUrl,
           notes: notes ? notes.trim() : null,
         },
         include: { vehicles: true },

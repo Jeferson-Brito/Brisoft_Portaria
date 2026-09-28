@@ -3,6 +3,7 @@ import { buildApp } from './app.js';
 import { env } from './config/env.js';
 import { realtimeService } from './services/realtime/realtime.service.js';
 import { whatsappService } from './services/whatsapp/whatsapp.service.js';
+import { storageRetentionService } from './services/storage/storage-cleanup.service.js';
 
 async function bootstrap() {
   const app = buildApp();
@@ -18,6 +19,9 @@ async function bootstrap() {
 
   try {
     await app.listen({ port: env.PORT, host: '0.0.0.0' });
+
+    // Inicia a rotina de exclusão automática de fotos antigas (> 30 dias corridos)
+    storageRetentionService.startAutoCleanup();
 
     // Restaura automaticamente sessões salvas do WhatsApp Baileys
     await whatsappService.autoRestoreSessions();

@@ -29,23 +29,29 @@ export interface ClientDestinationItem {
 interface ClientAutocompleteProps {
   onSelectClient: (client: ClientDestinationItem | null, selectedDestinationId: string) => void;
   selectedClientId?: string;
+  selectedClient?: ClientDestinationItem | null;
 }
 
 export const ClientAutocomplete: React.FC<ClientAutocompleteProps> = ({
   onSelectClient,
   selectedClientId,
+  selectedClient,
 }) => {
   const [query, setQuery] = useState('');
   const [clients, setClients] = useState<ClientDestinationItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [selectedItem, setSelectedItem] = useState<ClientDestinationItem | null>(null);
+  const [selectedItem, setSelectedItem] = useState<ClientDestinationItem | null>(
+    selectedClient || null
+  );
 
-  // Se o componente foi resetado pelo pai
+  // Sincroniza com a seleção do componente pai (ex: ao voltar de confirmação)
   useEffect(() => {
-    if (!selectedClientId) {
+    if (selectedClient !== undefined) {
+      setSelectedItem(selectedClient);
+    } else if (!selectedClientId) {
       setSelectedItem(null);
     }
-  }, [selectedClientId]);
+  }, [selectedClient, selectedClientId]);
 
   useEffect(() => {
     const trimmed = query.trim();

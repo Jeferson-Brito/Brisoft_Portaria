@@ -149,14 +149,9 @@ export const NewRequestModal: React.FC<NewRequestModalProps> = ({
         <View style={styles.header}>
           <View style={styles.headerWaveDecoration} />
           <View style={styles.headerContentRow}>
-            <View>
-              <Text style={styles.headerSubtext}>
-                {step === 'form' ? 'Portaria e Controle' : 'Revisão'}
-              </Text>
-              <Text style={styles.title}>
-                {step === 'form' ? 'Nova Solicitação' : 'Confirmar Acesso'}
-              </Text>
-            </View>
+            <Text style={styles.title}>
+              {step === 'form' ? 'Nova Solicitação' : 'Confirmar Acesso'}
+            </Text>
             <TouchableOpacity onPress={onClose} style={styles.closeBtn} activeOpacity={0.8}>
               <X size={20} color="#FFFFFF" strokeWidth={2.5} />
             </TouchableOpacity>
@@ -174,6 +169,7 @@ export const NewRequestModal: React.FC<NewRequestModalProps> = ({
               <ClientAutocomplete
                 onSelectClient={handleSelectClient}
                 selectedClientId={selectedClient?.id}
+                selectedClient={selectedClient}
               />
 
               {/* Dados do Visitante e Veículo */}
@@ -268,8 +264,8 @@ const styles = StyleSheet.create({
   header: {
     backgroundColor: '#165337',
     paddingHorizontal: 20,
-    paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 24) + 14 : 52,
-    paddingBottom: 18,
+    paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 24) + 6 : 42,
+    paddingBottom: 14,
     position: 'relative',
     overflow: 'hidden',
   },
@@ -288,14 +284,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     zIndex: 2,
   },
-  headerSubtext: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#A7F3D0',
-    textTransform: 'uppercase',
-    letterSpacing: 0.8,
-    marginBottom: 2,
-  },
+
   title: {
     fontSize: 20,
     fontWeight: '800',

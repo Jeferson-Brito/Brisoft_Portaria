@@ -7,7 +7,9 @@ import {
   StyleSheet,
   Switch,
   Image,
+  Alert,
 } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
 import {
   User,
   FileText,
@@ -55,6 +57,78 @@ export const VisitorFormSection: React.FC<VisitorFormSectionProps> = ({ data, on
   ];
 
   const visitReasons = ['Visita', 'Serviço', 'Entrega', 'Manutenção', 'Reunião'];
+
+  const handleTakePhoto = async () => {
+    try {
+      const { status } = await ImagePicker.requestCameraPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert(
+          'Permissão da Câmera',
+          'É necessário conceder permissão de acesso à câmera para fotografar o visitante.'
+        );
+        return;
+      }
+
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.7,
+        base64: true,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const asset = result.assets[0];
+        if (asset.base64) {
+          updateField('photoBase64', `data:image/jpeg;base64,${asset.base64}`);
+        } else if (asset.uri) {
+          updateField('photoBase64', asset.uri);
+        }
+      }
+    } catch (err: any) {
+      Alert.alert('Erro ao abrir câmera', err?.message || 'Falha ao acessar a câmera do dispositivo.');
+    }
+  };
+
+  const handleChooseFromGallery = async () => {
+    try {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert(
+          'Permissão da Galeria',
+          'É necessário conceder permissão para selecionar uma foto da galeria.'
+        );
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.7,
+        base64: true,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const asset = result.assets[0];
+        if (asset.base64) {
+          updateField('photoBase64', `data:image/jpeg;base64,${asset.base64}`);
+        } else if (asset.uri) {
+          updateField('photoBase64', asset.uri);
+        }
+      }
+    } catch (err: any) {
+      Alert.alert('Erro ao abrir galeria', err?.message || 'Falha ao acessar a galeria.');
+    }
+  };
+
+  const promptPhotoOptions = () => {
+    Alert.alert('Foto do Visitante', 'Escolha como deseja adicionar a foto:', [
+      { text: 'Tirar Foto com a Câmera', onPress: handleTakePhoto },
+      { text: 'Escolher da Galeria', onPress: handleChooseFromGallery },
+      { text: 'Cancelar', style: 'cancel' },
+    ]);
+  };
 
   return (
     <View style={styles.container}>
@@ -221,12 +295,17 @@ export const VisitorFormSection: React.FC<VisitorFormSectionProps> = ({ data, on
         {data.photoBase64 ? (
           <View style={styles.photoPreviewWrapper}>
             <Image
-              source={{ uri: `data:image/jpeg;base64,${data.photoBase64}` }}
+              source={{
+                uri: data.photoBase64.startsWith('data:') || data.photoBase64.startsWith('file:') || data.photoBase64.startsWith('http')
+                  ? data.photoBase64
+                  : `data:image/jpeg;base64,${data.photoBase64}`,
+              }}
               style={styles.photoPreview}
             />
             <TouchableOpacity
               style={styles.removePhotoButton}
               onPress={() => updateField('photoBase64', undefined)}
+              activeOpacity={0.8}
             >
               <Trash2 size={16} color={colors.white} />
             </TouchableOpacity>
@@ -234,16 +313,12 @@ export const VisitorFormSection: React.FC<VisitorFormSectionProps> = ({ data, on
         ) : (
           <TouchableOpacity
             style={styles.captureButton}
-            onPress={() => {
-              // Simulação de foto instantânea para testes locais de portaria
-              updateField(
-                'photoBase64',
-                '/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////wgALCAABAAEBAREA/8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPxA='
-              );
-            }}
+            onPress={promptPhotoOptions}
+            activeOpacity={0.8}
           >
-            <Camera size={24} color={colors.primaryLight} style={{ marginBottom: 6 }} />
-            <Text style={styles.captureText}>Capturar Foto pela Câmera</Text>
+            <Camera size={26} color="#165337" style={{ marginBottom: 6 }} />
+            <Text style={styles.captureText}>Fotografar Visitante</Text>
+            <Text style={styles.captureSubtext}>Tirar foto ou escolher da galeria</Text>
           </TouchableOpacity>
         )}
       </View>
@@ -375,9 +450,15 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   captureText: {
-    fontSize: 13,
+    fontSize: 14,
     color: '#165337',
-    fontWeight: '600',
+    fontWeight: '700',
+  },
+  captureSubtext: {
+    fontSize: 11,
+    color: '#64748B',
+    marginTop: 2,
+    fontWeight: '500',
   },
   photoPreviewWrapper: {
     position: 'relative',
