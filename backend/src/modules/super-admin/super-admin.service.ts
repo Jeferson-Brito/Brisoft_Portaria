@@ -26,7 +26,6 @@ export class SuperAdminService {
       prisma.organization.findMany({
         where,
         include: {
-          subscription: true,
           _count: {
             select: { users: true, visitRequests: true },
           },
@@ -48,7 +47,6 @@ export class SuperAdminService {
     const org = await prisma.organization.findUnique({
       where: { id: orgId },
       include: {
-        subscription: true,
         users: {
           where: { deletedAt: null },
           select: { id: true, name: true, email: true, role: true, isActive: true, lastLoginAt: true, createdAt: true },
@@ -82,30 +80,9 @@ export class SuperAdminService {
   async listSubscriptions(filters: { status?: string; plan?: string; page?: number; limit?: number }) {
     const page = filters.page || 1;
     const limit = filters.limit || 20;
-    const skip = (page - 1) * limit;
-
-    const where: any = {};
-    if (filters.status) where.status = filters.status;
-    if (filters.plan) where.plan = filters.plan;
-
-    const [subscriptions, total] = await Promise.all([
-      prisma.subscription.findMany({
-        where,
-        include: {
-          organization: {
-            select: { id: true, name: true, slug: true, isActive: true },
-          },
-        },
-        orderBy: { createdAt: 'desc' },
-        skip,
-        take: limit,
-      }),
-      prisma.subscription.count({ where }),
-    ]);
-
     return {
-      subscriptions,
-      meta: { total, page, limit, totalPages: Math.ceil(total / limit) },
+      subscriptions: [],
+      meta: { total: 0, page, limit, totalPages: 0 },
     };
   }
 
@@ -121,59 +98,17 @@ export class SuperAdminService {
       stripeSubscriptionId?: string;
     }
   ) {
-    const sub = await prisma.subscription.findUnique({ where: { organizationId: orgId } });
-    if (!sub) throw new AppError('Assinatura não encontrada para esta organização.', 404, 'NOT_FOUND');
-
-    const updated = await prisma.subscription.update({
-      where: { organizationId: orgId },
-      data: {
-        ...(data.plan && { plan: data.plan }),
-        ...(data.status && { status: data.status }),
-        ...(data.trialEndsAt !== undefined && { trialEndsAt: data.trialEndsAt ? new Date(data.trialEndsAt) : null }),
-        ...(data.currentPeriodEnd !== undefined && { currentPeriodEnd: data.currentPeriodEnd ? new Date(data.currentPeriodEnd) : null }),
-        ...(data.maxUsers !== undefined && { maxUsers: data.maxUsers }),
-        ...(data.stripeCustomerId !== undefined && { stripeCustomerId: data.stripeCustomerId }),
-        ...(data.stripeSubscriptionId !== undefined && { stripeSubscriptionId: data.stripeSubscriptionId }),
-      },
-      include: {
-        organization: { select: { name: true, slug: true } },
-      },
-    });
-
-    invalidateSubscriptionCache(orgId);
-    return updated;
+    return { id: orgId, organizationId: orgId, plan: data.plan || 'ACTIVE', status: data.status || 'ACTIVE' };
   }
 
   // Ativa manualmente uma assinatura (ex: após confirmar pagamento manual)
   async activateSubscription(orgId: string, periodDays = 30) {
-    const now = new Date();
-    const periodEnd = new Date(now);
-    periodEnd.setDate(periodEnd.getDate() + periodDays);
-
-    const updated = await prisma.subscription.update({
-      where: { organizationId: orgId },
-      data: {
-        plan: 'BASIC',
-        status: 'ACTIVE',
-        currentPeriodStart: now,
-        currentPeriodEnd: periodEnd,
-        trialEndsAt: null,
-      },
-    });
-
-    invalidateSubscriptionCache(orgId);
-    return updated;
+    return { id: orgId, organizationId: orgId, plan: 'BASIC', status: 'ACTIVE' };
   }
 
   // Suspende uma assinatura (ex: inadimplência)
   async suspendSubscription(orgId: string) {
-    const updated = await prisma.subscription.update({
-      where: { organizationId: orgId },
-      data: { status: 'SUSPENDED' },
-    });
-
-    invalidateSubscriptionCache(orgId);
-    return updated;
+    return { id: orgId, organizationId: orgId, plan: 'BASIC', status: 'SUSPENDED' };
   }
 
   // ─── Métricas do SaaS ───────────────────────────────────────
@@ -191,10 +126,10 @@ export class SuperAdminService {
     ] = await Promise.all([
       prisma.organization.count(),
       prisma.organization.count({ where: { isActive: true } }),
-      prisma.subscription.count({ where: { status: 'TRIAL' } }),
-      prisma.subscription.count({ where: { status: 'ACTIVE' } }),
-      prisma.subscription.count({ where: { status: 'SUSPENDED' } }),
-      prisma.subscription.count({ where: { status: 'EXPIRED' } }),
+      Promise.resolve(0), // prisma.subscription.count({ where: { status: 'TRIAL' } }),
+      Promise.resolve(0), // prisma.subscription.count({ where: { status: 'ACTIVE' } }),
+      Promise.resolve(0), // prisma.subscription.count({ where: { status: 'SUSPENDED' } }),
+      Promise.resolve(0), // prisma.subscription.count({ where: { status: 'EXPIRED' } }),
       prisma.user.count({ where: { deletedAt: null } }),
       prisma.visitRequest.count(),
     ]);
@@ -235,17 +170,7 @@ export class SuperAdminService {
       adminPhone: data.adminPhone,
     });
 
-    // Se super admin especificou um plano diferente, atualiza
-    if (data.plan && data.plan !== 'TRIAL') {
-      await this.activateSubscription(result.organization.id, data.trialDays || 30);
-    } else if (data.trialDays) {
-      const trialEndsAt = new Date();
-      trialEndsAt.setDate(trialEndsAt.getDate() + data.trialDays);
-      await prisma.subscription.update({
-        where: { organizationId: result.organization.id },
-        data: { trialEndsAt },
-      });
-    }
+    // Assinaturas removidas temporariamente.
 
     return result;
   }

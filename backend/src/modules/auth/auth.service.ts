@@ -71,16 +71,7 @@ export class AuthService {
         },
       });
 
-      // 2. Assinatura Trial
-      const subscription = await tx.subscription.create({
-        data: {
-          organizationId: organization.id,
-          plan: 'TRIAL',
-          status: 'TRIAL',
-          trialEndsAt,
-          maxUsers: 10,
-        },
-      });
+      // 2. Assinatura Trial removida
 
       // 3. Templates de mensagem padrão
       await tx.messageTemplate.createMany({
@@ -114,7 +105,7 @@ export class AuthService {
         },
       });
 
-      return { organization, admin, subscription };
+      return { organization, admin };
     });
 
     return {
@@ -147,11 +138,7 @@ export class AuthService {
         deletedAt: null,
       },
       include: {
-        organization: {
-          include: {
-            subscription: true,
-          },
-        },
+        organization: true,
       },
     });
 
@@ -193,21 +180,7 @@ export class AuthService {
     });
 
     // Calcula info da assinatura
-    const sub = user.organization.subscription;
-    let subscriptionInfo: any = null;
-    if (sub && user.role !== 'SUPER_ADMIN') {
-      const now = new Date();
-      let daysRemaining = null;
-      if (sub.trialEndsAt) {
-        daysRemaining = Math.max(0, Math.ceil((sub.trialEndsAt.getTime() - now.getTime()) / 86400000));
-      }
-      subscriptionInfo = {
-        plan: sub.plan,
-        status: sub.status,
-        trialEndsAt: sub.trialEndsAt,
-        daysRemaining,
-      };
-    }
+    let subscriptionInfo: any = { plan: 'ACTIVE', status: 'ACTIVE', daysRemaining: 9999 };
 
     return {
       user: {
@@ -232,14 +205,6 @@ export class AuthService {
             name: true,
             slug: true,
             isActive: true,
-            subscription: {
-              select: {
-                plan: true,
-                status: true,
-                trialEndsAt: true,
-                currentPeriodEnd: true,
-              },
-            },
           },
         },
       },
@@ -249,12 +214,9 @@ export class AuthService {
       throw new AppError('Usuário não encontrado.', 404, 'USER_NOT_FOUND');
     }
 
-    const sub = user.organization.subscription;
+    // const sub = user.organization.subscription;
     const now = new Date();
-    let daysRemaining = null;
-    if (sub?.trialEndsAt) {
-      daysRemaining = Math.max(0, Math.ceil((sub.trialEndsAt.getTime() - now.getTime()) / 86400000));
-    }
+    let daysRemaining = 9999;
 
     return {
       id: user.id,
@@ -268,15 +230,7 @@ export class AuthService {
         slug: user.organization.slug,
         isActive: user.organization.isActive,
       },
-      subscription: sub
-        ? {
-            plan: sub.plan,
-            status: sub.status,
-            trialEndsAt: sub.trialEndsAt,
-            currentPeriodEnd: sub.currentPeriodEnd,
-            daysRemaining,
-          }
-        : null,
+      subscription: { plan: 'ACTIVE', status: 'ACTIVE', daysRemaining },
     };
   }
 }
