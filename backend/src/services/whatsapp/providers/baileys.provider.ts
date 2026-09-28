@@ -41,13 +41,16 @@ export class BaileysProvider implements IWhatsAppProvider {
   };
   private messageListeners: Array<(msg: IncomingMessageEvent) => Promise<void>> = [];
   private baseSessionDir: string;
+  private orgSessionPath: string = '';
   private saveTimeout: NodeJS.Timeout | null = null;
   private isConnecting = false;
   private messageStore = new Map<string, proto.IMessage>();
   private msgRetryCounterCache = new MemoryCache();
 
   private getStoreFilePath(): string {
-    return path.join(this.baseSessionDir, 'messages_cache.json');
+    return this.orgSessionPath
+      ? path.join(this.orgSessionPath, 'messages_cache.json')
+      : path.join(this.baseSessionDir, 'messages_cache.json');
   }
 
   private loadMessageStoreFromDisk() {
@@ -112,6 +115,8 @@ export class BaileysProvider implements IWhatsAppProvider {
       const files = fs.readdirSync(orgSessionPath);
       const sessionMap: Record<string, string> = {};
       for (const f of files) {
+        // Exclui sessões individuais de contatos (session-*.json) para evitar ratchets Signal desincronizados entre reinicializações
+        if (f.startsWith('session-')) continue;
         const fullPath = path.join(orgSessionPath, f);
         if (fs.statSync(fullPath).isFile()) {
           sessionMap[f] = fs.readFileSync(fullPath, 'utf8');
@@ -158,6 +163,7 @@ export class BaileysProvider implements IWhatsAppProvider {
 
       const sessionMap: Record<string, string> = JSON.parse(setting.value);
       for (const [filename, content] of Object.entries(sessionMap)) {
+        if (filename.startsWith('session-')) continue;
         const fullPath = path.join(orgSessionPath, filename);
         fs.writeFileSync(fullPath, content, 'utf8');
       }
@@ -185,6 +191,7 @@ export class BaileysProvider implements IWhatsAppProvider {
     }
 
     const orgSessionPath = path.join(this.baseSessionDir, `org_${organizationId}`);
+    this.orgSessionPath = orgSessionPath;
     if (!fs.existsSync(orgSessionPath)) {
       fs.mkdirSync(orgSessionPath, { recursive: true });
     }
@@ -194,6 +201,8 @@ export class BaileysProvider implements IWhatsAppProvider {
     if (!fs.existsSync(credsPath)) {
       await this.restoreSessionFromDb(organizationId, orgSessionPath);
     }
+
+    this.loadMessageStoreFromDisk();
 
     this.statusInfo.status = 'CONNECTING';
 
@@ -506,6 +515,23 @@ export class BaileysProvider implements IWhatsAppProvider {
 
     console.log(`🚀 [Baileys] Enviando lembrete para ${data.clientName} (JID: ${jid})...`);
     return await this.sendMessage(jid, text);
+  }
+
+  public clearContactSession(phoneOrJid: string) {
+    if (!this.orgSessionPath || !fs.existsSync(this.orgSessionPath)) return;
+    try {
+      const clean = phoneOrJid.replace(/[^0-9]/g, '');
+      if (clean.length < 8) return;
+      const files = fs.readdirSync(this.orgSessionPath);
+      for (const f of files) {
+        if (f.startsWith(`session-${clean}`) || (f.startsWith('session-') && f.includes(clean))) {
+          try {
+            fs.unlinkSync(path.join(this.orgSessionPath, f));
+            console.log(`🧹 [Baileys] Sessão fechada/antiga de contato removida: ${f}`);
+          } catch (e) {}
+        }
+      }
+    } catch (err) {}
   }
 
   async sendMessage(toPhone: string, text: string): Promise<{ messageId: string }> {
