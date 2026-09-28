@@ -98,9 +98,11 @@ export const RealtimeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         organizationId: user.organizationId,
         userId: user.id,
       },
-      transports: ['websocket'],
-      reconnectionAttempts: 10,
-      reconnectionDelay: 2000,
+      transports: ['polling', 'websocket'],
+      timeout: 20000,
+      reconnection: true,
+      reconnectionAttempts: Infinity,
+      reconnectionDelay: 2500,
     });
 
     socketRef.current = socket;
@@ -116,7 +118,8 @@ export const RealtimeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     });
 
     socket.on('connect_error', (err) => {
-      console.warn('❌ Erro de conexão WebSocket:', err.message);
+      // Usar console.log em vez de console.warn para evitar LogBox amarelo no Expo Go durante reconexão
+      console.log('🔄 [WebSocket] Reconectando...', err.message);
       setIsConnected(false);
     });
 
