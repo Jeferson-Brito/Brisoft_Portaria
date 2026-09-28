@@ -455,57 +455,28 @@ export const DashboardScreen: React.FC = () => {
           </View>
         </View>
 
-        {/* Barra de Ações Compacta Fixa ao Scrolar (3 botões horizontais) */}
-        {showCompactActions && (
-          <View style={styles.compactActionsBar}>
-            <TouchableOpacity
-              style={styles.compactActionBtnPrimary}
-              onPress={() => setIsModalOpen(true)}
-              activeOpacity={0.85}
-            >
-              <Plus size={15} color="#FFFFFF" strokeWidth={2.5} />
-              <Text style={styles.compactActionBtnPrimaryText}>Nova Solicitação</Text>
-            </TouchableOpacity>
+        {/* Container Rolável com Barra de Ações Compacta em Sobreposição Absoluta */}
+        <View style={{ flex: 1, position: 'relative' }}>
+          {/* Conteúdo Rolável Abaixo do Cabeçalho Fixo */}
+          <ScrollView
+            ref={scrollRef}
+            style={styles.scrollView}
+            contentContainerStyle={[styles.scrollContent, { paddingBottom: bottomInset + 80 }]}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            scrollEventThrottle={16}
+            onScroll={(e) => {
+              const y = e.nativeEvent.contentOffset.y;
+              setShowScrollTop(y > 200);
 
-            <TouchableOpacity
-              style={styles.compactActionBtnSecondaryAmber}
-              onPress={() => setActiveTab('preauthorizations')}
-              activeOpacity={0.85}
-            >
-              <CalendarCheck size={15} color="#D97706" />
-              <Text style={styles.compactActionBtnTextAmber}>Agendados</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.compactActionBtnSecondaryPurple}
-              onPress={() => setActiveTab('packages')}
-              activeOpacity={0.85}
-            >
-              <Package size={15} color="#7C3AED" />
-              <Text style={styles.compactActionBtnTextPurple}>Encomendas</Text>
-              {packagesCount > 0 && (
-                <View style={styles.compactActionBadge}>
-                  <Text style={styles.compactActionBadgeText}>{packagesCount}</Text>
-                </View>
-              )}
-            </TouchableOpacity>
-          </View>
-        )}
-
-        {/* Conteúdo Rolável Abaixo do Cabeçalho Fixo */}
-        <ScrollView
-          ref={scrollRef}
-          style={styles.scrollView}
-          contentContainerStyle={[styles.scrollContent, { paddingBottom: bottomInset + 80 }]}
-          showsVerticalScrollIndicator={false}
-          keyboardShouldPersistTaps="handled"
-          scrollEventThrottle={16}
-          onScroll={(e) => {
-            const y = e.nativeEvent.contentOffset.y;
-            setShowScrollTop(y > 180);
-            setShowCompactActions(y > 140);
-          }}
-        >
+              // Histerese para eliminar oscilação e tremida ao scrolar
+              if (y > 170 && !showCompactActions) {
+                setShowCompactActions(true);
+              } else if (y < 120 && showCompactActions) {
+                setShowCompactActions(false);
+              }
+            }}
+          >
           <View style={styles.bodyContainer}>
             {/* Ação Principal Hero: Nova Solicitação em Grande Destaque */}
             <TouchableOpacity
@@ -795,6 +766,7 @@ export const DashboardScreen: React.FC = () => {
                   const isPending = req.status === 'PENDING';
                   const isAuthorized = req.status === 'AUTHORIZED';
                   const isEntered = req.status === 'ENTERED';
+                  const isExited = req.status === 'EXITED';
                   const isDenied = req.status === 'DENIED';
 
                   const timeFormatted = new Date(req.createdAt).toLocaleTimeString('pt-BR', {
@@ -817,6 +789,7 @@ export const DashboardScreen: React.FC = () => {
                         isPending && styles.accessCardPending,
                         isAuthorized && styles.accessCardAuthorized,
                         isEntered && styles.accessCardEntered,
+                        isExited && styles.accessCardExited,
                         isDenied && styles.accessCardDenied,
                       ]}
                       onPress={() => setDetailModal({ visible: true, request: req })}
@@ -829,10 +802,13 @@ export const DashboardScreen: React.FC = () => {
                           isPending && styles.accessCardIconBoxPending,
                           isAuthorized && styles.accessCardIconBoxAuthorized,
                           isEntered && styles.accessCardIconBoxEntered,
+                          isExited && styles.accessCardIconBoxExited,
                           isDenied && styles.accessCardIconBoxDenied,
                         ]}
                       >
-                        {isAuthorized ? (
+                        {isExited ? (
+                          <CheckCircle size={22} color="#059669" />
+                        ) : isAuthorized ? (
                           <CircleCheck size={22} color="#16A34A" />
                         ) : isPending ? (
                           <Clock size={22} color="#D97706" />
@@ -857,6 +833,7 @@ export const DashboardScreen: React.FC = () => {
                               isPending && styles.accessBadgePending,
                               isAuthorized && styles.accessBadgeAuthorized,
                               isEntered && styles.accessBadgeEntered,
+                              isExited && styles.accessBadgeExited,
                               isDenied && styles.accessBadgeDenied,
                             ]}
                           >
@@ -866,10 +843,13 @@ export const DashboardScreen: React.FC = () => {
                                 isPending && styles.accessBadgeTextPending,
                                 isAuthorized && styles.accessBadgeTextAuthorized,
                                 isEntered && styles.accessBadgeTextEntered,
+                                isExited && styles.accessBadgeTextExited,
                                 isDenied && styles.accessBadgeTextDenied,
                               ]}
                             >
-                              {isPending
+                              {isExited
+                                ? 'Finalizada'
+                                : isPending
                                 ? 'Aguardando'
                                 : isAuthorized
                                 ? 'Autorizado'
@@ -1010,6 +990,44 @@ export const DashboardScreen: React.FC = () => {
             </View>
           </View>
         </ScrollView>
+
+        {/* Barra de Ações Compacta Flutuante Fixa no Topo (Não desloca a rolagem) */}
+        {showCompactActions && (
+          <View style={styles.compactActionsBar}>
+            <TouchableOpacity
+              style={styles.compactActionBtnPrimary}
+              onPress={() => setIsModalOpen(true)}
+              activeOpacity={0.85}
+            >
+              <Plus size={15} color="#FFFFFF" strokeWidth={2.5} />
+              <Text style={styles.compactActionBtnPrimaryText}>Nova Solicitação</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.compactActionBtnSecondaryAmber}
+              onPress={() => setActiveTab('preauthorizations')}
+              activeOpacity={0.85}
+            >
+              <CalendarCheck size={15} color="#D97706" />
+              <Text style={styles.compactActionBtnTextAmber}>Agendados</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.compactActionBtnSecondaryPurple}
+              onPress={() => setActiveTab('packages')}
+              activeOpacity={0.85}
+            >
+              <Package size={15} color="#7C3AED" />
+              <Text style={styles.compactActionBtnTextPurple}>Encomendas</Text>
+              {packagesCount > 0 && (
+                <View style={styles.compactActionBadge}>
+                  <Text style={styles.compactActionBadgeText}>{packagesCount}</Text>
+                </View>
+              )}
+            </TouchableOpacity>
+          </View>
+        )}
+        </View>
       </View>
     );
   };
@@ -1249,9 +1267,34 @@ export const DashboardScreen: React.FC = () => {
                 const isPending = req.status === 'PENDING';
                 const isAuthorized = req.status === 'AUTHORIZED';
                 const isEntered = req.status === 'ENTERED';
-                const statusLabel = isPending ? 'Aguardando' : isAuthorized ? 'Autorizado' : isEntered ? 'No Local' : 'Recusado';
-                const statusColor = isPending ? '#D97706' : isAuthorized ? '#16A34A' : isEntered ? '#2563EB' : '#DC2626';
-                const statusBg = isPending ? '#FEF3C7' : isAuthorized ? '#DCFCE7' : isEntered ? '#DBEAFE' : '#FEE2E2';
+                const isExited = req.status === 'EXITED';
+                const statusLabel = isExited
+                  ? 'Finalizada (Saída Registrada)'
+                  : isPending
+                  ? 'Aguardando'
+                  : isAuthorized
+                  ? 'Autorizado'
+                  : isEntered
+                  ? 'No Local'
+                  : 'Recusado';
+                const statusColor = isExited
+                  ? '#047857'
+                  : isPending
+                  ? '#D97706'
+                  : isAuthorized
+                  ? '#16A34A'
+                  : isEntered
+                  ? '#2563EB'
+                  : '#DC2626';
+                const statusBg = isExited
+                  ? '#D1FAE5'
+                  : isPending
+                  ? '#FEF3C7'
+                  : isAuthorized
+                  ? '#DCFCE7'
+                  : isEntered
+                  ? '#DBEAFE'
+                  : '#FEE2E2';
                 const createdDate = new Date(req.createdAt);
                 const dateStr = createdDate.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
                 const timeStr = createdDate.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
@@ -1814,6 +1857,9 @@ const styles = StyleSheet.create({
   accessCardDenied: {
     borderLeftColor: '#EF4444',
   },
+  accessCardExited: {
+    borderLeftColor: '#059669', // Verde esmeralda para saída finalizada
+  },
   accessCardIconBox: {
     width: 44,
     height: 44,
@@ -1834,6 +1880,9 @@ const styles = StyleSheet.create({
   },
   accessCardIconBoxDenied: {
     backgroundColor: '#FEE2E2',
+  },
+  accessCardIconBoxExited: {
+    backgroundColor: '#ECFDF5',
   },
   accessCardContent: {
     flex: 1,
@@ -1870,6 +1919,9 @@ const styles = StyleSheet.create({
   accessBadgeDenied: {
     backgroundColor: '#FEE2E2',
   },
+  accessBadgeExited: {
+    backgroundColor: '#D1FAE5',
+  },
   accessBadgeText: {
     fontSize: 10,
     fontWeight: '800',
@@ -1886,6 +1938,9 @@ const styles = StyleSheet.create({
   },
   accessBadgeTextDenied: {
     color: '#B91C1C',
+  },
+  accessBadgeTextExited: {
+    color: '#047857',
   },
   accessCardMiddleRow: {
     flexDirection: 'row',
@@ -2177,8 +2232,12 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
 
-  // Barra de Ações Compacta Fixa ao Scrolar
+  // Barra de Ações Compacta Fixa ao Scrolar (Flutuante em Sobreposição Absoluta)
   compactActionsBar: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
     backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
     borderBottomColor: '#E2E8F0',
@@ -2189,11 +2248,11 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: 8,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 4,
-    elevation: 3,
-    zIndex: 10,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    elevation: 8,
+    zIndex: 50,
   },
   compactActionBtnPrimary: {
     flex: 1.2,
