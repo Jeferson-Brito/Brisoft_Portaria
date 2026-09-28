@@ -27,32 +27,47 @@ export function parseMessageTemplate(template: string, vars: TemplateVariables):
   );
   content = content.replace(/\{\{placa\}\}/gi, vars.placa || '');
   content = content.replace(/\{\{codigo\}\}/gi, vars.codigo || '');
-  content = content.replace(/\{\{observacao\}\}/gi, vars.observacao || '');
-  content = content.replace(/\{\{notas\}\}/gi, vars.observacao || '');
-  content = content.replace(/\{\{operador\}\}/gi, vars.operador || 'Portaria');
-  content = content.replace(/\{\{porteiro\}\}/gi, vars.operador || 'Portaria');
 
-  // Se o template não tinha placeholder para observação mas há observação informada, adiciona antes da pergunta de autorização
-  if (vars.observacao && !template.includes('{{observacao}}') && !template.includes('{{notas}}')) {
-    const obsBlock = `\n📝 *Observação:* ${vars.observacao}`;
-    if (content.includes('Deseja autorizar')) {
+  // Observação
+  if (vars.observacao && vars.observacao.trim()) {
+    content = content.replace(/\{\{observacao\}\}/gi, vars.observacao.trim());
+    content = content.replace(/\{\{notas\}\}/gi, vars.observacao.trim());
+  } else {
+    // Se não há observação, remove a linha inteira do placeholder para não ficar em branco
+    content = content.replace(/[^\n]*\{\{observacao\}\}[^\n]*\n?/gi, '');
+    content = content.replace(/[^\n]*\{\{notas\}\}[^\n]*\n?/gi, '');
+  }
+
+  // Operador
+  const opName = (vars.operador && vars.operador.trim()) ? vars.operador.trim() : 'Portaria';
+  content = content.replace(/\{\{operador\}\}/gi, opName);
+  content = content.replace(/\{\{porteiro\}\}/gi, opName);
+
+  // Se o template NÃO possuía placeholder de observação e há observação informada
+  if (vars.observacao && vars.observacao.trim() && !template.includes('{{observacao}}') && !template.includes('{{notas}}')) {
+    const obsBlock = `📝 *Observação:* ${vars.observacao.trim()}`;
+    if (content.includes('Para responder')) {
+      content = content.replace('Para responder', `${obsBlock}\n\nPara responder`);
+    } else if (content.includes('Deseja autorizar')) {
       content = content.replace('Deseja autorizar', `${obsBlock}\n\nDeseja autorizar`);
     } else {
       content += `\n${obsBlock}`;
     }
   }
 
-  // Se o template não tinha placeholder para operador mas há operador informado, adiciona
-  if (vars.operador && !template.includes('{{operador}}') && !template.includes('{{porteiro}}')) {
-    const opBlock = `\n👮‍♂️ *Solicitado por:* ${vars.operador}`;
-    if (content.includes('Deseja autorizar')) {
+  // Se o template NÃO possuía placeholder de operador
+  if (!template.includes('{{operador}}') && !template.includes('{{porteiro}}')) {
+    const opBlock = `👮‍♂️ *Solicitado por:* ${opName}`;
+    if (content.includes('Para responder')) {
+      content = content.replace('Para responder', `${opBlock}\n\nPara responder`);
+    } else if (content.includes('Deseja autorizar')) {
       content = content.replace('Deseja autorizar', `${opBlock}\n\nDeseja autorizar`);
     } else {
       content += `\n${opBlock}`;
     }
   }
 
-  return content;
+  return content.replace(/\n{3,}/g, '\n\n');
 }
 
 export const DEFAULT_APPROVAL_TEMPLATE = `Olá, *{{cliente}}*!
@@ -66,6 +81,7 @@ Há um visitante aguardando sua autorização na portaria.
 📅 *Data e Horário:* {{horario}}
 🚗 *Veículo:* {{veiculo}}
 🔖 *Solicitação:* {{codigo}}
+📝 *Observação:* {{observacao}}
 👮‍♂️ *Solicitado por:* {{operador}}
 
 Deseja autorizar a entrada?

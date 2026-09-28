@@ -118,7 +118,10 @@ export class PackagesService {
 
       if (pkg.photoUrl) {
         whatsappService.sendImageMessage(data.organizationId, client.whatsappNumber, pkg.photoUrl, msg).catch((err) => {
-          console.warn('Erro ao disparar WhatsApp com foto de encomenda:', err.message);
+          console.warn('Erro ao disparar WhatsApp com foto de encomenda, tentando texto:', err.message);
+          whatsappService.sendMessage(data.organizationId, client.whatsappNumber, msg).catch((err2) => {
+            console.warn('Erro ao disparar WhatsApp de encomenda (fallback texto):', err2.message);
+          });
         });
       } else {
         whatsappService.sendMessage(data.organizationId, client.whatsappNumber, msg).catch((err) => {

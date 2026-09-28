@@ -24,6 +24,7 @@ import {
 } from '../templates/template.parser.js';
 import { env } from '../../../config/env.js';
 import { prisma } from '../../../lib/prisma.js';
+import { getStorageService } from '../../storage/storage.service.js';
 
 class MemoryCache {
   private cache = new Map<string, any>();
@@ -531,17 +532,42 @@ export class BaileysProvider implements IWhatsAppProvider {
     console.log(`🚀 [Baileys] Enviando imagem para JID: ${jid}...`);
 
     let imageContent: any;
+    let mimeType = 'image/jpeg';
+
     if (imageBase64OrUrl.startsWith('data:image')) {
-      const base64Data = imageBase64OrUrl.split(',')[1];
-      imageContent = Buffer.from(base64Data, 'base64');
+      const parts = imageBase64OrUrl.split(',');
+      const match = parts[0].match(/:(.*?);/);
+      if (match) mimeType = match[1];
+      imageContent = Buffer.from(parts[1], 'base64');
     } else if (imageBase64OrUrl.startsWith('http://') || imageBase64OrUrl.startsWith('https://')) {
       imageContent = { url: imageBase64OrUrl };
     } else {
-      imageContent = Buffer.from(imageBase64OrUrl, 'base64');
+      // Tenta recuperar do storage service (Supabase Database Storage ou Bucket)
+      try {
+        const storageService = getStorageService();
+        const stored = await storageService.getFile(imageBase64OrUrl);
+        if (stored && stored.buffer && stored.buffer.length > 0) {
+          imageContent = stored.buffer;
+          if (stored.mimeType) mimeType = stored.mimeType;
+          console.log(`📷 [Baileys] Foto recuperada do storage com sucesso (${stored.buffer.length} bytes, mimetype: ${mimeType})`);
+        }
+      } catch (err: any) {
+        console.warn(`⚠️ [Baileys] Erro ao buscar foto no storage (${imageBase64OrUrl}):`, err?.message || err);
+      }
+
+      if (!imageContent) {
+        // Se for string base64 pura (comprimento longo)
+        if (imageBase64OrUrl.length > 100) {
+          imageContent = Buffer.from(imageBase64OrUrl, 'base64');
+        } else {
+          throw new Error(`Imagem não encontrada ou inválida no storage: ${imageBase64OrUrl}`);
+        }
+      }
     }
 
     const sent = await this.sock.sendMessage(jid, {
       image: imageContent,
+      mimetype: mimeType,
       caption: caption || '',
     });
     if (sent?.key?.id && sent.message) {

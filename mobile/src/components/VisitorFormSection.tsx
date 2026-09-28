@@ -70,7 +70,7 @@ export const VisitorFormSection: React.FC<VisitorFormSectionProps> = ({ data, on
       }
 
       const result = await ImagePicker.launchCameraAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        mediaTypes: ['images'],
         allowsEditing: true,
         aspect: [1, 1],
         quality: 0.7,
@@ -102,7 +102,7 @@ export const VisitorFormSection: React.FC<VisitorFormSectionProps> = ({ data, on
       }
 
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        mediaTypes: ['images'],
         allowsEditing: true,
         aspect: [1, 1],
         quality: 0.7,
