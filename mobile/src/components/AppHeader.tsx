@@ -1,6 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Platform, StatusBar } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { ArrowLeft } from 'lucide-react-native';
 import { colors } from '../theme/colors';
 
@@ -21,19 +20,21 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
   icon,
   badge,
 }) => {
-  const insets = useSafeAreaInsets();
-  const topPadding = Math.max(insets.top, Platform.OS === 'android' ? (StatusBar.currentHeight || 28) : 0) + 14;
-
   return (
-    <View style={[styles.header, { paddingTop: topPadding }]}>
+    <View style={styles.header}>
+      {/* Decoração Ondulada em Menta (Idêntica ao modal de Nova Solicitação) */}
+      <View style={styles.headerWaveDecoration} />
+
       <View style={styles.contentRow}>
         {onBack && (
-          <TouchableOpacity onPress={onBack} style={styles.backBtn} activeOpacity={0.7}>
-            <ArrowLeft size={22} color={colors.white} />
+          <TouchableOpacity onPress={onBack} style={styles.backBtn} activeOpacity={0.8}>
+            <ArrowLeft size={20} color="#FFFFFF" strokeWidth={2.5} />
           </TouchableOpacity>
         )}
+
         {icon && <View style={styles.iconCircle}>{icon}</View>}
-        <View style={{ flex: 1, marginLeft: (icon || onBack) ? 12 : 0 }}>
+
+        <View style={{ flex: 1, marginLeft: (icon || onBack) ? 10 : 0 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center' }}>
             <Text style={styles.title} numberOfLines={1}>{title}</Text>
             {badge !== undefined && badge > 0 ? (
@@ -44,6 +45,7 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
           </View>
           {subtitle ? <Text style={styles.subtitle} numberOfLines={1}>{subtitle}</Text> : null}
         </View>
+
         {rightAction ? <View style={styles.rightAction}>{rightAction}</View> : null}
       </View>
     </View>
@@ -54,51 +56,62 @@ const styles = StyleSheet.create({
   header: {
     backgroundColor: '#165337',
     paddingHorizontal: 18,
-    paddingBottom: 16,
-    borderBottomLeftRadius: 20,
-    borderBottomRightRadius: 20,
+    paddingTop: 12,
+    paddingBottom: 14,
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  headerWaveDecoration: {
+    position: 'absolute',
+    top: -45,
+    right: -35,
+    width: 200,
+    height: 200,
+    borderRadius: 100,
+    backgroundColor: 'rgba(180, 222, 196, 0.2)',
   },
   contentRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    zIndex: 2,
   },
   backBtn: {
     width: 38,
     height: 38,
     borderRadius: 19,
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    backgroundColor: 'rgba(255, 255, 255, 0.22)',
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 6,
   },
   iconCircle: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: 'rgba(255, 255, 255, 0.22)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   title: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: '800',
-    color: colors.white,
-    letterSpacing: -0.3,
+    color: '#FFFFFF',
+    letterSpacing: -0.2,
   },
   subtitle: {
-    fontSize: 12,
-    color: 'rgba(255, 255, 255, 0.75)',
-    marginTop: 2,
+    fontSize: 11,
+    color: '#A7F3D0',
+    fontWeight: '600',
+    marginTop: 1,
   },
   badge: {
-    backgroundColor: '#EF4444',
-    paddingHorizontal: 7,
+    backgroundColor: 'rgba(255, 255, 255, 0.25)',
+    paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: 10,
     marginLeft: 8,
   },
   badgeText: {
-    color: colors.white,
+    color: '#FFFFFF',
     fontSize: 11,
     fontWeight: '800',
   },
@@ -106,5 +119,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     marginLeft: 10,
+    zIndex: 2,
   },
 });

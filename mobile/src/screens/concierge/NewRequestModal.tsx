@@ -264,7 +264,7 @@ const styles = StyleSheet.create({
   header: {
     backgroundColor: '#165337',
     paddingHorizontal: 20,
-    paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 24) + 6 : 42,
+    paddingTop: Platform.OS === 'ios' ? 44 : 14,
     paddingBottom: 14,
     position: 'relative',
     overflow: 'hidden',

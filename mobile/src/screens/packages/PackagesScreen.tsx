@@ -33,12 +33,14 @@ import {
   Check,
   History,
   Archive,
+  Search,
 } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { colors } from '../../theme/colors';
 import { api } from '../../config/api';
 import { AppHeader } from '../../components/AppHeader';
 import { ScrollToTopButton } from '../../components/ScrollToTopButton';
+import { ClientAutocomplete, ClientDestinationItem } from '../../components/ClientAutocomplete';
 
 interface PackagesScreenProps {
   onBack?: () => void;
@@ -46,6 +48,7 @@ interface PackagesScreenProps {
 
 export const PackagesScreen: React.FC<PackagesScreenProps> = ({ onBack }) => {
   const [activeSubTab, setActiveSubTab] = useState<'pending' | 'history'>('pending');
+  const [searchQuery, setSearchQuery] = useState('');
   const listRef = useRef<FlatList>(null);
   const [showScrollTop, setShowScrollTop] = useState(false);
   const [packages, setPackages] = useState<any[]>([]);
@@ -57,9 +60,11 @@ export const PackagesScreen: React.FC<PackagesScreenProps> = ({ onBack }) => {
 
   // Modal Novo Pacote
   const [isNewModalOpen, setIsNewModalOpen] = useState(false);
+  const [selectedClient, setSelectedClient] = useState<ClientDestinationItem | null>(null);
   const [selectedDestId, setSelectedDestId] = useState('');
   const [selectedClientId, setSelectedClientId] = useState('');
   const [carrier, setCarrier] = useState('Mercado Livre');
+  const [customCarrier, setCustomCarrier] = useState('');
   const [trackingCode, setTrackingCode] = useState('');
   const [recipientName, setRecipientName] = useState('');
   const [sender, setSender] = useState('');
@@ -155,12 +160,18 @@ export const PackagesScreen: React.FC<PackagesScreenProps> = ({ onBack }) => {
       return;
     }
 
+    const finalCarrier = carrier === 'Outro' ? customCarrier.trim() : carrier;
+    if (carrier === 'Outro' && !finalCarrier) {
+      Alert.alert('Atenção', 'Informe o nome da transportadora ou entregador.');
+      return;
+    }
+
     try {
       setIsSubmitting(true);
       const res = await api.post('/packages', {
         destinationId: selectedDestId,
         clientId: selectedClientId || undefined,
-        carrier,
+        carrier: finalCarrier,
         trackingCode: trackingCode.trim() || undefined,
         recipientName: recipientName.trim() || undefined,
         sender: sender.trim() || undefined,
@@ -176,9 +187,13 @@ export const PackagesScreen: React.FC<PackagesScreenProps> = ({ onBack }) => {
         setTrackingCode('');
         setRecipientName('');
         setSender('');
+        setCarrier('Mercado Livre');
+        setCustomCarrier('');
+        setSelectedClient(null);
+        setSelectedDestId('');
+        setSelectedClientId('');
         setPhotoUri(null);
         setPhotoBase64(null);
-        setSelectedClientId('');
         loadData();
       }
     } catch (err: any) {
@@ -247,15 +262,54 @@ export const PackagesScreen: React.FC<PackagesScreenProps> = ({ onBack }) => {
 
   const currentList = activeSubTab === 'pending' ? packages : historyPackages;
 
+  const filteredList = currentList.filter((item) => {
+    if (!searchQuery.trim()) return true;
+    const q = searchQuery.toLowerCase().trim();
+    const dest = `${item.destination?.name || ''} ${item.destination?.block || ''}`.toLowerCase();
+    const client = (item.client?.name || '').toLowerCase();
+    const recipient = (item.recipientName || '').toLowerCase();
+    const carrierName = (item.carrier || '').toLowerCase();
+    const code = (item.code || '').toLowerCase();
+    const tracking = (item.trackingCode || '').toLowerCase();
+    return (
+      dest.includes(q) ||
+      client.includes(q) ||
+      recipient.includes(q) ||
+      carrierName.includes(q) ||
+      code.includes(q) ||
+      tracking.includes(q)
+    );
+  });
+
   return (
     <View style={styles.container}>
       {/* Header Unificado */}
       <AppHeader
-        title="Controle de Encomendas"
-        subtitle="Recebimento com foto e aviso automático no WhatsApp"
+        title="Encomendas"
         onBack={onBack}
         badge={packages.length}
       />
+
+      {/* Barra de Pesquisa Rápida */}
+      <View style={styles.searchBarContainer}>
+        <View style={styles.searchBar}>
+          <Search size={18} color="#64748B" style={{ marginRight: 8 }} />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Buscar por morador, unidade, código..."
+            placeholderTextColor="#94A3B8"
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            autoCapitalize="none"
+            autoCorrect={false}
+          />
+          {searchQuery.length > 0 && (
+            <TouchableOpacity onPress={() => setSearchQuery('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <X size={16} color="#94A3B8" />
+            </TouchableOpacity>
+          )}
+        </View>
+      </View>
 
       {/* Barra de Sub-Abas: Pendentes vs Histórico */}
       <View style={styles.subTabBar}>
@@ -264,9 +318,9 @@ export const PackagesScreen: React.FC<PackagesScreenProps> = ({ onBack }) => {
           onPress={() => setActiveSubTab('pending')}
           activeOpacity={0.8}
         >
-          <Package size={17} color={activeSubTab === 'pending' ? '#1D4ED8' : '#64748B'} />
+          <Package size={17} color={activeSubTab === 'pending' ? '#165337' : '#64748B'} />
           <Text style={[styles.subTabText, activeSubTab === 'pending' && styles.subTabTextActive]}>
-            Aguardando Retirada ({packages.length})
+            Aguardando ({packages.length})
           </Text>
         </TouchableOpacity>
 
@@ -275,7 +329,7 @@ export const PackagesScreen: React.FC<PackagesScreenProps> = ({ onBack }) => {
           onPress={() => setActiveSubTab('history')}
           activeOpacity={0.8}
         >
-          <History size={17} color={activeSubTab === 'history' ? '#1D4ED8' : '#64748B'} />
+          <History size={17} color={activeSubTab === 'history' ? '#165337' : '#64748B'} />
           <Text style={[styles.subTabText, activeSubTab === 'history' && styles.subTabTextActive]}>
             Histórico ({historyPackages.length})
           </Text>
@@ -299,13 +353,13 @@ export const PackagesScreen: React.FC<PackagesScreenProps> = ({ onBack }) => {
       {/* Lista de Encomendas */}
       {isLoading ? (
         <View style={styles.centerContainer}>
-          <ActivityIndicator size="large" color="#1D4ED8" />
+          <ActivityIndicator size="large" color="#165337" />
           <Text style={styles.loadingText}>Carregando encomendas da portaria...</Text>
         </View>
       ) : (
         <FlatList
           ref={listRef}
-          data={currentList}
+          data={filteredList}
           keyExtractor={(item) => item.id}
           scrollEventThrottle={16}
           onScroll={(e) => setShowScrollTop(e.nativeEvent.contentOffset.y > 150)}
@@ -316,19 +370,25 @@ export const PackagesScreen: React.FC<PackagesScreenProps> = ({ onBack }) => {
                 setRefreshing(true);
                 loadData();
               }}
-              colors={['#1D4ED8']}
+              colors={['#165337']}
             />
           }
           contentContainerStyle={styles.listContent}
           ListEmptyComponent={
             <View style={styles.emptyContainer}>
-              <CircleCheck size={48} color="#16A34A" style={{ marginBottom: 12 }} />
+              <CircleCheck size={48} color="#165337" style={{ marginBottom: 12 }} />
               <Text style={styles.emptyTitle}>
-                {activeSubTab === 'pending' ? 'Tudo em dia!' : 'Nenhum histórico'}
+                {searchQuery.trim()
+                  ? 'Nenhuma encomenda encontrada'
+                  : activeSubTab === 'pending'
+                  ? 'Tudo em dia!'
+                  : 'Nenhum histórico'}
               </Text>
               <Text style={styles.emptySub}>
-                {activeSubTab === 'pending'
-                  ? 'Todas as encomendas já foram retiradas pelos clientes.'
+                {searchQuery.trim()
+                  ? `Nenhum resultado para "${searchQuery}". Verifique a busca.`
+                  : activeSubTab === 'pending'
+                  ? 'Todas as encomendas já foram retiradas pelos moradores.'
                   : 'Nenhuma encomenda registrada no histórico ainda.'}
               </Text>
             </View>
@@ -340,7 +400,7 @@ export const PackagesScreen: React.FC<PackagesScreenProps> = ({ onBack }) => {
               <View style={[styles.packageCard, isPickedUp && styles.packageCardPickedUp]}>
                 <View style={styles.cardHeader}>
                   <View style={styles.carrierBadge}>
-                    <Truck size={14} color="#1D4ED8" style={{ marginRight: 4 }} />
+                    <Truck size={14} color="#165337" style={{ marginRight: 4 }} />
                     <Text style={styles.carrierText}>{item.carrier || 'Encomenda'}</Text>
                   </View>
                   <Text style={styles.codeText}>{item.code}</Text>
@@ -386,7 +446,7 @@ export const PackagesScreen: React.FC<PackagesScreenProps> = ({ onBack }) => {
                       <Text style={styles.photoLabel}>📸 Foto da Encomenda Salva</Text>
                       <Text style={styles.photoHint}>Toque para ampliar comprovante</Text>
                     </View>
-                    <Eye size={18} color="#2563EB" />
+                    <Eye size={18} color="#165337" />
                   </TouchableOpacity>
                 )}
 
@@ -405,9 +465,9 @@ export const PackagesScreen: React.FC<PackagesScreenProps> = ({ onBack }) => {
                 {/* Se já foi retirado, exibe comprovante de coleta */}
                 {isPickedUp ? (
                   <View style={styles.pickedUpBanner}>
-                    <CheckCircle size={16} color="#16A34A" style={{ marginRight: 6 }} />
+                    <CheckCircle size={16} color="#165337" style={{ marginRight: 6 }} />
                     <Text style={styles.pickedUpBannerText}>
-                      Coletado por *{item.pickedUpBy || 'Cliente'}* em{' '}
+                      Coletado por {item.pickedUpBy || 'Cliente'} em{' '}
                       {item.pickedUpAt
                         ? new Date(item.pickedUpAt).toLocaleDateString('pt-BR') +
                           ' às ' +
@@ -432,7 +492,7 @@ export const PackagesScreen: React.FC<PackagesScreenProps> = ({ onBack }) => {
                     >
                       <Check size={18} color="#FFFFFF" style={{ marginRight: 6 }} />
                       <Text style={styles.directPickupBtnText}>
-                        Marcar que Cliente Já Coletou
+                        Marcar que Morador Já Coletou
                       </Text>
                     </TouchableOpacity>
 
@@ -473,15 +533,18 @@ export const PackagesScreen: React.FC<PackagesScreenProps> = ({ onBack }) => {
                   Foto obrigatória para comprovar e notificar no WhatsApp
                 </Text>
               </View>
-              <TouchableOpacity onPress={() => setIsNewModalOpen(false)}>
-                <X size={24} color="#64748B" />
+              <TouchableOpacity
+                style={styles.modalCloseBtn}
+                onPress={() => setIsNewModalOpen(false)}
+              >
+                <X size={20} color="#334155" />
               </TouchableOpacity>
             </View>
 
             <ScrollView
               showsVerticalScrollIndicator={false}
               keyboardShouldPersistTaps="handled"
-              contentContainerStyle={{ paddingBottom: 180 }}
+              contentContainerStyle={{ paddingBottom: 24 }}
             >
               {/* ÁREA DA FOTO OBRIGATÓRIA */}
               <Text style={styles.label}>Foto da Encomenda * (Obrigatória)</Text>
@@ -504,7 +567,7 @@ export const PackagesScreen: React.FC<PackagesScreenProps> = ({ onBack }) => {
                   activeOpacity={0.8}
                 >
                   <View style={styles.cameraIconCircle}>
-                    <Camera size={28} color="#1D4ED8" />
+                    <Camera size={28} color="#165337" />
                   </View>
                   <Text style={styles.cameraBoxTitle}>Tirar Foto da Encomenda</Text>
                   <Text style={styles.cameraBoxSub}>
@@ -513,58 +576,44 @@ export const PackagesScreen: React.FC<PackagesScreenProps> = ({ onBack }) => {
                 </TouchableOpacity>
               )}
 
-              {/* Seleção do Destino / Unidade */}
-              <Text style={[styles.label, { marginTop: 14 }]}>Unidade / Destino *</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 12 }}>
-                {destinations.map((d: any) => (
-                  <TouchableOpacity
-                    key={d.id}
-                    style={[styles.destChip, selectedDestId === d.id && styles.destChipActive]}
-                    onPress={() => setSelectedDestId(d.id)}
-                  >
-                    <Text
-                      style={[
-                        styles.destChipText,
-                        selectedDestId === d.id && styles.destChipTextActive,
-                      ]}
-                    >
-                      {d.name} {d.block ? `(${d.block})` : ''}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
+              {/* SELEÇÃO DO DESTINO / MORADOR COM AUTOCOMPLETE */}
+              <ClientAutocomplete
+                onSelectClient={(client, destId) => {
+                  setSelectedClient(client);
+                  setSelectedClientId(client?.id || '');
+                  setSelectedDestId(destId || client?.destinations?.[0]?.destination?.id || '');
+                  if (client?.name && !recipientName) {
+                    setRecipientName(client.name);
+                  }
+                }}
+                selectedClientId={selectedClientId}
+                selectedClient={selectedClient}
+              />
 
-              {/* Seleção do Cliente / Morador */}
-              <Text style={styles.label}>Cliente / Morador da Unidade (Opcional)</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 12 }}>
-                <TouchableOpacity
-                  style={[styles.clientChip, !selectedClientId && styles.clientChipActive]}
-                  onPress={() => setSelectedClientId('')}
-                >
-                  <Text style={[styles.clientChipText, !selectedClientId && styles.clientChipTextActive]}>
-                    Morador Padrão
-                  </Text>
-                </TouchableOpacity>
-                {clients.map((c: any) => (
-                  <TouchableOpacity
-                    key={c.id}
-                    style={[styles.clientChip, selectedClientId === c.id && styles.clientChipActive]}
-                    onPress={() => {
-                      setSelectedClientId(c.id);
-                      setRecipientName(c.name);
-                    }}
-                  >
-                    <Text
-                      style={[
-                        styles.clientChipText,
-                        selectedClientId === c.id && styles.clientChipTextActive,
-                      ]}
-                    >
-                      {c.name}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
+              {/* Se o morador não estiver selecionado, permite escolher a unidade diretamente */}
+              {!selectedClient && (
+                <View style={{ marginBottom: 14 }}>
+                  <Text style={styles.label}>Ou selecione apenas a unidade (Destino):</Text>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 4 }}>
+                    {destinations.map((d: any) => {
+                      const isSel = selectedDestId === d.id;
+                      return (
+                        <TouchableOpacity
+                          key={d.id}
+                          style={[styles.destChip, isSel && styles.destChipActive]}
+                          onPress={() => {
+                            setSelectedDestId(d.id);
+                          }}
+                        >
+                          <Text style={[styles.destChipText, isSel && styles.destChipTextActive]}>
+                            {d.name} {d.block ? `(${d.block})` : ''}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </ScrollView>
+                </View>
+              )}
 
               {/* Transportadora */}
               <Text style={styles.label}>Transportadora / Loja</Text>
@@ -586,6 +635,20 @@ export const PackagesScreen: React.FC<PackagesScreenProps> = ({ onBack }) => {
                   </TouchableOpacity>
                 ))}
               </View>
+
+              {/* Campo para digitar transportadora se "Outro" for selecionado */}
+              {carrier === 'Outro' && (
+                <View style={{ marginBottom: 14 }}>
+                  <Text style={styles.label}>Nome da Transportadora / Loja *</Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Ex: FedEx, Jadlog, DHL, Ifood, Mercado..."
+                    placeholderTextColor="#94A3B8"
+                    value={customCarrier}
+                    onChangeText={setCustomCarrier}
+                  />
+                </View>
+              )}
 
               {/* Nome na Etiqueta */}
               <Text style={styles.label}>Nome do Destinatário (na etiqueta)</Text>
@@ -616,7 +679,7 @@ export const PackagesScreen: React.FC<PackagesScreenProps> = ({ onBack }) => {
                 {isSubmitting ? (
                   <ActivityIndicator color="#FFFFFF" />
                 ) : (
-                  <Text style={styles.submitBtnText}>Salvar e Avisar Cliente no WhatsApp</Text>
+                  <Text style={styles.submitBtnText}>Salvar e Avisar Morador no WhatsApp</Text>
                 )}
               </TouchableOpacity>
             </ScrollView>
@@ -742,6 +805,28 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#F8FAFC',
   },
+  searchBarContainer: {
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 16,
+    paddingTop: 10,
+    paddingBottom: 6,
+  },
+  searchBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F1F5F9',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: Platform.OS === 'ios' ? 10 : 6,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 14,
+    color: '#0F172A',
+    paddingVertical: 0,
+  },
   subTabBar: {
     flexDirection: 'row',
     backgroundColor: '#FFFFFF',
@@ -761,9 +846,9 @@ const styles = StyleSheet.create({
     marginHorizontal: 4,
   },
   subTabItemActive: {
-    backgroundColor: '#EFF6FF',
+    backgroundColor: '#EDF7ED',
     borderWidth: 1,
-    borderColor: '#BFDBFE',
+    borderColor: '#C8E6C9',
   },
   subTabText: {
     fontSize: 13,
@@ -772,7 +857,7 @@ const styles = StyleSheet.create({
     marginLeft: 6,
   },
   subTabTextActive: {
-    color: '#1D4ED8',
+    color: '#165337',
     fontWeight: '700',
   },
   topBtnRow: {
@@ -783,10 +868,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#16A34A',
+    backgroundColor: '#165337',
     borderRadius: 12,
     paddingVertical: 14,
-    shadowColor: '#16A34A',
+    shadowColor: '#165337',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25,
     shadowRadius: 4,
@@ -836,7 +921,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#E2E8F0',
     borderLeftWidth: 4,
-    borderLeftColor: '#2563EB',
+    borderLeftColor: '#165337',
     shadowColor: '#0F172A',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.04,
@@ -844,7 +929,7 @@ const styles = StyleSheet.create({
     elevation: 1,
   },
   packageCardPickedUp: {
-    borderLeftColor: '#16A34A',
+    borderLeftColor: '#94A3B8',
     opacity: 0.85,
   },
   cardHeader: {
@@ -856,7 +941,7 @@ const styles = StyleSheet.create({
   carrierBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#EFF6FF',
+    backgroundColor: '#EDF7ED',
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 6,
@@ -864,7 +949,7 @@ const styles = StyleSheet.create({
   carrierText: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#1D4ED8',
+    color: '#165337',
   },
   codeText: {
     fontSize: 12,
@@ -917,7 +1002,7 @@ const styles = StyleSheet.create({
   },
   photoHint: {
     fontSize: 11,
-    color: '#2563EB',
+    color: '#165337',
   },
   timeRow: {
     flexDirection: 'row',
@@ -949,10 +1034,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#16A34A',
+    backgroundColor: '#165337',
     borderRadius: 10,
     paddingVertical: 12,
-    shadowColor: '#16A34A',
+    shadowColor: '#165337',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.2,
     shadowRadius: 3,
@@ -1012,7 +1097,7 @@ const styles = StyleSheet.create({
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     marginBottom: 16,
   },
   modalTitle: {
@@ -1025,6 +1110,14 @@ const styles = StyleSheet.create({
     color: '#64748B',
     marginTop: 2,
   },
+  modalCloseBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   label: {
     fontSize: 13,
     fontWeight: '700',
@@ -1033,20 +1126,20 @@ const styles = StyleSheet.create({
   },
   cameraBox: {
     borderWidth: 2,
-    borderColor: '#93C5FD',
+    borderColor: '#86EFAC',
     borderStyle: 'dashed',
     borderRadius: 14,
     paddingVertical: 24,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#F0F7FF',
+    backgroundColor: '#F0FDF4',
     marginBottom: 12,
   },
   cameraIconCircle: {
     width: 52,
     height: 52,
     borderRadius: 26,
-    backgroundColor: '#DBEAFE',
+    backgroundColor: '#DCFCE7',
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 8,
@@ -1054,11 +1147,11 @@ const styles = StyleSheet.create({
   cameraBoxTitle: {
     fontSize: 15,
     fontWeight: '800',
-    color: '#1D4ED8',
+    color: '#165337',
   },
   cameraBoxSub: {
     fontSize: 12,
-    color: '#3B82F6',
+    color: '#15803D',
     marginTop: 2,
   },
   photoContainer: {
@@ -1095,8 +1188,8 @@ const styles = StyleSheet.create({
     borderColor: '#E2E8F0',
   },
   destChipActive: {
-    backgroundColor: '#2563EB',
-    borderColor: '#2563EB',
+    backgroundColor: '#165337',
+    borderColor: '#165337',
   },
   destChipText: {
     fontSize: 13,
@@ -1104,27 +1197,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   destChipTextActive: {
-    color: '#FFFFFF',
-    fontWeight: '700',
-  },
-  clientChip: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 6,
-    backgroundColor: '#F1F5F9',
-    marginRight: 6,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  clientChipActive: {
-    backgroundColor: '#16A34A',
-    borderColor: '#16A34A',
-  },
-  clientChipText: {
-    fontSize: 12,
-    color: '#475569',
-  },
-  clientChipTextActive: {
     color: '#FFFFFF',
     fontWeight: '700',
   },
@@ -1143,15 +1215,15 @@ const styles = StyleSheet.create({
     borderColor: '#E2E8F0',
   },
   carrierOptionActive: {
-    backgroundColor: '#EFF6FF',
-    borderColor: '#2563EB',
+    backgroundColor: '#EDF7ED',
+    borderColor: '#165337',
   },
   carrierOptionText: {
     fontSize: 12,
     color: '#475569',
   },
   carrierOptionTextActive: {
-    color: '#1D4ED8',
+    color: '#165337',
     fontWeight: '700',
   },
   input: {
@@ -1166,13 +1238,13 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
   submitBtn: {
-    backgroundColor: '#16A34A',
+    backgroundColor: '#165337',
     borderRadius: 12,
     paddingVertical: 15,
     alignItems: 'center',
     marginTop: 6,
     marginBottom: 20,
-    shadowColor: '#16A34A',
+    shadowColor: '#165337',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.3,
     shadowRadius: 4,
@@ -1265,7 +1337,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderRadius: 12,
     borderWidth: 2,
-    borderColor: '#2563EB',
+    borderColor: '#165337',
     textAlign: 'center',
     fontSize: 28,
     fontWeight: '900',
@@ -1274,13 +1346,13 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
   },
   confirmCodeBtn: {
-    backgroundColor: '#16A34A',
+    backgroundColor: '#165337',
     borderRadius: 12,
     paddingVertical: 14,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 10,
-    shadowColor: '#16A34A',
+    shadowColor: '#165337',
     shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.25,
     shadowRadius: 6,

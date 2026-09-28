@@ -221,8 +221,7 @@ export const PreAuthorizationsScreen: React.FC<PreAuthorizationsScreenProps> = (
   return (
     <View style={styles.container}>
       <AppHeader
-        title="Visitas Agendadas"
-        subtitle="Pré-autorizações cadastradas"
+        title="Agendamento"
         onBack={onBack}
         badge={items.length}
       />
