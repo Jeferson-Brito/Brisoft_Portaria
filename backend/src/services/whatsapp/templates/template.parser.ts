@@ -8,6 +8,8 @@ export interface TemplateVariables {
   veiculo?: string;
   placa?: string;
   codigo?: string;
+  observacao?: string;
+  operador?: string;
 }
 
 export function parseMessageTemplate(template: string, vars: TemplateVariables): string {
@@ -25,6 +27,30 @@ export function parseMessageTemplate(template: string, vars: TemplateVariables):
   );
   content = content.replace(/\{\{placa\}\}/gi, vars.placa || '');
   content = content.replace(/\{\{codigo\}\}/gi, vars.codigo || '');
+  content = content.replace(/\{\{observacao\}\}/gi, vars.observacao || '');
+  content = content.replace(/\{\{notas\}\}/gi, vars.observacao || '');
+  content = content.replace(/\{\{operador\}\}/gi, vars.operador || 'Portaria');
+  content = content.replace(/\{\{porteiro\}\}/gi, vars.operador || 'Portaria');
+
+  // Se o template não tinha placeholder para observação mas há observação informada, adiciona antes da pergunta de autorização
+  if (vars.observacao && !template.includes('{{observacao}}') && !template.includes('{{notas}}')) {
+    const obsBlock = `\n📝 *Observação:* ${vars.observacao}`;
+    if (content.includes('Deseja autorizar')) {
+      content = content.replace('Deseja autorizar', `${obsBlock}\n\nDeseja autorizar`);
+    } else {
+      content += `\n${obsBlock}`;
+    }
+  }
+
+  // Se o template não tinha placeholder para operador mas há operador informado, adiciona
+  if (vars.operador && !template.includes('{{operador}}') && !template.includes('{{porteiro}}')) {
+    const opBlock = `\n👮‍♂️ *Solicitado por:* ${vars.operador}`;
+    if (content.includes('Deseja autorizar')) {
+      content = content.replace('Deseja autorizar', `${opBlock}\n\nDeseja autorizar`);
+    } else {
+      content += `\n${opBlock}`;
+    }
+  }
 
   return content;
 }
@@ -40,6 +66,7 @@ Há um visitante aguardando sua autorização na portaria.
 📅 *Data e Horário:* {{horario}}
 🚗 *Veículo:* {{veiculo}}
 🔖 *Solicitação:* {{codigo}}
+👮‍♂️ *Solicitado por:* {{operador}}
 
 Deseja autorizar a entrada?
 Responda com:
@@ -48,7 +75,7 @@ Responda com:
 
 export const DEFAULT_REMINDER_TEMPLATE = `⏳ Olá, *{{cliente}}*!
 
-O visitante *{{visitante}}* ainda aguarda sua liberação na portaria (Ref: {{codigo}}).
+O visitante *{{visitante}}* ainda aguarda sua liberação na portaria (Ref: {{codigo}} | Solicitado por: {{operador}}).
 
 Por favor, responda com:
 *1* para *AUTORIZAR* ou *2* para *RECUSAR*.`;

@@ -221,12 +221,12 @@ export const PreAuthorizationsScreen: React.FC<PreAuthorizationsScreenProps> = (
   return (
     <View style={styles.container}>
       <AppHeader
-        title="Agendamento"
+        title="Agendamentos"
         onBack={onBack}
         badge={items.length}
       />
 
-      {/* Barra Superior: Busca e Botão + Nova Pré-Autorização */}
+      {/* Barra de Busca */}
       <View style={styles.topActionsRow}>
         <View style={styles.searchBar}>
           <Search size={18} color={colors.textSecondary} style={{ marginRight: 8 }} />
@@ -240,57 +240,63 @@ export const PreAuthorizationsScreen: React.FC<PreAuthorizationsScreenProps> = (
             returnKeyType="search"
           />
         </View>
+      </View>
 
+      {/* Botão + Novo Agendamento (Logo abaixo da busca, largo e grande no padrão das demais telas) */}
+      <View style={styles.topBtnRow}>
         <TouchableOpacity
-          style={styles.newButton}
+          style={styles.newAppointmentBtn}
           onPress={() => setIsModalOpen(true)}
-          activeOpacity={0.8}
+          activeOpacity={0.85}
         >
-          <CirclePlus size={20} color={colors.white} />
+          <CirclePlus size={20} color={colors.white} style={{ marginRight: 8 }} />
+          <Text style={styles.newAppointmentBtnText}>Novo Agendamento</Text>
         </TouchableOpacity>
       </View>
 
       {/* Lista de Pré-Autorizações */}
-      {isLoading ? (
-        <View style={styles.centerContainer}>
-          <ActivityIndicator size="large" color={colors.primaryLight} />
-          <Text style={styles.loadingText}>Carregando pré-autorizações de hoje...</Text>
-        </View>
-      ) : (
-        <FlatList
-          ref={listRef}
-          data={items}
-          keyExtractor={(item) => item.id}
-          renderItem={renderItem}
-          contentContainerStyle={styles.listContent}
-          scrollEventThrottle={16}
-          onScroll={(e) => setShowScrollTop(e.nativeEvent.contentOffset.y > 150)}
-          refreshControl={
-            <RefreshControl
-              refreshing={isRefreshing}
-              onRefresh={() => {
-                setIsRefreshing(true);
-                fetchPreAuthorizations();
-              }}
-              tintColor={colors.primaryLight}
-            />
-          }
-          ListEmptyComponent={
-            <View style={styles.emptyContainer}>
-              <UserCheck size={48} color={colors.textSecondary} style={{ marginBottom: 12 }} />
-              <Text style={styles.emptyTitle}>Nenhuma pré-autorização ativa hoje</Text>
-              <Text style={styles.emptySubtitle}>
-                Quando os moradores comunicarem visitas antecipadas, elas aparecerão aqui para liberação rápida.
-              </Text>
-            </View>
-          }
+      <View style={{ flex: 1 }}>
+        {isLoading ? (
+          <View style={styles.centerContainer}>
+            <ActivityIndicator size="large" color={colors.primaryLight} />
+            <Text style={styles.loadingText}>Carregando agendamentos de hoje...</Text>
+          </View>
+        ) : (
+          <FlatList
+            ref={listRef}
+            data={items}
+            keyExtractor={(item) => item.id}
+            renderItem={renderItem}
+            contentContainerStyle={styles.listContent}
+            scrollEventThrottle={16}
+            onScroll={(e) => setShowScrollTop(e.nativeEvent.contentOffset.y > 150)}
+            refreshControl={
+              <RefreshControl
+                refreshing={isRefreshing}
+                onRefresh={() => {
+                  setIsRefreshing(true);
+                  fetchPreAuthorizations();
+                }}
+                tintColor={colors.primaryLight}
+              />
+            }
+            ListEmptyComponent={
+              <View style={styles.emptyContainer}>
+                <UserCheck size={48} color={colors.textSecondary} style={{ marginBottom: 12 }} />
+                <Text style={styles.emptyTitle}>Nenhum agendamento ativo hoje</Text>
+                <Text style={styles.emptySubtitle}>
+                  Quando os moradores comunicarem visitas antecipadas, elas aparecerão aqui para liberação rápida.
+                </Text>
+              </View>
+            }
+          />
+        )}
+        <ScrollToTopButton
+          visible={showScrollTop}
+          onPress={() => listRef.current?.scrollToOffset({ offset: 0, animated: true })}
+          bottom={24}
         />
-      )}
-      <ScrollToTopButton
-        visible={showScrollTop}
-        onPress={() => listRef.current?.scrollToOffset({ offset: 0, animated: true })}
-        bottom={24}
-      />
+      </View>
 
       {/* Modal de Nova Pré-Autorização */}
       <NewPreAuthorizationModal
@@ -310,11 +316,9 @@ const styles = StyleSheet.create({
   topActionsRow: {
     flexDirection: 'row',
     paddingHorizontal: 16,
-    paddingVertical: 12,
-    gap: 10,
+    paddingTop: 12,
+    paddingBottom: 8,
     backgroundColor: colors.surface,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
   },
   searchBar: {
     flex: 1,
@@ -333,12 +337,30 @@ const styles = StyleSheet.create({
     fontSize: 13,
     padding: 0,
   },
-  newButton: {
+  topBtnRow: {
+    paddingHorizontal: 16,
+    paddingBottom: 12,
+    backgroundColor: colors.surface,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  newAppointmentBtn: {
     backgroundColor: colors.primary,
-    borderRadius: 10,
-    width: 44,
+    borderRadius: 12,
+    paddingVertical: 13,
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.25,
+    shadowRadius: 6,
+    elevation: 3,
+  },
+  newAppointmentBtnText: {
+    color: colors.white,
+    fontSize: 15,
+    fontWeight: '800',
   },
   listContent: {
     padding: 16,

@@ -234,7 +234,7 @@ export const WhatsAppConfigScreen: React.FC<WhatsAppConfigScreenProps> = ({ onBa
         <View style={styles.cardHeader}>
           <View style={{ flexDirection: 'row', alignItems: 'center' }}>
             <Phone size={20} color={colors.primaryLight} style={{ marginRight: 8 }} />
-            <Text style={styles.cardTitle}>Conexão WhatsApp (Baileys)</Text>
+            <Text style={styles.cardTitle}>Conexão WhatsApp</Text>
           </View>
           <TouchableOpacity onPress={fetchStatus} disabled={isLoading} style={styles.iconButton}>
             {isLoading ? (

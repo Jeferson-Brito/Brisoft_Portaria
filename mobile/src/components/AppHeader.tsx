@@ -1,5 +1,6 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Platform, StatusBar } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ArrowLeft } from 'lucide-react-native';
 import { colors } from '../theme/colors';
 
@@ -20,9 +21,16 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
   icon,
   badge,
 }) => {
+  const insets = useSafeAreaInsets();
+  // useSafeAreaInsets().top = 0 on Android without translucent statusbar,
+  // so we fall back to StatusBar.currentHeight to properly clear the status bar.
+  const topPadding = Platform.OS === 'ios'
+    ? Math.max(insets.top, 20)
+    : Math.max(insets.top, StatusBar.currentHeight || 0);
+
   return (
-    <View style={styles.header}>
-      {/* Decoração Ondulada em Menta (Idêntica ao modal de Nova Solicitação) */}
+    <View style={[styles.header, { paddingTop: topPadding + 8 }]}>
+      {/* Decoração circular translúcida no canto superior direito */}
       <View style={styles.headerWaveDecoration} />
 
       <View style={styles.contentRow}>
@@ -56,7 +64,6 @@ const styles = StyleSheet.create({
   header: {
     backgroundColor: '#165337',
     paddingHorizontal: 18,
-    paddingTop: 12,
     paddingBottom: 14,
     position: 'relative',
     overflow: 'hidden',
@@ -82,6 +89,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 255, 255, 0.22)',
     alignItems: 'center',
     justifyContent: 'center',
+    marginRight: 2,
   },
   iconCircle: {
     width: 38,

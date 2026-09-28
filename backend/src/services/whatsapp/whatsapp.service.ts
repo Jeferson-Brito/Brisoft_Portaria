@@ -294,6 +294,7 @@ export class WhatsAppService {
         destination: true,
         visitor: true,
         vehicle: true,
+        conciergeUser: { select: { id: true, name: true } },
       },
     });
 
@@ -331,6 +332,9 @@ export class WhatsAppService {
         vehiclePlate: req.vehicle?.licensePlate || undefined,
         requestCode: req.code,
         customTemplate: template?.content,
+        photoUrl: req.visitor?.photoUrl || undefined,
+        notes: req.notes || undefined,
+        conciergeName: req.conciergeUser?.name || 'Portaria',
       });
 
       // Registra evento de envio
@@ -355,6 +359,7 @@ export class WhatsAppService {
       include: {
         client: true,
         visitor: true,
+        conciergeUser: { select: { id: true, name: true } },
       },
     });
 
@@ -376,6 +381,7 @@ export class WhatsAppService {
         visitorName: req.visitor.name,
         requestCode: req.code,
         customTemplate: template?.content,
+        conciergeName: req.conciergeUser?.name || 'Portaria',
       });
     } catch (err: any) {
       console.warn('Aviso: falha ao enviar lembrete no WhatsApp:', err.message);

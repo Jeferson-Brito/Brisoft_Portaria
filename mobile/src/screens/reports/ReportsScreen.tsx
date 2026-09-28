@@ -7,12 +7,13 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   RefreshControl,
+  Modal,
   Platform,
   StatusBar,
+  TextInput,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
-  BarChart3,
   Clock,
   CircleCheck,
   CircleX,
@@ -20,28 +21,53 @@ import {
   ShieldCheck,
   TrendingUp,
   Building,
-  Calendar,
   AlertCircle,
+  SlidersHorizontal,
+  BarChart3,
+  FileText,
 } from 'lucide-react-native';
 import { colors } from '../../theme/colors';
 import { api } from '../../config/api';
+import { AppHeader } from '../../components/AppHeader';
 import { ScrollToTopButton } from '../../components/ScrollToTopButton';
+
+type SubTab = 'metrics' | 'audit';
+type DaysFilter = 1 | 7 | 30;
+
+const DAYS_LABELS: Record<DaysFilter, string> = {
+  1: 'Hoje',
+  7: 'Últimos 7 dias',
+  30: 'Últimos 30 dias',
+};
 
 export const ReportsScreen: React.FC = () => {
   const scrollRef = useRef<ScrollView>(null);
   const [showScrollTop, setShowScrollTop] = useState(false);
-  const [days, setDays] = useState<number>(7);
-  const [activeSubTab, setActiveSubTab] = useState<'metrics' | 'audit'>('metrics');
+  const [days, setDays] = useState<DaysFilter | 'custom'>(7);
+  const [startDateStr, setStartDateStr] = useState('');
+  const [endDateStr, setEndDateStr] = useState('');
+  const [activeSubTab, setActiveSubTab] = useState<SubTab>('metrics');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [metrics, setMetrics] = useState<any>(null);
   const [auditLogs, setAuditLogs] = useState<any[]>([]);
+  const [filterModalVisible, setFilterModalVisible] = useState(false);
 
   const loadData = async () => {
     try {
       setLoading(true);
+      
+      let url = `/reports/metrics?`;
+      if (days === 'custom') {
+        const start = startDateStr.split('/').reverse().join('-');
+        const end = endDateStr ? endDateStr.split('/').reverse().join('-') : start;
+        url += `startDate=${start}&endDate=${end}`;
+      } else {
+        url += `days=${days}`;
+      }
+
       const [metricsRes, auditRes] = await Promise.all([
-        api.get(`/reports/metrics?days=${days}`),
+        api.get(url),
         api.get('/audit/timeline?limit=30'),
       ]);
       setMetrics(metricsRes.data.data);
@@ -63,40 +89,52 @@ export const ReportsScreen: React.FC = () => {
     loadData();
   };
 
-  const insets = useSafeAreaInsets();
-  const topPadding = Math.max(insets.top, Platform.OS === 'android' ? (StatusBar.currentHeight || 28) : 0) + 14;
-
   return (
     <View style={styles.container}>
-      <View style={[styles.header, { paddingTop: topPadding }]}>
-        <View style={styles.headerTitleRow}>
-          <BarChart3 size={24} color={colors.white} />
-          <Text style={styles.headerTitle}>Relatórios & Métricas</Text>
-        </View>
-        <Text style={styles.headerSubtitle}>
-          Performance da portaria e auditoria em tempo real
-        </Text>
+      {/* Header padrão do sistema */}
+      <AppHeader title="Relatórios" subtitle="Performance e auditoria da portaria" />
 
-        {/* Abas Superiores (Métricas vs Auditoria) */}
-        <View style={styles.subTabContainer}>
-          <TouchableOpacity
-            style={[styles.subTab, activeSubTab === 'metrics' && styles.subTabActive]}
-            onPress={() => setActiveSubTab('metrics')}
-          >
-            <Text style={[styles.subTabText, activeSubTab === 'metrics' && styles.subTabTextActive]}>
-              Desempenho
+      {/* Sub-tabs: Desempenho / Auditoria — abaixo do header */}
+      <View style={styles.subTabBarContainer}>
+        <TouchableOpacity
+          style={[styles.subTab, activeSubTab === 'metrics' && styles.subTabActive]}
+          onPress={() => setActiveSubTab('metrics')}
+        >
+          <BarChart3 size={15} color={activeSubTab === 'metrics' ? '#165337' : '#94A3B8'} style={{ marginRight: 6 }} />
+          <Text style={[styles.subTabText, activeSubTab === 'metrics' && styles.subTabTextActive]}>
+            Desempenho
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.subTab, activeSubTab === 'audit' && styles.subTabActive]}
+          onPress={() => setActiveSubTab('audit')}
+        >
+          <FileText size={15} color={activeSubTab === 'audit' ? '#165337' : '#94A3B8'} style={{ marginRight: 6 }} />
+          <Text style={[styles.subTabText, activeSubTab === 'audit' && styles.subTabTextActive]}>
+            Auditoria
+          </Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Botão de filtro de período */}
+      {activeSubTab === 'metrics' && (
+        <View style={styles.filterBarRow}>
+          <Text style={styles.filterBarLabel}>
+            Período: <Text style={styles.filterBarValue}>
+              {days === 'custom' ? `${startDateStr} ${endDateStr ? `até ${endDateStr}` : ''}` : DAYS_LABELS[days as DaysFilter]}
             </Text>
-          </TouchableOpacity>
+          </Text>
           <TouchableOpacity
-            style={[styles.subTab, activeSubTab === 'audit' && styles.subTabActive]}
-            onPress={() => setActiveSubTab('audit')}
+            style={styles.filterBtn}
+            onPress={() => setFilterModalVisible(true)}
+            activeOpacity={0.8}
           >
-            <Text style={[styles.subTabText, activeSubTab === 'audit' && styles.subTabTextActive]}>
-              Auditoria
-            </Text>
+            <SlidersHorizontal size={15} color="#165337" style={{ marginRight: 6 }} />
+            <Text style={styles.filterBtnText}>Filtrar</Text>
           </TouchableOpacity>
         </View>
-      </View>
+      )}
 
       <ScrollView
         ref={scrollRef}
@@ -114,29 +152,7 @@ export const ReportsScreen: React.FC = () => {
           </View>
         ) : activeSubTab === 'metrics' ? (
           <>
-            {/* Filtro de Período (Pills Nubank) */}
-            <View style={styles.periodFilterContainer}>
-              <TouchableOpacity
-                style={[styles.periodChip, days === 1 && styles.periodChipActive]}
-                onPress={() => setDays(1)}
-              >
-                <Text style={[styles.periodChipText, days === 1 && styles.periodChipTextActive]}>Hoje</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.periodChip, days === 7 && styles.periodChipActive]}
-                onPress={() => setDays(7)}
-              >
-                <Text style={[styles.periodChipText, days === 7 && styles.periodChipTextActive]}>7 dias</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.periodChip, days === 30 && styles.periodChipActive]}
-                onPress={() => setDays(30)}
-              >
-                <Text style={[styles.periodChipText, days === 30 && styles.periodChipTextActive]}>30 dias</Text>
-              </TouchableOpacity>
-            </View>
-
-            {/* Destaque 1: Tempo Médio de Resposta */}
+            {/* Destaque: Tempo Médio de Resposta */}
             <View style={styles.heroCard}>
               <View style={styles.heroCardHeader}>
                 <View style={styles.iconCirclePurple}>
@@ -156,35 +172,12 @@ export const ReportsScreen: React.FC = () => {
               </Text>
             </View>
 
-            {/* Destaque 2: Taxa de Aprovação & Permanência */}
-            <View style={styles.kpiRow}>
-              <View style={styles.halfCard}>
-                <View style={[styles.iconCircle, { backgroundColor: '#D1FAE5' }]}>
-                  <CircleCheck size={18} color="#10B981" />
-                </View>
-                <Text style={styles.halfCardValue}>{metrics?.summary?.approvalRate ?? 100}%</Text>
-                <Text style={styles.halfCardLabel}>Taxa de Aprovação</Text>
-                <Text style={styles.halfCardHint}>{metrics?.summary?.denied ?? 0} recusas</Text>
-              </View>
-
-              <View style={styles.halfCard}>
-                <View style={[styles.iconCircle, { backgroundColor: '#F4EBFB' }]}>
-                  <Users size={18} color={colors.primary} />
-                </View>
-                <Text style={styles.halfCardValue}>
-                  {metrics?.performance?.averageStayFormatted || '0 min'}
-                </Text>
-                <Text style={styles.halfCardLabel}>Média no Local</Text>
-                <Text style={styles.halfCardHint}>{metrics?.summary?.presentNow ?? 0} no condomínio</Text>
-              </View>
-            </View>
-
             {/* Resumo Consolidado de Volumes */}
             <Text style={styles.sectionTitle}>Volume de Visitas ({days} dias)</Text>
             <View style={styles.summaryCard}>
               <View style={styles.summaryItem}>
                 <Text style={styles.summaryNum}>{metrics?.summary?.total ?? 0}</Text>
-                <Text style={styles.summaryTxt}>Total Solicitado</Text>
+                <Text style={styles.summaryTxt}>Total</Text>
               </View>
               <View style={styles.summaryDivider} />
               <View style={styles.summaryItem}>
@@ -265,40 +258,10 @@ export const ReportsScreen: React.FC = () => {
                 />
               </View>
             </View>
-
-            {/* Unidades Mais Visitadas */}
-            {metrics?.topDestinations && metrics.topDestinations.length > 0 && (
-              <>
-                <Text style={styles.sectionTitle}>Unidades Mais Visitadas</Text>
-                <View style={styles.destListCard}>
-                  {metrics.topDestinations.map((dest: any, idx: number) => (
-                    <View key={idx} style={styles.destItem}>
-                      <View style={styles.destRankBadge}>
-                        <Text style={styles.destRankText}>#{idx + 1}</Text>
-                      </View>
-                      <View style={{ flex: 1, marginLeft: 12 }}>
-                        <Text style={styles.destName}>{dest.name}</Text>
-                      </View>
-                      <Text style={styles.destCount}>{dest.count} visitas</Text>
-                    </View>
-                  ))}
-                </View>
-              </>
-            )}
           </>
         ) : (
-          /* Trilha de Auditoria Imutável (Seção 71) */
+          /* Auditoria */
           <>
-            <View style={styles.auditHeaderCard}>
-              <ShieldCheck size={24} color={colors.primary} />
-              <View style={{ marginLeft: 12, flex: 1 }}>
-                <Text style={styles.auditHeaderTitle}>Trilha de Auditoria Imutável</Text>
-                <Text style={styles.auditHeaderSub}>
-                  Registro criptografado de cada autorização e movimentação na portaria.
-                </Text>
-              </View>
-            </View>
-
             {auditLogs.length === 0 ? (
               <View style={styles.emptyContainer}>
                 <AlertCircle size={36} color={colors.textMuted} />
@@ -309,7 +272,6 @@ export const ReportsScreen: React.FC = () => {
                 const isAuth = log.eventType === 'AUTHORIZED';
                 const isDenied = log.eventType === 'DENIED';
                 const isEntry = log.eventType === 'ENTRY_RECORDED';
-                const isExit = log.eventType === 'EXIT_RECORDED';
 
                 let badgeColor = colors.primary;
                 let badgeBg = '#F4EBFB';
@@ -329,7 +291,7 @@ export const ReportsScreen: React.FC = () => {
                       </Text>
                     </View>
                     <Text style={styles.timelineDesc}>{log.description}</Text>
-                    
+
                     {log.visitRequest && (
                       <View style={styles.timelineMetaRow}>
                         <Building size={14} color={colors.textSecondary} />
@@ -354,11 +316,95 @@ export const ReportsScreen: React.FC = () => {
           </>
         )}
       </ScrollView>
+
       <ScrollToTopButton
         visible={showScrollTop}
         onPress={() => scrollRef.current?.scrollTo({ y: 0, animated: true })}
-        bottom={85}
+        bottom={115}
       />
+
+      {/* Modal de Filtro de Período */}
+      <Modal
+        visible={filterModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setFilterModalVisible(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalBackdrop}
+          activeOpacity={1}
+          onPress={() => setFilterModalVisible(false)}
+        >
+          <View style={styles.filterSheet}>
+            <Text style={styles.filterSheetTitle}>Filtrar por período</Text>
+            {([1, 7, 30] as DaysFilter[]).map((d) => (
+              <TouchableOpacity
+                key={d}
+                style={[styles.filterOption, days === d && styles.filterOptionActive]}
+                onPress={() => {
+                  setDays(d);
+                  setFilterModalVisible(false);
+                }}
+                activeOpacity={0.8}
+              >
+                <Text style={[styles.filterOptionText, days === d && styles.filterOptionTextActive]}>
+                  {DAYS_LABELS[d]}
+                </Text>
+                {days === d && <CircleCheck size={18} color="#165337" />}
+              </TouchableOpacity>
+            ))}
+
+            <TouchableOpacity
+              style={[styles.filterOption, days === 'custom' && styles.filterOptionActive]}
+              onPress={() => setDays('custom')}
+              activeOpacity={0.8}
+            >
+              <Text style={[styles.filterOptionText, days === 'custom' && styles.filterOptionTextActive]}>
+                Período Personalizado
+              </Text>
+              {days === 'custom' && <CircleCheck size={18} color="#165337" />}
+            </TouchableOpacity>
+
+            {days === 'custom' && (
+              <View style={styles.customDateContainer}>
+                <View style={styles.dateInputWrapper}>
+                  <Text style={styles.dateLabel}>Data Inicial</Text>
+                  <TextInput
+                    style={styles.dateInput}
+                    placeholder="DD/MM/AAAA"
+                    value={startDateStr}
+                    onChangeText={setStartDateStr}
+                    keyboardType="numeric"
+                    maxLength={10}
+                  />
+                </View>
+                <View style={styles.dateInputWrapper}>
+                  <Text style={styles.dateLabel}>Data Final</Text>
+                  <TextInput
+                    style={styles.dateInput}
+                    placeholder="DD/MM/AAAA"
+                    value={endDateStr}
+                    onChangeText={setEndDateStr}
+                    keyboardType="numeric"
+                    maxLength={10}
+                  />
+                </View>
+                <TouchableOpacity
+                  style={styles.applyDateBtn}
+                  onPress={() => {
+                    if (startDateStr.length >= 10) {
+                      setFilterModalVisible(false);
+                      loadData();
+                    }
+                  }}
+                >
+                  <Text style={styles.applyDateText}>Aplicar</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </View>
   );
 };
@@ -366,62 +412,86 @@ export const ReportsScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F0F1F5',
+    backgroundColor: '#F8FAFC',
   },
-  header: {
-    backgroundColor: '#165337',
-    paddingHorizontal: 20,
-    paddingBottom: 18,
-    borderBottomLeftRadius: 20,
-    borderBottomRightRadius: 20,
-  },
-  headerTitleRow: {
+
+  // Sub-tabs abaixo do header
+  subTabBarContainer: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: '800',
-    color: colors.white,
-    letterSpacing: -0.3,
-  },
-  headerSubtitle: {
-    fontSize: 13,
-    color: 'rgba(255, 255, 255, 0.85)',
-    marginTop: 4,
-    marginBottom: 16,
-  },
-  subTabContainer: {
-    flexDirection: 'row',
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
-    borderRadius: 12,
-    padding: 3,
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+    gap: 8,
   },
   subTab: {
     flex: 1,
-    paddingVertical: 8,
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 9,
     borderRadius: 10,
+    backgroundColor: '#F1F5F9',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
   },
   subTabActive: {
-    backgroundColor: colors.white,
+    backgroundColor: '#EDF7ED',
+    borderColor: '#165337',
   },
   subTabText: {
     fontSize: 13,
     fontWeight: '600',
-    color: colors.white,
+    color: '#94A3B8',
   },
   subTabTextActive: {
-    color: colors.primary,
+    color: '#165337',
     fontWeight: '700',
   },
+
+  // Barra de filtro de período
+  filterBarRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+  },
+  filterBarLabel: {
+    fontSize: 13,
+    color: '#64748B',
+    fontWeight: '500',
+  },
+  filterBarValue: {
+    color: '#165337',
+    fontWeight: '700',
+  },
+  filterBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#EDF7ED',
+    borderWidth: 1,
+    borderColor: '#165337',
+    borderRadius: 20,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  filterBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#165337',
+  },
+
   scrollView: {
     flex: 1,
   },
   scrollContent: {
     padding: 16,
-    paddingBottom: 110,
+    paddingBottom: 120,
   },
   loadingContainer: {
     padding: 40,
@@ -432,33 +502,8 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     fontSize: 14,
   },
-  periodFilterContainer: {
-    flexDirection: 'row',
-    gap: 8,
-    marginBottom: 16,
-  },
-  periodChip: {
-    paddingVertical: 6,
-    paddingHorizontal: 16,
-    backgroundColor: colors.white,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: '#E2E4E9',
-  },
-  periodChipActive: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
-  },
-  periodChipText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: colors.textSecondary,
-  },
-  periodChipTextActive: {
-    color: colors.white,
-  },
   heroCard: {
-    backgroundColor: colors.white,
+    backgroundColor: '#FFFFFF',
     borderRadius: 20,
     padding: 20,
     marginBottom: 16,
@@ -513,46 +558,6 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     lineHeight: 18,
   },
-  kpiRow: {
-    flexDirection: 'row',
-    gap: 12,
-    marginBottom: 20,
-  },
-  halfCard: {
-    flex: 1,
-    backgroundColor: colors.white,
-    borderRadius: 18,
-    padding: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    elevation: 2,
-  },
-  iconCircle: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  halfCardValue: {
-    fontSize: 22,
-    fontWeight: '800',
-    color: colors.textPrimary,
-    marginBottom: 2,
-  },
-  halfCardLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: colors.textSecondary,
-  },
-  halfCardHint: {
-    fontSize: 11,
-    color: colors.textMuted,
-    marginTop: 4,
-  },
   sectionTitle: {
     fontSize: 15,
     fontWeight: '700',
@@ -561,7 +566,7 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   summaryCard: {
-    backgroundColor: colors.white,
+    backgroundColor: '#FFFFFF',
     borderRadius: 18,
     padding: 18,
     flexDirection: 'row',
@@ -594,7 +599,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#E5E7EB',
   },
   periodCard: {
-    backgroundColor: colors.white,
+    backgroundColor: '#FFFFFF',
     borderRadius: 18,
     padding: 18,
     marginBottom: 20,
@@ -625,63 +630,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary,
     borderRadius: 4,
   },
-  destListCard: {
-    backgroundColor: colors.white,
-    borderRadius: 18,
-    padding: 12,
-    marginBottom: 20,
-  },
-  destItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F0F1F4',
-  },
-  destRankBadge: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: '#F4EBFB',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  destRankText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: colors.primary,
-  },
-  destName: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: colors.textPrimary,
-  },
-  destCount: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: colors.textSecondary,
-  },
-  auditHeaderCard: {
-    backgroundColor: colors.white,
-    borderRadius: 18,
-    padding: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  auditHeaderTitle: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: colors.textPrimary,
-  },
-  auditHeaderSub: {
-    fontSize: 12,
-    color: colors.textSecondary,
-    marginTop: 2,
-    lineHeight: 16,
-  },
   timelineCard: {
-    backgroundColor: colors.white,
+    backgroundColor: '#FFFFFF',
     borderRadius: 16,
     padding: 16,
     marginBottom: 10,
@@ -740,5 +690,90 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: colors.textMuted,
     marginTop: 10,
+  },
+
+  // Modal de filtro
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  filterSheet: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 24,
+    width: '100%',
+    maxWidth: 340,
+  },
+  filterSheetTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#0F172A',
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  filterOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    marginBottom: 8,
+    backgroundColor: '#F8FAFC',
+  },
+  filterOptionActive: {
+    backgroundColor: '#EDF7ED',
+    borderColor: '#165337',
+  },
+  filterOptionText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#475569',
+  },
+  filterOptionTextActive: {
+    color: '#165337',
+    fontWeight: '700',
+  },
+  customDateContainer: {
+    marginTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#E2E8F0',
+    paddingTop: 12,
+  },
+  dateInputWrapper: {
+    marginBottom: 10,
+  },
+  dateLabel: {
+    fontSize: 12,
+    color: '#64748B',
+    marginBottom: 4,
+    fontWeight: '600',
+  },
+  dateInput: {
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 14,
+    color: '#0F172A',
+    backgroundColor: '#F8FAFC',
+  },
+  applyDateBtn: {
+    backgroundColor: '#165337',
+    borderRadius: 10,
+    paddingVertical: 12,
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  applyDateText: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+    fontSize: 14,
   },
 });

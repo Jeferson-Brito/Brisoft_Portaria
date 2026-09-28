@@ -75,6 +75,9 @@ export const PackagesScreen: React.FC<PackagesScreenProps> = ({ onBack }) => {
   // Modal Visualizar Foto Grande
   const [previewPhotoUrl, setPreviewPhotoUrl] = useState<string | null>(null);
 
+  // Modal Detalhes de Encomenda no Histórico
+  const [historyDetailPackage, setHistoryDetailPackage] = useState<any | null>(null);
+
   // Modal Retirada com Código
   const [selectedPackageForPickup, setSelectedPackageForPickup] = useState<any | null>(null);
   const [inputPickupCode, setInputPickupCode] = useState('');
@@ -395,9 +398,11 @@ export const PackagesScreen: React.FC<PackagesScreenProps> = ({ onBack }) => {
           }
           renderItem={({ item }) => {
             const isPickedUp = item.status === 'PICKED_UP';
+            const isHistory = activeSubTab === 'history';
 
-            return (
+            const cardContent = (
               <View style={[styles.packageCard, isPickedUp && styles.packageCardPickedUp]}>
+                {/* When in history tab, allow tapping to see details */}
                 <View style={styles.cardHeader}>
                   <View style={styles.carrierBadge}>
                     <Truck size={14} color="#165337" style={{ marginRight: 4 }} />
@@ -510,13 +515,26 @@ export const PackagesScreen: React.FC<PackagesScreenProps> = ({ onBack }) => {
                 )}
               </View>
             );
+
+            if (isHistory) {
+              return (
+                <TouchableOpacity
+                  key={item.id}
+                  activeOpacity={0.85}
+                  onPress={() => setHistoryDetailPackage(item)}
+                >
+                  {cardContent}
+                </TouchableOpacity>
+              );
+            }
+            return cardContent;
           }}
         />
       )}
       <ScrollToTopButton
         visible={showScrollTop}
         onPress={() => listRef.current?.scrollToOffset({ offset: 0, animated: true })}
-        bottom={85}
+        bottom={115}
       />
 
       {/* Modal: Receber Encomenda com Foto Obrigatória */}
@@ -589,31 +607,6 @@ export const PackagesScreen: React.FC<PackagesScreenProps> = ({ onBack }) => {
                 selectedClientId={selectedClientId}
                 selectedClient={selectedClient}
               />
-
-              {/* Se o morador não estiver selecionado, permite escolher a unidade diretamente */}
-              {!selectedClient && (
-                <View style={{ marginBottom: 14 }}>
-                  <Text style={styles.label}>Ou selecione apenas a unidade (Destino):</Text>
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 4 }}>
-                    {destinations.map((d: any) => {
-                      const isSel = selectedDestId === d.id;
-                      return (
-                        <TouchableOpacity
-                          key={d.id}
-                          style={[styles.destChip, isSel && styles.destChipActive]}
-                          onPress={() => {
-                            setSelectedDestId(d.id);
-                          }}
-                        >
-                          <Text style={[styles.destChipText, isSel && styles.destChipTextActive]}>
-                            {d.name} {d.block ? `(${d.block})` : ''}
-                          </Text>
-                        </TouchableOpacity>
-                      );
-                    })}
-                  </ScrollView>
-                </View>
-              )}
 
               {/* Transportadora */}
               <Text style={styles.label}>Transportadora / Loja</Text>
@@ -794,6 +787,80 @@ export const PackagesScreen: React.FC<PackagesScreenProps> = ({ onBack }) => {
               resizeMode="contain"
             />
           )}
+        </View>
+      </Modal>
+
+      {/* Modal: Detalhes da Encomenda (Histórico) */}
+      <Modal
+        visible={!!historyDetailPackage}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setHistoryDetailPackage(null)}
+      >
+        <View style={styles.detailOverlay}>
+          <View style={styles.detailSheet}>
+            <View style={styles.detailHandle} />
+            {historyDetailPackage && (() => {
+              const pkg = historyDetailPackage;
+              const isPickedUp = pkg.status === 'PICKED_UP';
+              const receivedDate = new Date(pkg.receivedAt || pkg.createdAt);
+              const dateStr = receivedDate.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+              const timeStr = receivedDate.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+              const destName = pkg.destination?.name
+                ? `${pkg.destination.name}${pkg.destination.block ? ` - ${pkg.destination.block}` : ''}`
+                : '—';
+              return (
+                <>
+                  <View style={styles.detailHeaderRow}>
+                    <Text style={styles.detailTitle}>Detalhes da Encomenda</Text>
+                    <TouchableOpacity onPress={() => setHistoryDetailPackage(null)} style={styles.detailCloseBtn}>
+                      <X size={24} color="#64748B" />
+                    </TouchableOpacity>
+                  </View>
+
+                  <View style={[styles.detailStatusBadge, { backgroundColor: isPickedUp ? '#DCFCE7' : '#EDE9FE' }]}>
+                    <Text style={[styles.detailStatusText, { color: isPickedUp ? '#15803D' : '#7C3AED' }]}>
+                      {isPickedUp ? 'RETIRADA' : 'AGUARDANDO RETIRADA'}
+                    </Text>
+                  </View>
+
+                  <View style={styles.histDetailRow}>
+                    <Text style={styles.histDetailLabel}>Destinatário</Text>
+                    <Text style={styles.histDetailValue}>{pkg.recipientName || pkg.client?.name || '—'}</Text>
+                  </View>
+
+                  <View style={styles.histDetailRow}>
+                    <Text style={styles.histDetailLabel}>Transportadora</Text>
+                    <Text style={styles.histDetailValue}>{pkg.carrier || 'Não informado'}</Text>
+                  </View>
+
+                  <View style={styles.histDetailRow}>
+                    <Text style={styles.histDetailLabel}>Destino</Text>
+                    <Text style={styles.histDetailValue}>{destName}</Text>
+                  </View>
+
+                  {pkg.trackingCode && (
+                    <View style={styles.histDetailRow}>
+                      <Text style={styles.histDetailLabel}>Rastreio</Text>
+                      <Text style={styles.histDetailValue}>{pkg.trackingCode}</Text>
+                    </View>
+                  )}
+
+                  <View style={styles.histDetailRow}>
+                    <Text style={styles.histDetailLabel}>Recebida em</Text>
+                    <Text style={styles.histDetailValue}>{dateStr} às {timeStr}</Text>
+                  </View>
+
+                  {pkg.code && (
+                    <View style={styles.histDetailRow}>
+                      <Text style={styles.histDetailLabel}>Código</Text>
+                      <Text style={styles.histDetailValue}>{pkg.code}</Text>
+                    </View>
+                  )}
+                </>
+              );
+            })()}
+          </View>
         </View>
       </Modal>
     </View>
@@ -1409,5 +1476,74 @@ const styles = StyleSheet.create({
     width: '90%',
     height: '75%',
     borderRadius: 12,
+  },
+  // Detail Modal Styles
+  detailOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    justifyContent: 'flex-end',
+  },
+  detailSheet: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingHorizontal: 20,
+    paddingTop: 10,
+    paddingBottom: 36,
+  },
+  detailHandle: {
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#CBD5E1',
+    alignSelf: 'center',
+    marginBottom: 14,
+  },
+  detailHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 14,
+  },
+  detailTitle: {
+    fontSize: 17,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  detailCloseBtn: {
+    padding: 4,
+  },
+  detailStatusBadge: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 10,
+    marginBottom: 14,
+  },
+  detailStatusText: {
+    fontSize: 12,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
+  histDetailRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  histDetailLabel: {
+    fontSize: 13,
+    color: '#64748B',
+    fontWeight: '500',
+  },
+  histDetailValue: {
+    fontSize: 13,
+    color: '#0F172A',
+    fontWeight: '700',
+    flex: 1,
+    textAlign: 'right',
+    marginLeft: 8,
   },
 });

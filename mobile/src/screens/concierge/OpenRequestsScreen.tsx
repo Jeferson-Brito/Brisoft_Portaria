@@ -352,7 +352,7 @@ export const OpenRequestsScreen: React.FC<{ hideHeader?: boolean }> = ({ hideHea
       <ScrollToTopButton
         visible={showScrollTop}
         onPress={() => listRef.current?.scrollToOffset({ offset: 0, animated: true })}
-        bottom={85}
+        bottom={115}
       />
     </View>
   );

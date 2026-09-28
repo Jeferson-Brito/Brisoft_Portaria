@@ -45,7 +45,13 @@ export class MockWhatsAppProvider implements IWhatsAppProvider {
       veiculo: data.vehicleModel,
       placa: data.vehiclePlate,
       codigo: data.requestCode,
+      observacao: data.notes,
+      operador: data.conciergeName,
     });
+
+    if (data.photoUrl) {
+      return this.sendImageMessage(data.clientPhone, data.photoUrl, text);
+    }
 
     const messageId = `mock_msg_${Date.now()}`;
     this.sentMessages.push({ to: data.clientPhone, text, data });
@@ -59,6 +65,7 @@ export class MockWhatsAppProvider implements IWhatsAppProvider {
       motivo: 'Lembrete de liberação',
       horario: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
       codigo: data.requestCode,
+      operador: data.conciergeName,
     });
 
     const messageId = `mock_remind_${Date.now()}`;

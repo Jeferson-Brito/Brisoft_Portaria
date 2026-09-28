@@ -414,7 +414,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
             </View>
             <View style={styles.menuContent}>
               <View style={styles.menuTitleRow}>
-                <Text style={styles.menuTitle}>Robô do WhatsApp (Baileys)</Text>
+                <Text style={styles.menuTitle}>Robô do WhatsApp</Text>
                 {whatsappStatus === 'CONNECTED' ? (
                   <View style={styles.connectedBadge}>
                     <Text style={styles.connectedBadgeText}>ONLINE</Text>
@@ -463,70 +463,8 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
             </View>
             <ChevronRight size={18} color="#94A3B8" />
           </TouchableOpacity>
-
-          {/* Plano & Assinatura */}
-          <TouchableOpacity
-            style={styles.menuItem}
-            onPress={() => onNavigate('subscription')}
-            activeOpacity={0.7}
-          >
-            <View style={[styles.menuIconBox, { backgroundColor: '#F3E8FF' }]}>
-              <CreditCard size={22} color="#9333EA" />
-            </View>
-            <View style={styles.menuContent}>
-              <View style={styles.menuTitleRow}>
-                <Text style={styles.menuTitle}>Minha Assinatura & Plano</Text>
-                <View
-                  style={[
-                    styles.planBadge,
-                    { backgroundColor: isPro ? '#F3E8FF' : '#FEF3C7' },
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.planBadgeText,
-                      { color: isPro ? '#7E22CE' : '#B45309' },
-                    ]}
-                  >
-                    {isPro ? 'PLANO ATIVO' : `${trialDays}D RESTANTES`}
-                  </Text>
-                </View>
-              </View>
-              <Text style={styles.menuSubtitle}>
-                {isPro
-                  ? 'Plano Profissional ativo. Recursos ilimitados liberados.'
-                  : 'Período de testes. Assine para garantir o funcionamento contínuo.'}
-              </Text>
-            </View>
-            <ChevronRight size={18} color="#94A3B8" />
-          </TouchableOpacity>
         </View>
       )}
-
-      {/* 6. SEÇÃO: MINHA CONTA */}
-      <View style={styles.section}>
-        <Text style={styles.sectionHeader}>MINHA CONTA</Text>
-        <Text style={styles.sectionDescription}>
-          Segurança e credenciais de acesso deste operador
-        </Text>
-
-        <TouchableOpacity
-          style={styles.menuItem}
-          onPress={() => onNavigate('profile')}
-          activeOpacity={0.7}
-        >
-          <View style={[styles.menuIconBox, { backgroundColor: '#F1F5F9' }]}>
-            <User size={22} color="#475569" />
-          </View>
-          <View style={styles.menuContent}>
-            <Text style={styles.menuTitle}>Meu Perfil & Senha</Text>
-            <Text style={styles.menuSubtitle}>
-              Alterar seu nome de operador e redefinir sua senha
-            </Text>
-          </View>
-          <ChevronRight size={18} color="#94A3B8" />
-        </TouchableOpacity>
-      </View>
 
       {/* 7. BOTÃO LOGOUT / SAIR */}
       <TouchableOpacity
@@ -538,18 +476,11 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
         <Text style={styles.logoutText}>Sair da Conta</Text>
       </TouchableOpacity>
 
-      {/* 8. RODAPÉ DE VERSÃO */}
-      <View style={styles.footer}>
-        <Text style={styles.footerTitle}>Combate Portaria Inteligente</Text>
-        <Text style={styles.footerSubtitle}>
-          Versão 1.2.0 • SaaS Multi-Condomínio & Empresas
-        </Text>
-      </View>
     </ScrollView>
     <ScrollToTopButton
       visible={showScrollTop}
       onPress={() => scrollRef.current?.scrollTo({ y: 0, animated: true })}
-      bottom={85}
+      bottom={115}
     />
   </View>
   );

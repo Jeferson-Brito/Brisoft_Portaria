@@ -18,10 +18,10 @@ export class ReportsController {
 
   async getMetrics(req: FastifyRequest, reply: FastifyReply) {
     const { organizationId } = (req as any).user;
-    const { days } = req.query as { days?: string };
+    const { days, startDate, endDate } = req.query as { days?: string, startDate?: string, endDate?: string };
 
     const daysNum = days ? parseInt(days, 10) : 7;
-    const data = await reportsService.getMetrics(organizationId, daysNum);
+    const data = await reportsService.getMetrics(organizationId, daysNum, startDate, endDate);
     return reply.send({ success: true, data });
   }
 }

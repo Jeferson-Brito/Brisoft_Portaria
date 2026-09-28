@@ -42,6 +42,7 @@ import {
   Filter,
   X,
   List,
+  History,
 } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from '../../theme/colors';
@@ -52,6 +53,7 @@ import { OpenRequestsScreen } from './OpenRequestsScreen';
 import { PreAuthorizationsScreen } from './PreAuthorizationsScreen';
 import { PresentVisitorsScreen } from './PresentVisitorsScreen';
 import { AuthorizedRequestsScreen } from './AuthorizedRequestsScreen';
+import { VisitorHistoryScreen } from './VisitorHistoryScreen';
 import { NotificationsModal } from './NotificationsModal';
 import { PackagesScreen } from '../packages/PackagesScreen';
 import { WhatsAppConfigScreen } from '../admin/WhatsAppConfigScreen';
@@ -115,6 +117,7 @@ export const DashboardScreen: React.FC = () => {
     | 'pending'
     | 'authorized'
     | 'present'
+    | 'history'
     | 'packages'
     | 'reports'
     | 'whatsapp'
@@ -296,6 +299,7 @@ export const DashboardScreen: React.FC = () => {
     }
     if (activeTab === 'pending') return <OpenRequestsScreen />;
     if (activeTab === 'authorized') return <AuthorizedRequestsScreen />;
+    if (activeTab === 'history') return <VisitorHistoryScreen />;
     if (activeTab === 'present') return <PresentVisitorsScreen />;
     if (activeTab === 'packages') return <PackagesScreen onBack={() => setActiveTab('dashboard')} />;
     if (activeTab === 'preauthorizations') return <PreAuthorizationsScreen onBack={() => setActiveTab('dashboard')} />;
@@ -335,8 +339,7 @@ export const DashboardScreen: React.FC = () => {
       return (
         <View style={{ flex: 1, backgroundColor: '#F8FAFC' }}>
           <AppHeader
-            title="Configurações & Gestão"
-            subtitle="Operadores, moradores, WhatsApp e empresa"
+            title="Configurações"
             onBack={() => setActiveTab('dashboard')}
           />
           <SettingsScreen
@@ -521,7 +524,7 @@ export const DashboardScreen: React.FC = () => {
                 <View style={styles.secondaryIconCircle}>
                   <CalendarCheck size={26} color="#165337" />
                 </View>
-                <Text style={styles.secondaryCardTitle}>Agendamento</Text>
+                <Text style={styles.secondaryCardTitle}>Agendamentos</Text>
               </TouchableOpacity>
 
               {/* Card Encomendas */}
@@ -1031,7 +1034,7 @@ export const DashboardScreen: React.FC = () => {
               activeOpacity={0.85}
             >
               <CalendarCheck size={15} color="#165337" />
-              <Text style={styles.compactActionBtnTextSecondary}>Agendamento</Text>
+              <Text style={styles.compactActionBtnTextSecondary}>Agendamentos</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -1147,91 +1150,47 @@ export const DashboardScreen: React.FC = () => {
             )}
           </TouchableOpacity>
 
-          {/* 4. Presentes (para Portaria) ou Relatórios (para Admin/Supervisor) */}
-          {isConcierge ? (
-            <TouchableOpacity
-              style={styles.tabItem}
-              onPress={() => setActiveTab('present')}
-              activeOpacity={0.8}
+          {/* 4. Histórico de Solicitações (Nova Aba) */}
+          <TouchableOpacity
+            style={styles.tabItem}
+            onPress={() => setActiveTab('history')}
+            activeOpacity={0.8}
+          >
+            <History
+              size={22}
+              color={activeTab === 'history' ? '#165337' : '#94A3B8'}
+            />
+            <Text
+              style={[
+                styles.tabLabel,
+                activeTab === 'history' && styles.tabLabelActive,
+              ]}
             >
-              <View>
-                <Users
-                  size={22}
-                  color={activeTab === 'present' ? '#165337' : '#94A3B8'}
-                />
-                {summary.presentCount > 0 && (
-                  <View style={styles.tabBadgeDot}>
-                    <Text style={styles.tabBadgeText}>{summary.presentCount}</Text>
-                  </View>
-                )}
-              </View>
-              <Text
-                style={[
-                  styles.tabLabel,
-                  activeTab === 'present' && styles.tabLabelActive,
-                ]}
-              >
-                Presentes
-              </Text>
-              {activeTab === 'present' && <View style={styles.activeTabIndicator} />}
-            </TouchableOpacity>
-          ) : (
-            <TouchableOpacity
-              style={styles.tabItem}
-              onPress={() => setActiveTab('reports')}
-              activeOpacity={0.8}
+              Histórico
+            </Text>
+            {activeTab === 'history' && <View style={styles.activeTabIndicator} />}
+          </TouchableOpacity>
+
+          {/* 5. Relatórios */}
+          <TouchableOpacity
+            style={styles.tabItem}
+            onPress={() => setActiveTab('reports')}
+            activeOpacity={0.8}
+          >
+            <BarChart3
+              size={22}
+              color={activeTab === 'reports' ? '#165337' : '#94A3B8'}
+            />
+            <Text
+              style={[
+                styles.tabLabel,
+                activeTab === 'reports' && styles.tabLabelActive,
+              ]}
             >
-              <BarChart3
-                size={22}
-                color={activeTab === 'reports' ? '#165337' : '#94A3B8'}
-              />
-              <Text
-                style={[
-                  styles.tabLabel,
-                  activeTab === 'reports' && styles.tabLabelActive,
-                ]}
-              >
-                Relatórios
-              </Text>
-              {activeTab === 'reports' && <View style={styles.activeTabIndicator} />}
-            </TouchableOpacity>
-          )}
-
-          {/* 5. Ajustes / Configurações (Sempre visível para todos os perfis) */}
-          {(() => {
-            const isSettingsTabActive = [
-              'settings',
-              'whatsapp',
-              'users_mgmt',
-              'clients_mgmt',
-              'org_profile',
-              'profile',
-              'subscription',
-              'super_admin_orgs',
-            ].includes(activeTab);
-
-            return (
-              <TouchableOpacity
-                style={styles.tabItem}
-                onPress={() => setActiveTab('settings')}
-                activeOpacity={0.8}
-              >
-                <Settings
-                  size={22}
-                  color={isSettingsTabActive ? '#165337' : '#94A3B8'}
-                />
-                <Text
-                  style={[
-                    styles.tabLabel,
-                    isSettingsTabActive && styles.tabLabelActive,
-                  ]}
-                >
-                  Ajustes
-                </Text>
-                {isSettingsTabActive && <View style={styles.activeTabIndicator} />}
-              </TouchableOpacity>
-            );
-          })()}
+              Relatórios
+            </Text>
+            {activeTab === 'reports' && <View style={styles.activeTabIndicator} />}
+          </TouchableOpacity>
         </View>
 
         {/* Modal Nova Solicitação */}

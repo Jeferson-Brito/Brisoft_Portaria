@@ -19,6 +19,9 @@ export interface ApprovalRequestMessageData {
   vehiclePlate?: string;
   requestCode: string;
   customTemplate?: string;
+  photoUrl?: string;
+  notes?: string;
+  conciergeName?: string;
 }
 
 export interface ReminderMessageData {
@@ -27,6 +30,7 @@ export interface ReminderMessageData {
   visitorName: string;
   requestCode: string;
   customTemplate?: string;
+  conciergeName?: string;
 }
 
 export interface IncomingMessageEvent {

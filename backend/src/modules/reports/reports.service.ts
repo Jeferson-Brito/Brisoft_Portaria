@@ -99,15 +99,26 @@ export class ReportsService {
     });
   }
 
-  async getMetrics(organizationId: string, days = 7) {
-    const sinceDate = new Date();
-    sinceDate.setDate(sinceDate.getDate() - days);
-    sinceDate.setHours(0, 0, 0, 0);
+  async getMetrics(organizationId: string, days = 7, startDateStr?: string, endDateStr?: string) {
+    let startDate: Date;
+    let endDate = new Date();
+    
+    if (startDateStr) {
+      startDate = new Date(startDateStr);
+      if (endDateStr) {
+        endDate = new Date(endDateStr);
+        endDate.setHours(23, 59, 59, 999);
+      }
+    } else {
+      startDate = new Date();
+      startDate.setDate(startDate.getDate() - days);
+      startDate.setHours(0, 0, 0, 0);
+    }
 
     const visits = await prisma.visitRequest.findMany({
       where: {
         organizationId,
-        createdAt: { gte: sinceDate },
+        createdAt: { gte: startDate, lte: endDate },
       },
       include: {
         destination: { select: { name: true, block: true } },
@@ -211,7 +222,7 @@ export class ReportsService {
 
     return {
       periodDays: days,
-      since: sinceDate.toISOString(),
+      since: startDate.toISOString(),
       summary: {
         total,
         pending,

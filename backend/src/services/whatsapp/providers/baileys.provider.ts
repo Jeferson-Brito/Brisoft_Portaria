@@ -7,6 +7,7 @@ import makeWASocket, {
   fetchLatestBaileysVersion,
   proto,
   Browsers,
+  makeCacheableSignalKeyStore,
 } from '@whiskeysockets/baileys';
 import pino from 'pino';
 import {
@@ -44,6 +45,41 @@ export class BaileysProvider implements IWhatsAppProvider {
   private messageStore = new Map<string, proto.IMessage>();
   private msgRetryCounterCache = new MemoryCache();
 
+  private getStoreFilePath(): string {
+    return path.join(this.baseSessionDir, 'messages_cache.json');
+  }
+
+  private loadMessageStoreFromDisk() {
+    try {
+      const filePath = this.getStoreFilePath();
+      if (fs.existsSync(filePath)) {
+        const raw = fs.readFileSync(filePath, 'utf8');
+        const parsed = JSON.parse(raw);
+        for (const [id, msg] of Object.entries(parsed)) {
+          this.messageStore.set(id, msg as proto.IMessage);
+        }
+        console.log(`📦 [Baileys] ${this.messageStore.size} mensagens carregadas do cache em disco.`);
+      }
+    } catch (err) {
+      console.warn('Aviso ao carregar cache de mensagens do disco:', err);
+    }
+  }
+
+  private persistMessageStoreToDisk() {
+    try {
+      const filePath = this.getStoreFilePath();
+      const obj: Record<string, proto.IMessage> = {};
+      // Mantém as últimas 500 mensagens persistidas para responder a retries do celular
+      const entries = Array.from(this.messageStore.entries()).slice(-500);
+      for (const [id, msg] of entries) {
+        obj[id] = msg;
+      }
+      fs.writeFileSync(filePath, JSON.stringify(obj), 'utf8');
+    } catch (err) {
+      console.warn('Aviso ao persistir cache de mensagens no disco:', err);
+    }
+  }
+
   private saveMessageToStore(id: string, message: proto.IMessage) {
     if (!id || !message) return;
     this.messageStore.set(id, message);
@@ -51,6 +87,7 @@ export class BaileysProvider implements IWhatsAppProvider {
       const firstKey = this.messageStore.keys().next().value;
       if (firstKey) this.messageStore.delete(firstKey);
     }
+    this.persistMessageStoreToDisk();
   }
 
   constructor(sessionDir?: string) {
@@ -58,6 +95,7 @@ export class BaileysProvider implements IWhatsAppProvider {
     if (!fs.existsSync(this.baseSessionDir)) {
       fs.mkdirSync(this.baseSessionDir, { recursive: true });
     }
+    this.loadMessageStoreFromDisk();
   }
 
   private debounceSaveToDb(organizationId: string, orgSessionPath: string) {
@@ -173,7 +211,10 @@ export class BaileysProvider implements IWhatsAppProvider {
     this.sock = makeWASocket({
       version,
       logger,
-      auth: state,
+      auth: {
+        creds: state.creds,
+        keys: makeCacheableSignalKeyStore(state.keys, logger),
+      },
       printQRInTerminal: false,
       browser: Browsers.ubuntu('Chrome'),
       syncFullHistory: false,
@@ -354,19 +395,15 @@ export class BaileysProvider implements IWhatsAppProvider {
     if (this.sock) {
       try {
         // 1. Para números brasileiros com 13 dígitos (55 + DDD + 9 dígitos):
-        // No WhatsApp, contas de quase todos os DDDs fora de SP (DDD > 28) são registradas internamente sem o 9º dígito (12 dígitos).
-        // Se enviarmos para o JID de 13 dígitos, o WhatsApp entrega mas o celular não consegue descriptografar ("Aguardando mensagem").
-        // Portanto, para DDDs > 28, verificamos primeiro a existência do JID canônico sem o 9º dígito!
+        // No WhatsApp, grande parte das contas brasileiras continuam registradas internamente sem o 9º dígito (12 dígitos).
+        // Se enviarmos para o JID de 13 dígitos, o WhatsApp Web pode exibir, mas o celular oficial fica em "Aguardando mensagem".
+        // Portanto, verificamos primeiro se a conta existe no formato canônico sem o 9º dígito!
         if (clean.startsWith('55') && clean.length === 13 && clean[4] === '9') {
-          const ddd = parseInt(clean.slice(2, 4), 10);
           const withoutNine = `${clean.slice(0, 4)}${clean.slice(5)}`;
-
-          if (ddd > 28) {
-            const [resWithout] = (await this.sock.onWhatsApp(withoutNine)) || [];
-            if (resWithout && resWithout.exists) {
-              console.log(`📱 [Baileys] JID canônico sem 9º dígito resolvido (${withoutNine}): ${resWithout.jid}`);
-              return resWithout.jid;
-            }
+          const [resWithout] = (await this.sock.onWhatsApp(withoutNine)) || [];
+          if (resWithout && resWithout.exists) {
+            console.log(`📱 [Baileys] JID canônico sem 9º dígito resolvido (${withoutNine}): ${resWithout.jid}`);
+            return resWithout.jid;
           }
         }
 
@@ -431,15 +468,23 @@ export class BaileysProvider implements IWhatsAppProvider {
       veiculo: data.vehicleModel,
       placa: data.vehiclePlate,
       codigo: data.requestCode,
+      observacao: data.notes,
+      operador: data.conciergeName,
     });
 
-    console.log(`🚀 [Baileys] Enviando mensagem de autorização para ${data.clientName} (JID: ${jid})...`);
-    const sent = await this.sock.sendMessage(jid, { text });
-    if (sent?.key?.id && sent.message) {
-      this.saveMessageToStore(sent.key.id, sent.message);
+    if (data.photoUrl) {
+      console.log(`🚀 [Baileys] Enviando mensagem de autorização COM FOTO para ${data.clientName} (JID: ${jid})...`);
+      try {
+        const imgResult = await this.sendImageMessage(jid, data.photoUrl, text);
+        console.log(`✅ [Baileys] Mensagem com foto enviada com sucesso! ID: ${imgResult.messageId}`);
+        return imgResult;
+      } catch (imgErr: any) {
+        console.warn(`⚠️ [Baileys] Falha ao enviar foto da visita (${imgErr?.message || imgErr}). Enviando como texto...`);
+      }
     }
-    console.log(`✅ [Baileys] Mensagem enviada com sucesso! ID: ${sent?.key?.id}`);
-    return { messageId: sent.key.id || '' };
+
+    console.log(`🚀 [Baileys] Enviando mensagem de autorização para ${data.clientName} (JID: ${jid})...`);
+    return await this.sendMessage(jid, text);
   }
 
   async sendReminder(data: ReminderMessageData): Promise<{ messageId: string }> {
@@ -455,15 +500,11 @@ export class BaileysProvider implements IWhatsAppProvider {
       motivo: 'Lembrete de liberação',
       horario: new Date().toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit' }),
       codigo: data.requestCode,
+      operador: data.conciergeName,
     });
 
     console.log(`🚀 [Baileys] Enviando lembrete para ${data.clientName} (JID: ${jid})...`);
-    const sent = await this.sock.sendMessage(jid, { text });
-    if (sent?.key?.id && sent.message) {
-      this.saveMessageToStore(sent.key.id, sent.message);
-    }
-    console.log(`✅ [Baileys] Lembrete enviado com sucesso! ID: ${sent?.key?.id}`);
-    return { messageId: sent.key.id || '' };
+    return await this.sendMessage(jid, text);
   }
 
   async sendMessage(toPhone: string, text: string): Promise<{ messageId: string }> {
