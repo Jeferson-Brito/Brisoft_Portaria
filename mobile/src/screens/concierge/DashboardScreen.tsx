@@ -445,7 +445,7 @@ export const DashboardScreen: React.FC = () => {
                   Olá, {user?.name ? user.name.split(' ')[0] : 'Jeferson'}
                 </Text>
                 <Text style={styles.greetingSubtitle}>
-                  {orgProfile.companyName || 'Grupo Combate Portaria'}
+                  {orgProfile.companyName || 'Brisoft Portaria'}
                 </Text>
               </View>
             </TouchableOpacity>

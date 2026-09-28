@@ -13,8 +13,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../../contexts/AuthContext';
 
 // URL do seu link de pagamento (Stripe, Pix, etc.) - configure conforme necessário
-const PAYMENT_LINK = 'https://combateportaria.com.br/assinar';
-const SUPPORT_WHATSAPP = 'https://wa.me/5511999999999?text=Quero+assinar+o+Combate+Portaria';
+const PAYMENT_LINK = 'https://brisoftportaria.com.br/assinar';
+const SUPPORT_WHATSAPP = 'https://wa.me/5511999999999?text=Quero+assinar+o+Brisoft+Portaria';
 
 const FEATURES = [
   { icon: '🏢', title: 'Multi-unidades', desc: 'Gerencie todos os destinos do estabelecimento' },
@@ -104,7 +104,7 @@ export const SubscriptionScreen: React.FC<{ onBack?: () => void }> = ({ onBack }
           </View>
           <Text style={styles.planPrice}>R$ 149</Text>
           <Text style={styles.planPeriod}>/mês · Cancele quando quiser</Text>
-          <Text style={styles.planName}>Combate Portaria Basic</Text>
+          <Text style={styles.planName}>Brisoft Portaria Basic</Text>
 
           <View style={styles.divider} />
 

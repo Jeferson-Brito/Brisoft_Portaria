@@ -10,6 +10,7 @@ import {
   Platform,
   ScrollView,
   StatusBar,
+  Image,
   ImageBackground,
   Dimensions,
 } from 'react-native';
@@ -73,11 +74,15 @@ export const LoginScreen: React.FC<{ onRegisterPress?: () => void }> = ({ onRegi
           resizeMode="cover"
         >
           <View style={styles.heroOverlay}>
-            {/* Badge Central Oficial: Escudo de Segurança Verde */}
+            {/* Badge Central Oficial: Logo Brisoft Portaria */}
             <View style={styles.logoBadge}>
-              <ShieldCheck size={42} color="#FFFFFF" strokeWidth={2.2} />
+              <Image
+                source={require('../../../assets/logo.png')}
+                style={{ width: 68, height: 68, borderRadius: 16 }}
+                resizeMode="contain"
+              />
             </View>
-            <Text style={styles.brandTitle}>Bem-vindo!</Text>
+            <Text style={styles.brandTitle}>Brisoft Portaria</Text>
             <Text style={styles.brandSubtitle}>
               Faça login para acessar o sistema de controle de acesso.
             </Text>
@@ -206,7 +211,7 @@ export const LoginScreen: React.FC<{ onRegisterPress?: () => void }> = ({ onRegi
 
           {/* Rodapé institucional */}
           <Text style={styles.footerText}>
-            Grupo Combate Segurança e Tecnologia © 2026
+            Brisoft Portaria • Segurança e Tecnologia © 2026
           </Text>
         </View>
       </ScrollView>

@@ -1,5 +1,5 @@
 export const colors = {
-  // Paleta Combate Portaria Oficial (Tema Verde Esmeralda & Menta)
+  // Paleta Brisoft Portaria Oficial (Tema Verde Esmeralda & Menta)
   background: '#F4F7F5',      // Fundo sutilmente esverdeado e moderno
   surface: '#FFFFFF',         // Branco puro para os cards
   surfaceElevated: '#EDF5F0', // Fundo sutil para atalhos circulares e badges

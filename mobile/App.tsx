@@ -131,7 +131,7 @@ const AnimatedLoadingScreen: React.FC = () => {
         />
       </View>
 
-      <Text style={styles.loadingBrand}>Combate Portaria</Text>
+      <Text style={styles.loadingBrand}>Brisoft Portaria</Text>
       <Text style={styles.loadingTagline}>Controle de Acesso Inteligente</Text>
 
       {/* Animated progress bar */}

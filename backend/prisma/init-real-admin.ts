@@ -6,11 +6,11 @@ const prisma = new PrismaClient();
 async function main() {
   console.log('🛡️ Inicializando banco de dados com estrutura de produção real...');
 
-  const orgName = process.env.INITIAL_ORG_NAME || 'Grupo Combate Portaria';
-  const orgSlug = process.env.INITIAL_ORG_SLUG || 'combate-portaria';
-  const adminEmail = process.env.INITIAL_ADMIN_EMAIL || 'admin@grupocombate.com.br';
-  const adminPasswordRaw = process.env.INITIAL_ADMIN_PASSWORD || 'Combate@2026';
-  const conciergeEmail = process.env.INITIAL_CONCIERGE_EMAIL || 'porteiro@grupocombate.com.br';
+  const orgName = process.env.INITIAL_ORG_NAME || 'Brisoft Portaria';
+  const orgSlug = process.env.INITIAL_ORG_SLUG || 'brisoft-portaria';
+  const adminEmail = process.env.INITIAL_ADMIN_EMAIL || 'admin@brisoft.com.br';
+  const adminPasswordRaw = process.env.INITIAL_ADMIN_PASSWORD || 'Brisoft@2026';
+  const conciergeEmail = process.env.INITIAL_CONCIERGE_EMAIL || 'porteiro@brisoft.com.br';
   const conciergePasswordRaw = process.env.INITIAL_CONCIERGE_PASSWORD || 'Porteiro@2026';
 
   // 1. Organização Oficial

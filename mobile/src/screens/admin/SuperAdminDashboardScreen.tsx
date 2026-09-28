@@ -590,7 +590,7 @@ export const SuperAdminDashboardScreen: React.FC = () => {
               <View style={styles.recentOrgHeader}>
                 <View>
                   <Text style={styles.recentOrgName}>{org.name}</Text>
-                  <Text style={styles.recentOrgSlug}>{org.slug}.combateportaria.com</Text>
+                  <Text style={styles.recentOrgSlug}>{org.slug}.brisoftportaria.com</Text>
                 </View>
                 <View style={{ alignItems: 'flex-end' }}>
                   <View
@@ -1221,7 +1221,7 @@ export const SuperAdminDashboardScreen: React.FC = () => {
               <ShieldCheck size={20} color="#60A5FA" style={{ marginRight: 6 }} />
               <Text style={styles.superHeaderBadge}>PAINEL SAAS MASTER</Text>
             </View>
-            <Text style={styles.superHeaderTitle}>Combate Portaria</Text>
+            <Text style={styles.superHeaderTitle}>Brisoft Portaria</Text>
           </View>
 
           <TouchableOpacity style={styles.refreshIconBtn} onPress={onRefresh}>

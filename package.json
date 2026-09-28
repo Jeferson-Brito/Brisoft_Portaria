@@ -1,5 +1,5 @@
 {
-  "name": "combate-portaria",
+  "name": "brisoft-portaria",
   "version": "1.0.0",
   "private": true,
   "description": "Sistema Profissional de Controle de Acesso e Gestão de Visitantes com WhatsApp Baileys",
@@ -29,6 +29,6 @@
     "react-native",
     "fastify"
   ],
-  "author": "Grupo Combate",
+  "author": "Brisoft Tecnologia",
   "license": "UNLICENSED"
 }

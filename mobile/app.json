@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "Combate Portaria",
-    "slug": "combate-portaria",
+    "name": "Brisoft Portaria",
+    "slug": "brisoft-portaria",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -13,7 +13,7 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.grupocombate.portaria",
+      "bundleIdentifier": "com.brisoft.portaria",
       "infoPlist": {
         "NSCameraUsageDescription": "O aplicativo necessita de acesso à câmera para fotografar visitantes na portaria."
       }
@@ -24,7 +24,7 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#165337"
       },
-      "package": "com.grupocombate.portaria",
+      "package": "com.brisoft.portaria",
       "permissions": [
         "CAMERA",
         "READ_EXTERNAL_STORAGE",
@@ -41,7 +41,7 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "Permitir que o Combate Portaria tire fotos de visitantes."
+          "cameraPermission": "Permitir que o Brisoft Portaria tire fotos de visitantes."
         }
       ],
       [

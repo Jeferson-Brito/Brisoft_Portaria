@@ -10,20 +10,20 @@ import bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
 
-const SUPER_ADMIN_EMAIL = process.env.SUPER_ADMIN_EMAIL || 'superadmin@combateportaria.com.br';
+const SUPER_ADMIN_EMAIL = process.env.SUPER_ADMIN_EMAIL || 'superadmin@brisoftportaria.com.br';
 const SUPER_ADMIN_PASSWORD = process.env.SUPER_ADMIN_PASSWORD || 'SuperAdmin@2026!';
-const SUPER_ADMIN_NAME = process.env.SUPER_ADMIN_NAME || 'Administrador Combate Portaria';
+const SUPER_ADMIN_NAME = process.env.SUPER_ADMIN_NAME || 'Administrador Brisoft Portaria';
 
 async function main() {
   console.log('🔧 Criando usuário SUPER_ADMIN...');
 
   // Cria (ou usa) uma organização "system" para abrigar o super admin
   const systemOrg = await prisma.organization.upsert({
-    where: { slug: 'system-combate-portaria' },
+    where: { slug: 'system-brisoft-portaria' },
     update: {},
     create: {
-      name: 'Combate Portaria [SYSTEM]',
-      slug: 'system-combate-portaria',
+      name: 'Brisoft Portaria [SYSTEM]',
+      slug: 'system-brisoft-portaria',
       settings: JSON.stringify({ type: 'SYSTEM' }),
     },
   });

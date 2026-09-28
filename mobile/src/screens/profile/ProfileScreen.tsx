@@ -108,7 +108,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onBack }) => {
                 <ShieldCheck size={13} color="#2563EB" style={{ marginRight: 4 }} />
                 <Text style={styles.roleTagText}>{roleLabel}</Text>
               </View>
-              <Text style={styles.profileOrg}>{user?.organizationName || 'Combate Portaria'}</Text>
+              <Text style={styles.profileOrg}>{user?.organizationName || 'Brisoft Portaria'}</Text>
             </View>
           </View>
 

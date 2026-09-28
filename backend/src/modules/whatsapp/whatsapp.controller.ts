@@ -177,7 +177,7 @@ export class WhatsAppController {
       }
 
       const provider = whatsappService.getProvider(request.user.organizationId);
-      const message = text || '🔔 *Combate Portaria:* Teste de conectividade do WhatsApp realizado com sucesso!';
+      const message = text || '🔔 *Brisoft Portaria:* Teste de conectividade do WhatsApp realizado com sucesso!';
       const result = await provider.sendMessage(toPhone, message);
 
       return reply.status(200).send({
