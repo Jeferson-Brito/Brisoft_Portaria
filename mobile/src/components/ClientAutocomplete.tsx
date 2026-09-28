@@ -4,11 +4,10 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
-  FlatList,
   StyleSheet,
   ActivityIndicator,
 } from 'react-native';
-import { Search, Building, User, Phone, Check } from 'lucide-react-native';
+import { Search, Building, User, Phone, Check, RefreshCw } from 'lucide-react-native';
 import { colors } from '../theme/colors';
 import { api } from '../config/api';
 
@@ -28,7 +27,7 @@ export interface ClientDestinationItem {
 }
 
 interface ClientAutocompleteProps {
-  onSelectClient: (client: ClientDestinationItem, selectedDestinationId: string) => void;
+  onSelectClient: (client: ClientDestinationItem | null, selectedDestinationId: string) => void;
   selectedClientId?: string;
 }
 
@@ -41,9 +40,23 @@ export const ClientAutocomplete: React.FC<ClientAutocompleteProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   const [selectedItem, setSelectedItem] = useState<ClientDestinationItem | null>(null);
 
+  // Se o componente foi resetado pelo pai
   useEffect(() => {
+    if (!selectedClientId) {
+      setSelectedItem(null);
+    }
+  }, [selectedClientId]);
+
+  useEffect(() => {
+    const trimmed = query.trim();
+    if (trimmed.length === 0) {
+      setClients([]);
+      setIsLoading(false);
+      return;
+    }
+
     const delayDebounceFn = setTimeout(() => {
-      fetchClients(query);
+      fetchClients(trimmed);
     }, 250);
 
     return () => clearTimeout(delayDebounceFn);
@@ -55,7 +68,7 @@ export const ClientAutocomplete: React.FC<ClientAutocompleteProps> = ({
       const response = await api.get('/clients/search', {
         params: { q: searchQuery },
       });
-      setClients(response.data.data.clients || []);
+      setClients(response.data?.data?.clients || []);
     } catch (err) {
       console.warn('Erro ao buscar clientes:', err);
     } finally {
@@ -65,187 +78,320 @@ export const ClientAutocomplete: React.FC<ClientAutocompleteProps> = ({
 
   const handleSelect = (client: ClientDestinationItem) => {
     setSelectedItem(client);
+    setQuery('');
+    setClients([]);
     const primaryDestId = client.destinations[0]?.destination.id || '';
     onSelectClient(client, primaryDestId);
   };
 
+  const handleClearSelection = () => {
+    setSelectedItem(null);
+    setQuery('');
+    setClients([]);
+    onSelectClient(null, '');
+  };
+
   return (
     <View style={styles.container}>
-      <Text style={styles.label}>Buscar Destino / Cliente (Apartamento, Sala, Nome)</Text>
+      <Text style={styles.label}>Destino / Morador</Text>
 
-      {/* Campo de Busca Rápida */}
-      <View style={styles.searchBox}>
-        <Search size={20} color={colors.textSecondary} style={styles.searchIcon} />
-        <TextInput
-          style={styles.searchInput}
-          placeholder="Digite o número da unidade (ex: 8) ou nome..."
-          placeholderTextColor={colors.textMuted}
-          value={query}
-          onChangeText={setQuery}
-          autoCapitalize="none"
-        />
-        {isLoading && <ActivityIndicator size="small" color={colors.primaryLight} />}
-      </View>
-
-      {/* Lista de Resultados Rápidos (Autocomplete) */}
-      <FlatList
-        data={clients}
-        keyExtractor={(item) => item.id}
-        style={styles.list}
-        scrollEnabled={false}
-        keyboardShouldPersistTaps="handled"
-        ListEmptyComponent={
-          !isLoading ? (
-            <View style={styles.emptyBox}>
-              <Text style={styles.emptyText}>Nenhum cliente ou unidade encontrado.</Text>
+      {/* 1. SELEÇÃO ATIVA: CARD COMPACTO E MODERNO */}
+      {selectedItem ? (
+        <View style={styles.selectedCard}>
+          <View style={styles.selectedHeaderRow}>
+            <View style={styles.destinationBadge}>
+              <Building size={14} color="#165337" style={{ marginRight: 5 }} />
+              <Text style={styles.destinationBadgeText}>
+                {selectedItem.destinations.length > 0
+                  ? `${selectedItem.destinations[0].destination.name}${
+                      selectedItem.destinations[0].destination.block
+                        ? ` (${selectedItem.destinations[0].destination.block})`
+                        : ''
+                    }`
+                  : 'Unidade vinculada'}
+              </Text>
             </View>
-          ) : null
-        }
-        renderItem={({ item }) => {
-          const isSelected = selectedItem?.id === item.id || selectedClientId === item.id;
-          const destinationName =
-            item.destinations.length > 0
-              ? `${item.destinations[0].destination.name}${
-                  item.destinations[0].destination.block
-                    ? ` (${item.destinations[0].destination.block})`
-                    : ''
-                }`
-              : 'Sem unidade vinculada';
 
-          return (
             <TouchableOpacity
-              style={[styles.resultItem, isSelected && styles.resultItemSelected]}
-              onPress={() => handleSelect(item)}
+              style={styles.changeBtn}
+              onPress={handleClearSelection}
               activeOpacity={0.7}
             >
-              <View style={styles.itemHeader}>
-                <View style={styles.destinationBadge}>
-                  <Building size={14} color={colors.primaryLight} style={{ marginRight: 4 }} />
-                  <Text style={styles.destinationText}>{destinationName}</Text>
-                </View>
-
-                {isSelected && (
-                  <View style={styles.selectedBadge}>
-                    <Check size={14} color={colors.white} />
-                  </View>
-                )}
-              </View>
-
-              <View style={styles.clientDetails}>
-                <View style={styles.row}>
-                  <User size={14} color={colors.textSecondary} style={{ marginRight: 6 }} />
-                  <Text style={styles.clientName}>{item.name}</Text>
-                </View>
-                <View style={styles.row}>
-                  <Phone size={13} color={colors.textMuted} style={{ marginRight: 6 }} />
-                  <Text style={styles.clientPhone}>{item.whatsappNumber}</Text>
-                </View>
-              </View>
+              <RefreshCw size={12} color="#165337" style={{ marginRight: 4 }} />
+              <Text style={styles.changeBtnText}>Alterar</Text>
             </TouchableOpacity>
-          );
-        }}
-      />
+          </View>
+
+          <View style={styles.selectedBodyRow}>
+            <View style={styles.clientIconCircle}>
+              <User size={16} color="#165337" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.selectedClientName}>{selectedItem.name}</Text>
+              {selectedItem.whatsappNumber ? (
+                <View style={styles.phoneRow}>
+                  <Phone size={12} color="#64748B" style={{ marginRight: 4 }} />
+                  <Text style={styles.selectedClientPhone}>{selectedItem.whatsappNumber}</Text>
+                </View>
+              ) : null}
+            </View>
+            <View style={styles.checkIndicator}>
+              <Check size={14} color="#FFFFFF" strokeWidth={3} />
+            </View>
+          </View>
+        </View>
+      ) : (
+        /* 2. CAMPO DE BUSCA (QUANDO NÃO SELECIONADO) */
+        <View style={styles.searchSection}>
+          <View style={styles.searchBox}>
+            <Search size={18} color="#64748B" style={styles.searchIcon} />
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Digite o número da unidade ou nome..."
+              placeholderTextColor="#94A3B8"
+              value={query}
+              onChangeText={setQuery}
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+            {isLoading && <ActivityIndicator size="small" color="#165337" />}
+          </View>
+
+          {/* RESULTADOS DA BUSCA (APENAS QUANDO HOUVER DIGITAÇÃO) */}
+          {query.trim().length > 0 && (
+            <View style={styles.resultsContainer}>
+              {clients.length > 0 ? (
+                clients.slice(0, 5).map((item) => {
+                  const destinationName =
+                    item.destinations.length > 0
+                      ? `${item.destinations[0].destination.name}${
+                          item.destinations[0].destination.block
+                            ? ` (${item.destinations[0].destination.block})`
+                            : ''
+                        }`
+                      : 'Sem unidade';
+
+                  return (
+                    <TouchableOpacity
+                      key={item.id}
+                      style={styles.resultItem}
+                      onPress={() => handleSelect(item)}
+                      activeOpacity={0.7}
+                    >
+                      <View style={styles.resultItemHeader}>
+                        <View style={styles.resultDestBadge}>
+                          <Building size={12} color="#165337" style={{ marginRight: 4 }} />
+                          <Text style={styles.resultDestText}>{destinationName}</Text>
+                        </View>
+                      </View>
+
+                      <View style={styles.resultClientInfo}>
+                        <Text style={styles.resultClientName} numberOfLines={1}>
+                          {item.name}
+                        </Text>
+                        <Text style={styles.resultClientPhone}>
+                          {item.whatsappNumber}
+                        </Text>
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })
+              ) : !isLoading ? (
+                <View style={styles.emptyBox}>
+                  <Text style={styles.emptyText}>Nenhuma unidade ou morador encontrado.</Text>
+                </View>
+              ) : null}
+            </View>
+          )}
+        </View>
+      )}
     </View>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
-    marginVertical: 12,
+    marginVertical: 10,
   },
   label: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: colors.textSecondary,
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#165337',
     marginBottom: 8,
     textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    letterSpacing: 0.6,
   },
-  searchBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.surfaceElevated,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.borderLight,
-    paddingHorizontal: 14,
-    height: 52,
-    marginBottom: 10,
-  },
-  searchIcon: {
-    marginRight: 10,
-  },
-  searchInput: {
-    flex: 1,
-    color: colors.textPrimary,
-    fontSize: 15,
-  },
-  list: {
-    maxHeight: 320,
-  },
-  resultItem: {
-    backgroundColor: colors.surface,
-    borderRadius: 12,
+
+  // Card Selecionado (Elegante & Compacto)
+  selectedCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
     padding: 14,
-    marginBottom: 8,
-    borderWidth: 1,
-    borderColor: colors.border,
+    borderWidth: 1.5,
+    borderColor: '#165337',
+    shadowColor: '#165337',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    elevation: 2,
   },
-  resultItemSelected: {
-    borderColor: colors.primaryLight,
-    backgroundColor: 'rgba(37, 99, 235, 0.1)',
-  },
-  itemHeader: {
+  selectedHeaderRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: 10,
+    paddingBottom: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
   },
   destinationBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(96, 165, 250, 0.15)',
+    backgroundColor: '#EDF7ED',
+    paddingHorizontal: 9,
     paddingVertical: 4,
-    paddingHorizontal: 8,
-    borderRadius: 6,
+    borderRadius: 8,
   },
-  destinationText: {
+  destinationBadgeText: {
     fontSize: 13,
     fontWeight: '700',
-    color: colors.primaryLight,
+    color: '#165337',
   },
-  selectedBadge: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    backgroundColor: colors.statusAuthorized,
-    justifyContent: 'center',
+  changeBtn: {
+    flexDirection: 'row',
     alignItems: 'center',
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    borderRadius: 8,
   },
-  clientDetails: {
-    gap: 4,
+  changeBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#165337',
   },
-  row: {
+  selectedBodyRow: {
     flexDirection: 'row',
     alignItems: 'center',
   },
-  clientName: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: colors.textPrimary,
+  clientIconCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#EDF7ED',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
   },
-  clientPhone: {
-    fontSize: 13,
-    color: colors.textMuted,
+  selectedClientName: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  phoneRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 2,
+  },
+  selectedClientPhone: {
+    fontSize: 12,
+    color: '#64748B',
+    fontWeight: '500',
+  },
+  checkIndicator: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#165337',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 8,
+  },
+
+  // Campo de Busca
+  searchSection: {
+    position: 'relative',
+  },
+  searchBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    paddingHorizontal: 12,
+    height: 50,
+  },
+  searchIcon: {
+    marginRight: 8,
+  },
+  searchInput: {
+    flex: 1,
+    color: '#0F172A',
+    fontSize: 14,
+  },
+
+  // Resultados Dropdown
+  resultsContainer: {
+    marginTop: 8,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    padding: 6,
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    elevation: 3,
+  },
+  resultItem: {
+    paddingVertical: 10,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F8FAFC',
+  },
+  resultItemHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  resultDestBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#EDF7ED',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  resultDestText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#165337',
+  },
+  resultClientInfo: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  resultClientName: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#0F172A',
+    flex: 1,
+  },
+  resultClientPhone: {
+    fontSize: 12,
+    color: '#64748B',
+    marginLeft: 8,
   },
   emptyBox: {
-    padding: 16,
+    padding: 14,
     alignItems: 'center',
-    backgroundColor: colors.surface,
-    borderRadius: 10,
   },
   emptyText: {
-    color: colors.textMuted,
     fontSize: 13,
+    color: '#64748B',
   },
 });

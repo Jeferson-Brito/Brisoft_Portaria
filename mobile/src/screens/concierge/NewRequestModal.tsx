@@ -10,6 +10,7 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
+  StatusBar,
 } from 'react-native';
 import { X, Send, CircleCheck, ArrowRight, ShieldAlert } from 'lucide-react-native';
 import { colors } from '../../theme/colors';
@@ -48,7 +49,7 @@ export const NewRequestModal: React.FC<NewRequestModalProps> = ({
     notes: '',
   });
 
-  const handleSelectClient = (client: ClientDestinationItem, destId: string) => {
+  const handleSelectClient = (client: ClientDestinationItem | null, destId: string) => {
     setSelectedClient(client);
     setSelectedDestinationId(destId);
   };
@@ -139,22 +140,31 @@ export const NewRequestModal: React.FC<NewRequestModalProps> = ({
 
   return (
     <Modal visible={visible} animationType="slide" transparent={false} onRequestClose={onClose}>
+      <StatusBar barStyle="light-content" backgroundColor="#165337" />
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={styles.modalContainer}
       >
-        {/* Modal Header */}
+        {/* Modal Header Premium Verde Esmeralda */}
         <View style={styles.header}>
-          <Text style={styles.title}>
-            {step === 'form' ? '+ Nova Solicitação de Acesso' : 'Confirmação dos Dados'}
-          </Text>
-          <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
-            <X size={22} color={colors.textSecondary} />
-          </TouchableOpacity>
+          <View style={styles.headerWaveDecoration} />
+          <View style={styles.headerContentRow}>
+            <View>
+              <Text style={styles.headerSubtext}>
+                {step === 'form' ? 'Portaria e Controle' : 'Revisão'}
+              </Text>
+              <Text style={styles.title}>
+                {step === 'form' ? 'Nova Solicitação' : 'Confirmar Acesso'}
+              </Text>
+            </View>
+            <TouchableOpacity onPress={onClose} style={styles.closeBtn} activeOpacity={0.8}>
+              <X size={20} color="#FFFFFF" strokeWidth={2.5} />
+            </TouchableOpacity>
+          </View>
         </View>
 
         <ScrollView
-          contentContainerStyle={[styles.content, { paddingBottom: 160 }]}
+          contentContainerStyle={[styles.content, { paddingBottom: 32 }]}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
@@ -173,7 +183,7 @@ export const NewRequestModal: React.FC<NewRequestModalProps> = ({
               <TouchableOpacity
                 style={styles.advanceButton}
                 onPress={handleProceedToConfirmation}
-                activeOpacity={0.85}
+                activeOpacity={0.88}
               >
                 <Text style={styles.advanceButtonText}>Avançar para Confirmação</Text>
                 <ArrowRight size={20} color={colors.white} style={{ marginLeft: 8 }} />
@@ -256,40 +266,70 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
   },
   header: {
+    backgroundColor: '#165337',
+    paddingHorizontal: 20,
+    paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 24) + 14 : 52,
+    paddingBottom: 18,
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  headerWaveDecoration: {
+    position: 'absolute',
+    top: -45,
+    right: -35,
+    width: 200,
+    height: 200,
+    borderRadius: 100,
+    backgroundColor: 'rgba(180, 222, 196, 0.2)',
+  },
+  headerContentRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingTop: 48,
-    paddingBottom: 16,
-    backgroundColor: colors.surface,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    zIndex: 2,
+  },
+  headerSubtext: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#A7F3D0',
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+    marginBottom: 2,
   },
   title: {
-    fontSize: 16,
+    fontSize: 20,
     fontWeight: '800',
-    color: colors.textPrimary,
+    color: '#FFFFFF',
   },
   closeBtn: {
-    padding: 6,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: 'rgba(255, 255, 255, 0.22)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   content: {
-    padding: 20,
-    paddingBottom: 40,
+    padding: 18,
+    paddingBottom: 32,
   },
   advanceButton: {
-    backgroundColor: colors.primary,
-    borderRadius: 12,
-    height: 54,
+    backgroundColor: '#165337',
+    borderRadius: 14,
+    height: 52,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 20,
-    marginBottom: 20,
+    marginBottom: 10,
+    shadowColor: '#165337',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.25,
+    shadowRadius: 6,
+    elevation: 3,
   },
   advanceButtonText: {
-    color: colors.white,
+    color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '700',
   },

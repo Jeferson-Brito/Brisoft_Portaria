@@ -250,6 +250,15 @@ export const DashboardScreen: React.FC = () => {
     };
   }, [addListener, fetchSummaryAndRequests, fetchOrgProfile]);
 
+  // Reset da barra de ações compactas e botão voltar ao topo na troca de aba
+  useEffect(() => {
+    setShowCompactActions(false);
+    setShowScrollTop(false);
+    if (activeTab === 'dashboard') {
+      scrollRef.current?.scrollTo({ y: 0, animated: false });
+    }
+  }, [activeTab]);
+
   const handleRegisterEntry = (requestId: string, visitorName: string) => {
     setConfirmEntryModal({
       visible: true,
@@ -1003,7 +1012,10 @@ export const DashboardScreen: React.FC = () => {
           <View style={styles.compactActionsBar}>
             <TouchableOpacity
               style={styles.compactActionBtnPrimary}
-              onPress={() => setIsModalOpen(true)}
+              onPress={() => {
+                setShowCompactActions(false);
+                setIsModalOpen(true);
+              }}
               activeOpacity={0.85}
             >
               <Plus size={15} color="#FFFFFF" strokeWidth={2.5} />
@@ -1011,21 +1023,27 @@ export const DashboardScreen: React.FC = () => {
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={styles.compactActionBtnSecondaryAmber}
-              onPress={() => setActiveTab('preauthorizations')}
+              style={styles.compactActionBtnSecondary}
+              onPress={() => {
+                setShowCompactActions(false);
+                setActiveTab('preauthorizations');
+              }}
               activeOpacity={0.85}
             >
-              <CalendarCheck size={15} color="#D97706" />
-              <Text style={styles.compactActionBtnTextAmber}>Agendados</Text>
+              <CalendarCheck size={15} color="#165337" />
+              <Text style={styles.compactActionBtnTextSecondary}>Agendamento</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={styles.compactActionBtnSecondaryPurple}
-              onPress={() => setActiveTab('packages')}
+              style={styles.compactActionBtnSecondary}
+              onPress={() => {
+                setShowCompactActions(false);
+                setActiveTab('packages');
+              }}
               activeOpacity={0.85}
             >
-              <Package size={15} color="#7C3AED" />
-              <Text style={styles.compactActionBtnTextPurple}>Encomendas</Text>
+              <Package size={15} color="#165337" />
+              <Text style={styles.compactActionBtnTextSecondary}>Encomendas</Text>
               {packagesCount > 0 && (
                 <View style={styles.compactActionBadge}>
                   <Text style={styles.compactActionBadgeText}>{packagesCount}</Text>
@@ -1537,7 +1555,11 @@ export const DashboardScreen: React.FC = () => {
         {/* Botão Flutuante Voltar ao Topo */}
         <ScrollToTopButton
           visible={showScrollTop && activeTab === 'dashboard'}
-          onPress={() => scrollRef.current?.scrollTo({ y: 0, animated: true })}
+          onPress={() => {
+            scrollRef.current?.scrollTo({ y: 0, animated: true });
+            setShowCompactActions(false);
+            setShowScrollTop(false);
+          }}
           bottom={bottomInset + 65}
         />
       </View>
@@ -2314,13 +2336,18 @@ const styles = StyleSheet.create({
   },
   compactActionBtnPrimary: {
     flex: 1.2,
-    backgroundColor: '#2563EB',
+    backgroundColor: '#165337',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 8,
     paddingHorizontal: 10,
     borderRadius: 8,
+    shadowColor: '#165337',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 3,
+    elevation: 2,
   },
   compactActionBtnPrimaryText: {
     color: '#FFFFFF',
@@ -2328,9 +2355,11 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     marginLeft: 4,
   },
-  compactActionBtnSecondaryAmber: {
+  compactActionBtnSecondary: {
     flex: 1,
-    backgroundColor: '#FEF3C7',
+    backgroundColor: '#EDF7ED',
+    borderWidth: 1,
+    borderColor: '#C8E6C9',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -2338,30 +2367,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     borderRadius: 8,
   },
-  compactActionBtnTextAmber: {
-    color: '#92400E',
-    fontSize: 12,
-    fontWeight: '600',
-    marginLeft: 4,
-  },
-  compactActionBtnSecondaryPurple: {
-    flex: 1,
-    backgroundColor: '#EDE9FE',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 8,
-    paddingHorizontal: 8,
-    borderRadius: 8,
-  },
-  compactActionBtnTextPurple: {
-    color: '#5B21B6',
+  compactActionBtnTextSecondary: {
+    color: '#165337',
     fontSize: 12,
     fontWeight: '600',
     marginLeft: 4,
   },
   compactActionBadge: {
-    backgroundColor: '#7C3AED',
+    backgroundColor: '#165337',
     paddingHorizontal: 5,
     paddingVertical: 1,
     borderRadius: 8,
@@ -2373,42 +2386,6 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
 
-  // Filtro de Data & Badges
-  sectionCountBadge: {
-    backgroundColor: '#E2E8F0',
-    paddingHorizontal: 7,
-    paddingVertical: 2,
-    borderRadius: 10,
-    marginLeft: 8,
-  },
-  sectionCountBadgeText: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: '#334155',
-  },
-  dateFilterChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 14,
-  },
-  dateFilterChipActive: {
-    borderColor: '#93C5FD',
-    backgroundColor: '#EFF6FF',
-  },
-  dateFilterText: {
-    fontSize: 12,
-    color: '#64748B',
-    fontWeight: '600',
-  },
-  dateFilterTextActive: {
-    color: '#1D4ED8',
-    fontWeight: '700',
-  },
   modalBackdrop: {
     flex: 1,
     backgroundColor: 'rgba(15, 23, 42, 0.45)',

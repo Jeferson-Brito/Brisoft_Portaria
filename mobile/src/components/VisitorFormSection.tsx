@@ -158,14 +158,15 @@ export const VisitorFormSection: React.FC<VisitorFormSectionProps> = ({ data, on
       {/* 2. SEÇÃO VEÍCULO (Seção 12) */}
       <View style={styles.vehicleHeader}>
         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-          <Car size={20} color={colors.primaryLight} style={{ marginRight: 8 }} />
-          <Text style={styles.sectionHeader}>Possui Veículo?</Text>
+          <Car size={20} color="#165337" style={{ marginRight: 8 }} />
+          <Text style={styles.sectionHeaderVehicle}>Possui Veículo?</Text>
         </View>
         <Switch
           value={data.hasVehicle}
           onValueChange={(v) => updateField('hasVehicle', v)}
-          trackColor={{ false: colors.surfaceElevated, true: colors.primary }}
-          thumbColor={colors.white}
+          trackColor={{ false: '#CBD5E1', true: '#165337' }}
+          thumbColor={data.hasVehicle ? '#FFFFFF' : '#64748B'}
+          ios_backgroundColor="#CBD5E1"
         />
       </View>
 
@@ -322,8 +323,8 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
   },
   chipActive: {
-    backgroundColor: 'rgba(37, 99, 235, 0.2)',
-    borderColor: colors.primaryLight,
+    backgroundColor: '#EDF7ED',
+    borderColor: '#165337',
   },
   chipText: {
     fontSize: 12,
@@ -331,17 +332,26 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   chipTextActive: {
-    color: colors.primaryLight,
+    color: '#165337',
     fontWeight: '700',
   },
   vehicleHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginTop: 16,
-    paddingVertical: 8,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
+    marginTop: 18,
+    marginBottom: 10,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  sectionHeaderVehicle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#0F172A',
   },
   vehicleCard: {
     backgroundColor: colors.surface,
@@ -357,7 +367,7 @@ const styles = StyleSheet.create({
   captureButton: {
     backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: '#CBD5E1',
     borderStyle: 'dashed',
     borderRadius: 12,
     padding: 20,
@@ -366,7 +376,7 @@ const styles = StyleSheet.create({
   },
   captureText: {
     fontSize: 13,
-    color: colors.primaryLight,
+    color: '#165337',
     fontWeight: '600',
   },
   photoPreviewWrapper: {
@@ -378,7 +388,7 @@ const styles = StyleSheet.create({
     height: 140,
     borderRadius: 12,
     borderWidth: 2,
-    borderColor: colors.primaryLight,
+    borderColor: '#165337',
   },
   removePhotoButton: {
     position: 'absolute',
