@@ -334,7 +334,7 @@ export const DashboardScreen: React.FC = () => {
                 <Plus size={32} color="#FFFFFF" strokeWidth={3} />
               </View>
               <View style={{ flex: 1, marginLeft: 14 }}>
-                <Text style={styles.heroNewVisitTitle}>+ Nova Solicitação</Text>
+                <Text style={styles.heroNewVisitTitle}>Nova Solicitação</Text>
               </View>
               <ChevronRight size={24} color="#FFFFFF" />
             </TouchableOpacity>
@@ -444,7 +444,7 @@ export const DashboardScreen: React.FC = () => {
                   </Text>
                 </View>
               ) : (
-                /* Cards Compactos e Otimizados (Item 1) */
+                /* Cards Modernos e Profissionais de Solicitações */
                 filteredRequests.map((req) => {
                   const isPending = req.status === 'PENDING';
                   const isAuthorized = req.status === 'AUTHORIZED';
@@ -456,65 +456,110 @@ export const DashboardScreen: React.FC = () => {
                     minute: '2-digit',
                   });
 
-                  const clientName = req.client?.name || req.client?.ownerName || req.destination?.name || req.destination?.ownerName || 'Responsável';
+                  const visitorName = req.visitor?.name || 'Visitante';
+                  const clientName = req.client?.name || req.client?.ownerName || 'Morador';
+                  const destName = req.destination?.name
+                    ? `${req.destination.name}${req.destination.block ? ` - ${req.destination.block}` : ''}`
+                    : '';
+                  const reason = req.visitReason || req.visitorType || 'Visita';
 
                   return (
                     <TouchableOpacity
                       key={req.id}
                       style={[
-                        styles.compactCard,
-                        isPending && styles.compactCardPending,
-                        isAuthorized && styles.compactCardAuthorized,
-                        isEntered && styles.compactCardEntered,
-                        isDenied && styles.compactCardDenied,
+                        styles.accessCard,
+                        isPending && styles.accessCardPending,
+                        isAuthorized && styles.accessCardAuthorized,
+                        isEntered && styles.accessCardEntered,
+                        isDenied && styles.accessCardDenied,
                       ]}
                       onPress={() => setDetailModal({ visible: true, request: req })}
-                      activeOpacity={0.82}
+                      activeOpacity={0.85}
                     >
-                      <View style={styles.compactCardBody}>
-                        {/* Linha 1: Nome do Visitante + Badge de Status */}
-                        <View style={styles.compactCardHeader}>
-                          <Text style={styles.compactVisitorName} numberOfLines={1}>
-                            {req.visitor?.name || 'Visitante'}
+                      {/* Lado Esquerdo: Ícone / Avatar de Status */}
+                      <View
+                        style={[
+                          styles.accessCardIconBox,
+                          isPending && styles.accessCardIconBoxPending,
+                          isAuthorized && styles.accessCardIconBoxAuthorized,
+                          isEntered && styles.accessCardIconBoxEntered,
+                          isDenied && styles.accessCardIconBoxDenied,
+                        ]}
+                      >
+                        {isAuthorized ? (
+                          <CircleCheck size={22} color="#16A34A" />
+                        ) : isPending ? (
+                          <Clock size={22} color="#D97706" />
+                        ) : isEntered ? (
+                          <LogIn size={22} color="#2563EB" />
+                        ) : (
+                          <CircleX size={22} color="#DC2626" />
+                        )}
+                      </View>
+
+                      {/* Conteúdo Central */}
+                      <View style={styles.accessCardContent}>
+                        {/* Linha 1: Nome do Visitante + Badge */}
+                        <View style={styles.accessCardTopRow}>
+                          <Text style={styles.accessVisitorName} numberOfLines={1}>
+                            {visitorName}
                           </Text>
+
                           <View
                             style={[
-                              styles.compactBadge,
-                              isPending && styles.compactBadgePending,
-                              isAuthorized && styles.compactBadgeAuthorized,
-                              isEntered && styles.compactBadgeEntered,
-                              isDenied && styles.compactBadgeDenied,
+                              styles.accessBadge,
+                              isPending && styles.accessBadgePending,
+                              isAuthorized && styles.accessBadgeAuthorized,
+                              isEntered && styles.accessBadgeEntered,
+                              isDenied && styles.accessBadgeDenied,
                             ]}
                           >
                             <Text
                               style={[
-                                styles.compactBadgeText,
-                                isPending && styles.compactBadgeTextPending,
-                                isAuthorized && styles.compactBadgeTextAuthorized,
-                                isEntered && styles.compactBadgeTextEntered,
-                                isDenied && styles.compactBadgeTextDenied,
+                                styles.accessBadgeText,
+                                isPending && styles.accessBadgeTextPending,
+                                isAuthorized && styles.accessBadgeTextAuthorized,
+                                isEntered && styles.accessBadgeTextEntered,
+                                isDenied && styles.accessBadgeTextDenied,
                               ]}
                             >
                               {isPending
-                                ? 'AGUARDANDO'
+                                ? 'Aguardando'
                                 : isAuthorized
-                                ? 'AUTORIZADO'
+                                ? 'Autorizado'
                                 : isEntered
-                                ? 'NO LOCAL'
-                                : 'RECUSADO'}
+                                ? 'No Local'
+                                : 'Recusado'}
                             </Text>
                           </View>
                         </View>
 
-                        {/* Linha 2: Responsável que autorizou / vai autorizar + Horário */}
-                        <View style={styles.compactCardFooter}>
-                          <Text style={styles.compactClientName} numberOfLines={1}>
-                            Resp.: <Text style={styles.compactClientHighlight}>{clientName}</Text>
-                          </Text>
+                        {/* Linha 2: Morador & Unidade */}
+                        <View style={styles.accessCardMiddleRow}>
+                          <View style={styles.accessClientTag}>
+                            <User size={12} color="#64748B" style={{ marginRight: 4 }} />
+                            <Text style={styles.accessClientText} numberOfLines={1}>
+                              Resp.: <Text style={styles.accessClientHighlight}>{clientName}</Text>
+                            </Text>
+                          </View>
 
-                          <View style={styles.compactTimeRow}>
+                          {destName ? (
+                            <View style={styles.accessDestTag}>
+                              <Building2 size={12} color="#475569" style={{ marginRight: 4 }} />
+                              <Text style={styles.accessDestText} numberOfLines={1}>{destName}</Text>
+                            </View>
+                          ) : null}
+                        </View>
+
+                        {/* Linha 3: Motivo / Tag + Horário */}
+                        <View style={styles.accessCardBottomRow}>
+                          <View style={styles.accessReasonBadge}>
+                            <Text style={styles.accessReasonText}>{reason}</Text>
+                          </View>
+
+                          <View style={styles.accessTimeBox}>
                             <Clock size={11} color="#94A3B8" style={{ marginRight: 3 }} />
-                            <Text style={styles.compactTimeText}>{timeFormatted}</Text>
+                            <Text style={styles.accessTimeText}>{timeFormatted}</Text>
                           </View>
                         </View>
                       </View>
@@ -1165,110 +1210,169 @@ const styles = StyleSheet.create({
     lineHeight: 16,
   },
 
-  // Cards Compactos de Solicitação (Item 1: caber 4 a 5 na tela)
-  compactCard: {
+  // Cards de Solicitação de Acesso (Modernos & Profissionais)
+  accessCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    marginBottom: 8,
+    borderRadius: 16,
+    padding: 13,
+    marginBottom: 10,
     borderWidth: 1,
     borderColor: '#E2E8F0',
     borderLeftWidth: 4,
+    borderLeftColor: '#94A3B8',
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.03,
-    shadowRadius: 2,
-    elevation: 1,
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 6,
+    elevation: 2,
   },
-  compactCardPending: {
-    borderLeftColor: '#D97706',
+  accessCardPending: {
+    borderLeftColor: '#F59E0B',
   },
-  compactCardAuthorized: {
-    borderLeftColor: '#16A34A',
+  accessCardAuthorized: {
+    borderLeftColor: '#10B981',
   },
-  compactCardEntered: {
-    borderLeftColor: '#2563EB',
+  accessCardEntered: {
+    borderLeftColor: '#3B82F6',
   },
-  compactCardDenied: {
-    borderLeftColor: '#DC2626',
+  accessCardDenied: {
+    borderLeftColor: '#EF4444',
   },
-  compactCardBody: {
-    flex: 1,
-    paddingRight: 8,
-  },
-  compactCardHeader: {
-    flexDirection: 'row',
+  accessCardIconBox: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
     alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 3,
+    justifyContent: 'center',
+    marginRight: 12,
+    backgroundColor: '#F8FAFC',
   },
-  compactVisitorName: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#0F172A',
-    flex: 1,
-    marginRight: 6,
-  },
-  compactBadge: {
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
-  },
-  compactBadgePending: {
+  accessCardIconBoxPending: {
     backgroundColor: '#FEF3C7',
   },
-  compactBadgeAuthorized: {
+  accessCardIconBoxAuthorized: {
     backgroundColor: '#DCFCE7',
   },
-  compactBadgeEntered: {
+  accessCardIconBoxEntered: {
     backgroundColor: '#DBEAFE',
   },
-  compactBadgeDenied: {
+  accessCardIconBoxDenied: {
     backgroundColor: '#FEE2E2',
   },
-  compactBadgeText: {
-    fontSize: 9,
-    fontWeight: '800',
-    letterSpacing: 0.3,
+  accessCardContent: {
+    flex: 1,
   },
-  compactBadgeTextPending: {
-    color: '#D97706',
-  },
-  compactBadgeTextAuthorized: {
-    color: '#16A34A',
-  },
-  compactBadgeTextEntered: {
-    color: '#2563EB',
-  },
-  compactBadgeTextDenied: {
-    color: '#DC2626',
-  },
-  compactCardFooter: {
+  accessCardTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    marginBottom: 5,
   },
-  compactClientName: {
-    fontSize: 12,
-    color: '#64748B',
+  accessVisitorName: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#0F172A',
     flex: 1,
     marginRight: 8,
   },
-  compactClientHighlight: {
-    fontWeight: '700',
-    color: '#1E293B',
+  accessBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  compactTimeRow: {
+  accessBadgePending: {
+    backgroundColor: '#FEF3C7',
+  },
+  accessBadgeAuthorized: {
+    backgroundColor: '#DCFCE7',
+  },
+  accessBadgeEntered: {
+    backgroundColor: '#DBEAFE',
+  },
+  accessBadgeDenied: {
+    backgroundColor: '#FEE2E2',
+  },
+  accessBadgeText: {
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.2,
+  },
+  accessBadgeTextPending: {
+    color: '#B45309',
+  },
+  accessBadgeTextAuthorized: {
+    color: '#15803D',
+  },
+  accessBadgeTextEntered: {
+    color: '#1D4ED8',
+  },
+  accessBadgeTextDenied: {
+    color: '#B91C1C',
+  },
+  accessCardMiddleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 6,
+  },
+  accessDestTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  accessDestText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#334155',
+  },
+  accessClientTag: {
     flexDirection: 'row',
     alignItems: 'center',
   },
-  compactTimeText: {
+  accessClientText: {
+    fontSize: 12,
+    color: '#64748B',
+    fontWeight: '500',
+  },
+  accessClientHighlight: {
+    fontWeight: '700',
+    color: '#1E293B',
+  },
+  accessCardBottomRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 2,
+  },
+  accessReasonBadge: {
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    paddingHorizontal: 7,
+    paddingVertical: 1.5,
+    borderRadius: 6,
+  },
+  accessReasonText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#64748B',
+  },
+  accessTimeBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  accessTimeText: {
     fontSize: 11,
     color: '#94A3B8',
+    fontWeight: '500',
   },
   compactEntryBtn: {
     flexDirection: 'row',
