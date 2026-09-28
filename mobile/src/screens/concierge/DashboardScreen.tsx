@@ -11,7 +11,6 @@ import {
   Alert,
   Modal,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   Clock,
   CircleCheck,
@@ -286,8 +285,8 @@ export const DashboardScreen: React.FC = () => {
     }
   };
 
-  const topInset = Math.max(insets.top, Platform.OS === 'android' ? (StatusBar.currentHeight || 28) : 0) + 14;
-  const bottomInset = Math.max(insets.bottom, Platform.OS === 'android' ? 28 : 12);
+  const topInset = Math.max(insets.top, Platform.OS === 'android' ? (StatusBar.currentHeight || 24) : 0);
+  const bottomInset = insets.bottom > 0 ? insets.bottom : (Platform.OS === 'android' ? 8 : 6);
 
   const renderContent = () => {
     if (activeTab === 'profile') {
@@ -428,7 +427,7 @@ export const DashboardScreen: React.FC = () => {
     return (
       <View style={{ flex: 1, backgroundColor: '#F4F7F5' }}>
         {/* Cabeçalho FIXO no Topo com Onda Orgânica Suave */}
-        <View style={[styles.header, { paddingTop: topInset + 6 }]}>
+        <View style={[styles.header, { paddingTop: topInset + 8 }]}>
           <View style={styles.headerWaveDecoration} />
 
           <View style={styles.headerTopRow}>
@@ -1063,7 +1062,7 @@ export const DashboardScreen: React.FC = () => {
   const isConcierge = user?.role === 'CONCIERGE';
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <View style={styles.safeArea}>
       <StatusBar barStyle="dark-content" backgroundColor="#F4F7F5" />
 
       <View style={styles.container}>
@@ -1522,7 +1521,7 @@ export const DashboardScreen: React.FC = () => {
           bottom={bottomInset + 65}
         />
       </View>
-    </SafeAreaView>
+    </View>
   );
 };
 
