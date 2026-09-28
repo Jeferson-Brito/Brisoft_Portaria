@@ -436,11 +436,6 @@ export const DashboardScreen: React.FC = () => {
                 <Text style={styles.greetingSubtitle}>
                   {orgProfile.companyName || 'Grupo Combate Portaria'}
                 </Text>
-                <View style={styles.onlineBadgeRow}>
-                  <View style={styles.onlineDot} />
-                  <Text style={styles.onlineText}>Online</Text>
-                  <ChevronRight size={13} color="#165337" />
-                </View>
               </View>
             </TouchableOpacity>
 
@@ -502,32 +497,22 @@ export const DashboardScreen: React.FC = () => {
               </View>
               <View style={{ flex: 1, marginLeft: 14 }}>
                 <Text style={styles.heroNewVisitTitle}>Nova Solicitação</Text>
-                <Text style={styles.heroNewVisitSubtitle}>
-                  Solicite autorizações, visitantes e entregas
-                </Text>
               </View>
               <ChevronRight size={22} color="#FFFFFF" />
             </TouchableOpacity>
 
-            {/* Cards Lado a Lado: Agendados & Encomendas */}
+            {/* Cards Lado a Lado: Agendamento & Encomendas Centralizados */}
             <View style={styles.secondaryCardsRow}>
-              {/* Card Agendados */}
+              {/* Card Agendamento */}
               <TouchableOpacity
                 style={styles.secondaryCard}
                 onPress={() => setActiveTab('preauthorizations')}
                 activeOpacity={0.85}
               >
-                <View style={styles.secondaryCardTopRow}>
-                  <View style={styles.secondaryIconCircle}>
-                    <CalendarCheck size={22} color="#165337" />
-                  </View>
-                  <ChevronRight size={16} color="#94A3B8" />
+                <View style={styles.secondaryIconCircle}>
+                  <CalendarCheck size={26} color="#165337" />
                 </View>
-                <Text style={styles.secondaryCardNumber}>
-                  {summary.authorizedCount > 0 ? summary.authorizedCount : 2}
-                </Text>
-                <Text style={styles.secondaryCardTitle}>Agendados</Text>
-                <Text style={styles.secondaryCardSubtitle}>Pré-autorizações próximas</Text>
+                <Text style={styles.secondaryCardTitle}>Agendamento</Text>
               </TouchableOpacity>
 
               {/* Card Encomendas */}
@@ -536,17 +521,10 @@ export const DashboardScreen: React.FC = () => {
                 onPress={() => setActiveTab('packages')}
                 activeOpacity={0.85}
               >
-                <View style={styles.secondaryCardTopRow}>
-                  <View style={styles.secondaryIconCircle}>
-                    <Package size={22} color="#165337" />
-                  </View>
-                  <ChevronRight size={16} color="#94A3B8" />
+                <View style={styles.secondaryIconCircle}>
+                  <Package size={26} color="#165337" />
                 </View>
-                <Text style={styles.secondaryCardNumber}>
-                  {packagesCount > 0 ? packagesCount : 4}
-                </Text>
                 <Text style={styles.secondaryCardTitle}>Encomendas</Text>
-                <Text style={styles.secondaryCardSubtitle}>Aguardando retirada</Text>
               </TouchableOpacity>
             </View>
 
@@ -554,9 +532,6 @@ export const DashboardScreen: React.FC = () => {
             <View style={styles.listSectionContainer}>
               <View style={styles.sectionHeaderRow}>
                 <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                  <View style={styles.sectionIconSquare}>
-                    <List size={18} color="#FFFFFF" strokeWidth={2.4} />
-                  </View>
                   <Text style={styles.sectionTitle}>Solicitações</Text>
                   <View style={styles.sectionCountBadge}>
                     <Text style={styles.sectionCountBadgeText}>{filteredList.length}</Text>
@@ -602,8 +577,13 @@ export const DashboardScreen: React.FC = () => {
                 </TouchableOpacity>
               </View>
 
-              {/* Barra de Filtros: Todos, Aguardando, Autorizados, Encomendas, No Local */}
-              <View style={styles.filterPillsRow}>
+              {/* Barra de Filtros com Rolagem Horizontal */}
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.filterPillsScroll}
+                style={styles.filterPillsContainer}
+              >
                 {[
                   { key: 'ALL', label: 'Todos', count: unifiedList.length },
                   { key: 'PENDING', label: 'Aguardando', count: pendingTotal },
@@ -650,7 +630,7 @@ export const DashboardScreen: React.FC = () => {
                     </TouchableOpacity>
                   );
                 })}
-              </View>
+              </ScrollView>
 
               {isLoadingRequests && unifiedList.length === 0 ? (
                 <View style={styles.loadingContainer}>
@@ -1743,7 +1723,10 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#FFFFFF',
     borderRadius: 16,
-    padding: 16,
+    paddingVertical: 18,
+    paddingHorizontal: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
     borderWidth: 1,
     borderColor: '#E2E8F0',
     shadowColor: '#0F172A',
@@ -1752,52 +1735,20 @@ const styles = StyleSheet.create({
     shadowRadius: 6,
     elevation: 2,
   },
-  secondaryCardTopRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
   secondaryIconCircle: {
-    width: 42,
-    height: 42,
-    borderRadius: 12,
+    width: 48,
+    height: 48,
+    borderRadius: 14,
     backgroundColor: '#EDF7ED',
     alignItems: 'center',
     justifyContent: 'center',
-    position: 'relative',
-  },
-  secondaryCardNumber: {
-    fontSize: 24,
-    fontWeight: '800',
-    color: '#0F172A',
-    marginBottom: 2,
-  },
-  secondaryBadge: {
-    position: 'absolute',
-    top: -2,
-    right: -4,
-    backgroundColor: '#165337',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 10,
-    borderWidth: 2,
-    borderColor: colors.white,
-  },
-  secondaryBadgeText: {
-    color: colors.white,
-    fontSize: 10,
-    fontWeight: '800',
+    marginBottom: 8,
   },
   secondaryCardTitle: {
     fontSize: 15,
     fontWeight: '700',
     color: '#0F172A',
-  },
-  secondaryCardSubtitle: {
-    fontSize: 12,
-    color: '#64748B',
-    marginTop: 2,
+    textAlign: 'center',
   },
 
   // Seção da Lista de Solicitações com Filtro
@@ -1809,15 +1760,6 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 12,
-  },
-  sectionIconSquare: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
-    backgroundColor: '#165337',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 8,
   },
   sectionTitle: {
     fontSize: 17,
@@ -1860,11 +1802,14 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
 
-  // Barra de Filtros
-  filterPillsRow: {
-    flexDirection: 'row',
-    gap: 6,
+  // Barra de Filtros com Rolagem Horizontal
+  filterPillsContainer: {
     marginBottom: 12,
+  },
+  filterPillsScroll: {
+    flexDirection: 'row',
+    gap: 8,
+    paddingRight: 16,
   },
   filterChip: {
     flexDirection: 'row',
