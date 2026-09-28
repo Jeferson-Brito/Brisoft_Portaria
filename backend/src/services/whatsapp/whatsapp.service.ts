@@ -318,10 +318,12 @@ export class WhatsAppService {
         visitorType: req.visitorType,
         visitReason: req.visitReason,
         arrivalFormattedTime: `${req.createdAt.toLocaleDateString('pt-BR', {
+          timeZone: 'America/Sao_Paulo',
           day: '2-digit',
           month: '2-digit',
           year: 'numeric',
         })} às ${req.createdAt.toLocaleTimeString('pt-BR', {
+          timeZone: 'America/Sao_Paulo',
           hour: '2-digit',
           minute: '2-digit',
         })}`,

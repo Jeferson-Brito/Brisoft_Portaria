@@ -55,31 +55,35 @@ export class VisitRequestService {
       throw new AppError('O motivo da visita é obrigatório.', 400, 'VISIT_REASON_REQUIRED');
     }
 
-    // Valida cliente
-    const client = await prisma.client.findFirst({
-      where: { id: data.clientId, organizationId: data.organizationId, deletedAt: null },
-    });
+    // Validações em paralelo com Promise.all para máxima performance de resposta
+    const [client, destination, visitor, reqCount] = await Promise.all([
+      prisma.client.findFirst({
+        where: { id: data.clientId, organizationId: data.organizationId, deletedAt: null },
+      }),
+      prisma.destination.findFirst({
+        where: { id: data.destinationId, organizationId: data.organizationId, deletedAt: null },
+      }),
+      prisma.visitor.findFirst({
+        where: { id: data.visitorId, organizationId: data.organizationId },
+      }),
+      prisma.visitRequest.count({
+        where: { organizationId: data.organizationId },
+      }),
+    ]);
+
     if (!client) {
       throw new AppError('Cliente responsável não encontrado.', 404, 'CLIENT_NOT_FOUND');
     }
-
-    // Valida destino
-    const destination = await prisma.destination.findFirst({
-      where: { id: data.destinationId, organizationId: data.organizationId, deletedAt: null },
-    });
     if (!destination) {
       throw new AppError('Destino/unidade não encontrado.', 404, 'DESTINATION_NOT_FOUND');
     }
-
-    // Valida visitante
-    const visitor = await prisma.visitor.findFirst({
-      where: { id: data.visitorId, organizationId: data.organizationId },
-    });
     if (!visitor) {
       throw new AppError('Visitante não encontrado.', 404, 'VISITOR_NOT_FOUND');
     }
 
-    const code = await this.generateRequestCode(data.organizationId);
+    const year = new Date().getFullYear();
+    const seq = String(reqCount + 1).padStart(6, '0');
+    const code = `REQ-${year}-${seq}`;
 
     const visitRequest = await prisma.visitRequest.create({
       data: {

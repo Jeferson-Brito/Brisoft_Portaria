@@ -20,7 +20,7 @@ import { VisitorFormSection, VisitorFormData } from '../../components/VisitorFor
 interface NewRequestModalProps {
   visible: boolean;
   onClose: () => void;
-  onSuccess: () => void;
+  onSuccess: (newReq?: any) => void;
 }
 
 export const NewRequestModal: React.FC<NewRequestModalProps> = ({
@@ -106,12 +106,7 @@ export const NewRequestModal: React.FC<NewRequestModalProps> = ({
         notes: visitorForm.notes || undefined,
       });
 
-      const code = requestRes.data.data.visitRequest.code;
-
-      Alert.alert(
-        'Solicitação Enviada! 🚀',
-        `A solicitação ${code} foi registrada com sucesso. Uma notificação foi despachada para o WhatsApp do morador.`
-      );
+      const createdReq = requestRes.data?.data?.visitRequest;
 
       // Reset form
       setStep('form');
@@ -132,7 +127,7 @@ export const NewRequestModal: React.FC<NewRequestModalProps> = ({
         notes: '',
       });
 
-      onSuccess();
+      onSuccess(createdReq);
       onClose();
     } catch (err: any) {
       const msg = err.response?.data?.error?.message || 'Falha ao registrar solicitação na portaria.';

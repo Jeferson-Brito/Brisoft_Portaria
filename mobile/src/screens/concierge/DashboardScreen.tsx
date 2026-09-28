@@ -168,8 +168,12 @@ export const DashboardScreen: React.FC = () => {
 
   const { addListener } = useRealtime();
 
+  const isFetchingRef = useRef(false);
+
   const fetchSummaryAndRequests = useCallback(async () => {
+    if (isFetchingRef.current) return;
     try {
+      isFetchingRef.current = true;
       setIsLoadingRequests(true);
       const [summaryRes, pkgsPendingRes, pkgsHistoryRes, historyRes] = await Promise.allSettled([
         api.get('/visit-requests/summary'),
@@ -206,6 +210,7 @@ export const DashboardScreen: React.FC = () => {
     } catch (err) {
       console.warn('Erro ao atualizar dashboard:', err);
     } finally {
+      isFetchingRef.current = false;
       setIsLoadingRequests(false);
     }
   }, []);
@@ -1213,7 +1218,11 @@ export const DashboardScreen: React.FC = () => {
         <NewRequestModal
           visible={isModalOpen}
           onClose={() => setIsModalOpen(false)}
-          onSuccess={() => {
+          onSuccess={(newReq?: any) => {
+            if (newReq) {
+              setRecentRequests((prev) => [newReq, ...prev.filter((r) => r.id !== newReq.id)]);
+              setSummary((prev) => ({ ...prev, pendingCount: prev.pendingCount + 1 }));
+            }
             fetchSummaryAndRequests();
             setActiveTab('pending');
           }}

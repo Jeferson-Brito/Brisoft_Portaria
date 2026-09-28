@@ -453,7 +453,7 @@ export class BaileysProvider implements IWhatsAppProvider {
       cliente: data.clientName,
       visitante: data.visitorName,
       motivo: 'Lembrete de liberação',
-      horario: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+      horario: new Date().toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit' }),
       codigo: data.requestCode,
     });
 
