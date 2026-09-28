@@ -244,7 +244,11 @@ export class PackagesService {
     const destText = `${pkg.destination.name}${pkg.destination.block ? ' - ' + pkg.destination.block : ''}`;
     const msg = `🔔 *LEMBRETE DE ENCOMENDA NA PORTARIA*\n\nOlá, *${pkg.client.name}*!\nSua encomenda *${pkg.code}* (${pkg.carrier || 'Pacote'}) segue aguardando retirada na portaria de *${destText}*.\n\n• 🔑 *CÓDIGO DE RETIRADA:* *${pkg.pickupCode}*`;
 
-    await whatsappService.sendMessage(organizationId, pkg.client.whatsappNumber, msg);
+    if (pkg.photoUrl) {
+      await whatsappService.sendImageMessage(organizationId, pkg.client.whatsappNumber, pkg.photoUrl, msg);
+    } else {
+      await whatsappService.sendMessage(organizationId, pkg.client.whatsappNumber, msg);
+    }
     return { success: true, message: 'Código reenviado com sucesso.' };
   }
 }

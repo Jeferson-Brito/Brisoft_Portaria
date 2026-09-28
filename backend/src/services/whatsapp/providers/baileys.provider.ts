@@ -45,6 +45,7 @@ export class BaileysProvider implements IWhatsAppProvider {
   private saveTimeout: NodeJS.Timeout | null = null;
   private isConnecting = false;
   private messageStore = new Map<string, proto.IMessage>();
+  private jidCache = new Map<string, string>();
   private msgRetryCounterCache = new MemoryCache();
 
   private getStoreFilePath(): string {
@@ -58,7 +59,12 @@ export class BaileysProvider implements IWhatsAppProvider {
       const filePath = this.getStoreFilePath();
       if (fs.existsSync(filePath)) {
         const raw = fs.readFileSync(filePath, 'utf8');
-        const parsed = JSON.parse(raw);
+        const parsed = JSON.parse(raw, (key, value) => {
+          if (value && typeof value === 'object' && value.type === 'Buffer' && Array.isArray(value.data)) {
+            return Buffer.from(value.data);
+          }
+          return value;
+        });
         for (const [id, msg] of Object.entries(parsed)) {
           this.messageStore.set(id, msg as proto.IMessage);
         }
@@ -298,6 +304,15 @@ export class BaileysProvider implements IWhatsAppProvider {
         if (remoteJid.endsWith('@g.us')) continue; // Ignora grupos de WhatsApp
 
         const fromPhone = remoteJid.replace(/[^0-9]/g, '');
+        if (fromPhone) {
+          this.jidCache.set(fromPhone, remoteJid);
+          if (fromPhone.startsWith('55') && fromPhone.length === 12) {
+            this.jidCache.set(`${fromPhone.slice(0, 4)}9${fromPhone.slice(4)}`, remoteJid);
+          }
+          if (fromPhone.startsWith('55') && fromPhone.length === 13 && fromPhone[4] === '9') {
+            this.jidCache.set(`${fromPhone.slice(0, 4)}${fromPhone.slice(5)}`, remoteJid);
+          }
+        }
 
         let message = msg.message;
         // Desempacota mensagens encapsuladas (ephemeralMessage, viewOnce, editedMessage, documentWithCaption)
@@ -400,7 +415,18 @@ export class BaileysProvider implements IWhatsAppProvider {
   }
 
   private async resolveJid(phone: string): Promise<string> {
+    if (phone.includes('@')) {
+      return phone;
+    }
+
     const clean = phone.replace(/\D/g, '');
+
+    // Se já temos o JID ativo do contato através de uma interação recente, usa diretamente!
+    if (this.jidCache.has(clean)) {
+      const cached = this.jidCache.get(clean)!;
+      console.log(`📱 [Baileys] JID recuperado do cache de interação recente para ${clean}: ${cached}`);
+      return cached;
+    }
 
     if (this.sock) {
       try {
@@ -507,13 +533,29 @@ export class BaileysProvider implements IWhatsAppProvider {
     const text = parseMessageTemplate(data.customTemplate || DEFAULT_REMINDER_TEMPLATE, {
       cliente: data.clientName,
       visitante: data.visitorName,
-      motivo: 'Lembrete de liberação',
+      empresa: data.visitorCompany || 'Não informada',
+      tipo: data.visitorType || 'Visitante',
+      motivo: data.visitReason || 'Lembrete de liberação',
       horario: new Date().toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit' }),
+      veiculo: data.vehicleModel || 'Nenhum',
+      placa: data.vehiclePlate || '',
       codigo: data.requestCode,
+      observacao: data.notes || '',
       operador: data.conciergeName,
     });
 
-    console.log(`🚀 [Baileys] Enviando lembrete para ${data.clientName} (JID: ${jid})...`);
+    if (data.photoUrl) {
+      console.log(`🚀 [Baileys] Enviando lembrete COM FOTO para ${data.clientName} (JID: ${jid})...`);
+      try {
+        const imgResult = await this.sendImageMessage(jid, data.photoUrl, text);
+        console.log(`✅ [Baileys] Lembrete com foto enviado com sucesso! ID: ${imgResult.messageId}`);
+        return imgResult;
+      } catch (imgErr: any) {
+        console.warn(`⚠️ [Baileys] Falha ao enviar foto no lembrete (${imgErr?.message || imgErr}). Enviando como texto...`);
+      }
+    }
+
+    console.log(`🚀 [Baileys] Enviando lembrete de texto para ${data.clientName} (JID: ${jid})...`);
     return await this.sendMessage(jid, text);
   }
 

@@ -359,6 +359,7 @@ export class WhatsAppService {
       include: {
         client: true,
         visitor: true,
+        vehicle: true,
         conciergeUser: { select: { id: true, name: true } },
       },
     });
@@ -379,8 +380,15 @@ export class WhatsAppService {
         clientName: req.client.name,
         clientPhone: req.client.whatsappNumber,
         visitorName: req.visitor.name,
+        visitorCompany: req.visitor.company || 'Não informada',
+        visitorType: req.visitorType,
+        visitReason: req.visitReason,
+        vehicleModel: req.vehicle ? `${req.vehicle.model}` : 'Nenhum',
+        vehiclePlate: req.vehicle?.licensePlate || undefined,
         requestCode: req.code,
         customTemplate: template?.content,
+        photoUrl: req.visitor.photoUrl || undefined,
+        notes: req.notes || undefined,
         conciergeName: req.conciergeUser?.name || 'Portaria',
       });
     } catch (err: any) {

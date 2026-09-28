@@ -31,6 +31,13 @@ export interface ReminderMessageData {
   requestCode: string;
   customTemplate?: string;
   conciergeName?: string;
+  photoUrl?: string;
+  notes?: string;
+  visitorCompany?: string;
+  visitorType?: string;
+  visitReason?: string;
+  vehicleModel?: string;
+  vehiclePlate?: string;
 }
 
 export interface IncomingMessageEvent {
