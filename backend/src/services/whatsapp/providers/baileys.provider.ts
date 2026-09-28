@@ -606,11 +606,12 @@ export class BaileysProvider implements IWhatsAppProvider {
 
         // 2. Gera thumbnail minúsculo (~1KB) embutido diretamente no frame criptográfico
         // Isso permite que o app do WhatsApp renderize o preview imediatamente sem travar em "Aguardando mensagem"
-        thumbnailBuffer = await sharp(imageContent)
+        const thumb = await sharp(imageContent)
           .resize(72, 72, { fit: 'inside' })
           .jpeg({ quality: 40 })
           .toBuffer();
-        console.log(`⚡ [Baileys] Foto otimizada com sharp (${optimized.length} bytes, thumb: ${thumbnailBuffer.length} bytes)`);
+        thumbnailBuffer = thumb;
+        console.log(`⚡ [Baileys] Foto otimizada com sharp (${optimized.length} bytes, thumb: ${thumb.length} bytes)`);
       } catch (sharpErr: any) {
         console.warn('⚠️ [Baileys] Erro ao otimizar imagem com sharp:', sharpErr?.message || sharpErr);
       }
