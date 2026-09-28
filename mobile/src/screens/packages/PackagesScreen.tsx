@@ -41,6 +41,7 @@ import { api } from '../../config/api';
 import { AppHeader } from '../../components/AppHeader';
 import { ScrollToTopButton } from '../../components/ScrollToTopButton';
 import { ClientAutocomplete, ClientDestinationItem } from '../../components/ClientAutocomplete';
+import { getPhotoUri } from '../../utils/photo';
 
 interface PackagesScreenProps {
   onBack?: () => void;
@@ -443,10 +444,10 @@ export const PackagesScreen: React.FC<PackagesScreenProps> = ({ onBack }) => {
                 {item.photoUrl && (
                   <TouchableOpacity
                     style={styles.photoPreviewRow}
-                    onPress={() => setPreviewPhotoUrl(item.photoUrl)}
+                    onPress={() => setPreviewPhotoUrl(getPhotoUri(item.photoUrl))}
                     activeOpacity={0.8}
                   >
-                    <Image source={{ uri: item.photoUrl }} style={styles.thumbImage} />
+                    <Image source={{ uri: getPhotoUri(item.photoUrl) || '' }} style={styles.thumbImage} />
                     <View style={{ marginLeft: 10, flex: 1 }}>
                       <Text style={styles.photoLabel}>📸 Foto da Encomenda Salva</Text>
                       <Text style={styles.photoHint}>Toque para ampliar comprovante</Text>
@@ -856,6 +857,21 @@ export const PackagesScreen: React.FC<PackagesScreenProps> = ({ onBack }) => {
                       <Text style={styles.histDetailLabel}>Código</Text>
                       <Text style={styles.histDetailValue}>{pkg.code}</Text>
                     </View>
+                  )}
+
+                  {pkg.photoUrl && (
+                    <TouchableOpacity
+                      style={[styles.photoPreviewRow, { marginTop: 14 }]}
+                      onPress={() => setPreviewPhotoUrl(getPhotoUri(pkg.photoUrl))}
+                      activeOpacity={0.8}
+                    >
+                      <Image source={{ uri: getPhotoUri(pkg.photoUrl) || '' }} style={styles.thumbImage} />
+                      <View style={{ marginLeft: 10, flex: 1 }}>
+                        <Text style={styles.photoLabel}>📸 Foto da Encomenda Salva</Text>
+                        <Text style={styles.photoHint}>Toque para ampliar comprovante</Text>
+                      </View>
+                      <Eye size={18} color="#165337" />
+                    </TouchableOpacity>
                   )}
                 </>
               );
