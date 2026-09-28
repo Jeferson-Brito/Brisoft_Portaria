@@ -45,6 +45,7 @@ interface SettingsScreenProps {
       | 'clients_mgmt'
       | 'whatsapp'
       | 'subscription'
+      | 'super_admin_orgs'
   ) => void;
   orgProfile: {
     companyName?: string;
@@ -69,7 +70,8 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
   >('LOADING');
   const [connectedPhone, setConnectedPhone] = useState<string | null>(null);
 
-  const isAdmin = user?.role === 'ADMIN';
+  const isSuperAdmin = user?.role === 'SUPER_ADMIN';
+  const isAdmin = user?.role === 'ADMIN' || isSuperAdmin;
   const isSupervisor = user?.role === 'SUPERVISOR';
   const isConcierge = user?.role === 'CONCIERGE';
 
@@ -314,6 +316,35 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
           </TouchableOpacity>
         )}
       </View>
+
+      {/* SEÇÃO EXCLUSIVA SUPER ADMIN: GESTÃO SAAS */}
+      {isSuperAdmin && (
+        <View style={styles.section}>
+          <Text style={[styles.sectionHeader, { color: '#2563EB' }]}>PAINEL SUPER ADMINISTRADOR</Text>
+          <Text style={styles.sectionDescription}>
+            Gestão global de todas as empresas e condomínios cadastrados
+          </Text>
+
+          <TouchableOpacity
+            style={[styles.menuItem, { backgroundColor: '#EFF6FF', borderColor: '#BFDBFE' }]}
+            onPress={() => onNavigate('super_admin_orgs')}
+            activeOpacity={0.7}
+          >
+            <View style={[styles.menuIconBox, { backgroundColor: '#2563EB' }]}>
+              <Building2 size={22} color="#FFFFFF" />
+            </View>
+            <View style={styles.menuContent}>
+              <Text style={[styles.menuTitle, { color: '#1E40AF', fontWeight: '800' }]}>
+                Gestão de Empresas (SaaS Master)
+              </Text>
+              <Text style={styles.menuSubtitle}>
+                Cadastrar novas empresas, ver operadores e gerenciar acessos
+              </Text>
+            </View>
+            <ChevronRight size={18} color="#2563EB" />
+          </TouchableOpacity>
+        </View>
+      )}
 
       {/* 3. SEÇÃO: OPERAÇÃO & CADASTROS */}
       {(isAdmin || isSupervisor) && (

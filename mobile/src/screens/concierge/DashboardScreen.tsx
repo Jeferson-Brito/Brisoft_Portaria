@@ -61,6 +61,7 @@ import { ReportsScreen } from '../reports/ReportsScreen';
 import { ProfileScreen } from '../profile/ProfileScreen';
 import { SettingsScreen } from '../settings/SettingsScreen';
 import { SubscriptionScreen } from '../auth/SubscriptionScreen';
+import { SuperAdminOrganizationsScreen } from '../admin/SuperAdminOrganizationsScreen';
 import { CustomConfirmModal } from '../../components/CustomConfirmModal';
 import { AppHeader } from '../../components/AppHeader';
 import { ScrollToTopButton } from '../../components/ScrollToTopButton';
@@ -123,6 +124,7 @@ export const DashboardScreen: React.FC = () => {
     | 'org_profile'
     | 'profile'
     | 'subscription'
+    | 'super_admin_orgs'
   >('dashboard');
   const [requestFilter, setRequestFilter] = useState<'ALL' | 'PENDING' | 'AUTHORIZED' | 'PACKAGES' | 'ENTERED'>('ALL');
   const [dateFilter, setDateFilter] = useState<DateFilterType>('ALL');
@@ -301,6 +303,14 @@ export const DashboardScreen: React.FC = () => {
     if (activeTab === 'subscription') {
       return (
         <SubscriptionScreen
+          onBack={() => setActiveTab('settings')}
+        />
+      );
+    }
+
+    if (activeTab === 'super_admin_orgs') {
+      return (
+        <SuperAdminOrganizationsScreen
           onBack={() => setActiveTab('settings')}
         />
       );
@@ -1154,6 +1164,7 @@ export const DashboardScreen: React.FC = () => {
               'org_profile',
               'profile',
               'subscription',
+              'super_admin_orgs',
             ].includes(activeTab);
 
             return (
