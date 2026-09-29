@@ -364,7 +364,7 @@ export class VisitRequestService {
       data: {
         visitRequestId: id,
         eventType: 'ENTRY_RECORDED',
-        description: `Entrada física registrada na portaria às ${new Date().toLocaleTimeString('pt-BR')}.`,
+        description: `Entrada física registrada na portaria às ${new Date().toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit', hour12: false })}.`,
         actorType: 'USER',
         actorId: actorUserId,
       },
@@ -427,7 +427,7 @@ export class VisitRequestService {
       data: {
         visitRequestId: id,
         eventType: 'EXIT_RECORDED',
-        description: `Saída física registrada na portaria às ${exitDate.toLocaleTimeString('pt-BR')}${
+        description: `Saída física registrada na portaria às ${exitDate.toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit', hour12: false })}${
           durationMins !== null ? ` (Tempo no local: ${durationMins} min)` : ''
         }.`,
         actorType: 'USER',

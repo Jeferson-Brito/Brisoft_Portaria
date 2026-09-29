@@ -112,8 +112,8 @@ export class PackagesService {
     // 5. Notifica o Morador/Responsável pelo WhatsApp automaticamente com foto
     if (client?.whatsappNumber) {
       const destText = `${destination.name}${destination.block ? ' - ' + destination.block : ''}`;
-      const dateFormatted = new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
-      const timeFormatted = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+      const dateFormatted = new Date().toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', year: 'numeric' });
+      const timeFormatted = new Date().toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit', hour12: false });
       const msg = `📦 *NOVA ENCOMENDA RECEBIDA NA PORTARIA*\n\nOlá, *${client.name}*!\nUma encomenda acabou de ser recebida na guarita para *${destText}*.\n\n• 📅 *Data e Horário:* ${dateFormatted} às ${timeFormatted}\n• 🚚 *Transportadora / Remetente:* ${pkg.carrier || 'Entrega'}${pkg.sender ? ' (' + pkg.sender + ')' : ''}\n• 🔖 *Código da Entrega:* ${pkg.code}\n• 📦 *Rastreio:* ${pkg.trackingCode || 'Sem rastreio'}\n• 🔑 *CÓDIGO DE RETIRADA:* *${pkg.pickupCode}*\n\n📸 *Comprovante fotográfico:* Segue a foto da encomenda anexada para comprovar o recebimento.\n\nPor favor, informe este código de 4 dígitos ao porteiro ao retirar seu pacote.`;
 
       if (pkg.photoUrl) {
@@ -217,7 +217,8 @@ export class PackagesService {
 
     // Notificação de confirmação no WhatsApp
     if (pkg.client?.whatsappNumber) {
-      const msg = `✅ *ENCOMENDA RETIRADA*\n\nA encomenda *${pkg.code}* (${pkg.carrier || 'Pacote'}) foi retirada com sucesso na portaria por *${updated.pickedUpBy}* às ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}.`;
+      const timeFormatted = new Date().toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit', hour12: false });
+      const msg = `✅ *ENCOMENDA RETIRADA*\n\nA encomenda *${pkg.code}* (${pkg.carrier || 'Pacote'}) foi retirada com sucesso na portaria por *${updated.pickedUpBy}* às ${timeFormatted}.`;
       whatsappService.sendMessage(organizationId, pkg.client.whatsappNumber, msg).catch(() => {});
     }
 

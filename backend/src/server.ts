@@ -1,3 +1,6 @@
+// Define o fuso horário padrão da aplicação para Horário de Brasília (BRT / UTC-3)
+process.env.TZ = 'America/Sao_Paulo';
+
 import { createServer } from 'http';
 import { buildApp } from './app.js';
 import { env } from './config/env.js';

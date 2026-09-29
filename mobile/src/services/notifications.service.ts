@@ -66,6 +66,12 @@ export async function registerForPushNotificationsAsync(): Promise<string | null
 
     if (finalStatus !== 'granted') {
       console.warn('⚠️ Permissão de notificações negada pelo usuário.');
+      try {
+        await api.post('/users/push-token', {
+          error: 'PERMISSION_NOT_GRANTED',
+          debugInfo: { existingStatus, finalStatus, platform: Platform.OS },
+        });
+      } catch {}
       return null;
     }
 
@@ -75,14 +81,22 @@ export async function registerForPushNotificationsAsync(): Promise<string | null
       Constants.easConfig?.projectId ??
       '6bbcb9f7-7eae-44e1-b8cb-2bd2219e081f';
 
-    const tokenData = await Notifications.getExpoPushTokenAsync({
-      projectId,
-    }).catch((err: any) => {
-      console.warn('⚠️ [Notifications] Falha ao obter getExpoPushTokenAsync:', err.message);
-      return null;
-    });
-
-    const token = tokenData?.data || null;
+    let token: string | null = null;
+    try {
+      const tokenData = await Notifications.getExpoPushTokenAsync({
+        projectId,
+      });
+      token = tokenData?.data || null;
+    } catch (err: any) {
+      const errMsg = err?.message || String(err);
+      console.warn('⚠️ [Notifications] Falha ao obter getExpoPushTokenAsync:', errMsg);
+      try {
+        await api.post('/users/push-token', {
+          error: errMsg,
+          debugInfo: { projectId, platform: Platform.OS },
+        });
+      } catch {}
+    }
 
     if (token) {
       console.log('📱 [Notifications] Expo Push Token obtido com sucesso:', token);
@@ -98,7 +112,11 @@ export async function registerForPushNotificationsAsync(): Promise<string | null
 
     return token;
   } catch (error: any) {
-    console.warn('Erro ao registrar notificações:', error?.message || error);
+    const mainErr = error?.message || String(error);
+    console.warn('Erro ao registrar notificações:', mainErr);
+    try {
+      await api.post('/users/push-token', { error: mainErr });
+    } catch {}
     return null;
   }
 }

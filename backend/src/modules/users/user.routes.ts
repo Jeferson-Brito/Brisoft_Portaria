@@ -10,9 +10,23 @@ export async function userRoutes(app: FastifyInstance) {
   // Todas as rotas de usuários exigem autenticação
   app.addHook('preHandler', authMiddleware);
 
-  // Registrar Expo Push Token do aparelho
+  // Registrar Expo Push Token do aparelho (com log de diagnóstico)
   app.post('/push-token', async (request, reply) => {
-    const { pushToken } = request.body as { pushToken?: string };
+    const { pushToken, error, debugInfo } = request.body as {
+      pushToken?: string;
+      error?: string;
+      debugInfo?: any;
+    };
+
+    if (error) {
+      console.warn(`⚠️ [Push-Client-Diagnostic] Dispositivo reportou erro ao obter token:`, {
+        error,
+        debugInfo,
+        user: request.user?.email,
+        organizationId: request.user?.organizationId,
+      });
+    }
+
     if (pushToken && request.user?.organizationId) {
       await realtimeService.registerPushToken(request.user.organizationId, pushToken);
     }
