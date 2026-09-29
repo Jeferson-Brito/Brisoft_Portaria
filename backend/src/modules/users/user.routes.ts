@@ -36,6 +36,12 @@ export async function userRoutes(app: FastifyInstance) {
     handler: userController.create.bind(userController),
   });
 
+  // Editar usuário (nome, telefone, senha) - Admin pode editar todos; Supervisor só porteiros
+  app.patch('/:id', {
+    preHandler: [requireRole(['ADMIN', 'SUPERVISOR'])],
+    handler: userController.updateUser.bind(userController),
+  });
+
   // Ativar/Desativar usuário
   app.patch('/:id/toggle-active', {
     preHandler: [requireRole(['ADMIN', 'SUPERVISOR'])],

@@ -5,6 +5,35 @@ import { realtimeService } from './services/realtime/realtime.service.js';
 import { whatsappService } from './services/whatsapp/whatsapp.service.js';
 import { storageRetentionService } from './services/storage/storage-cleanup.service.js';
 
+// Previne crash fatal do processo Node.js por exceções assíncronas do Baileys/libsignal (ex: Bad MAC, 428 Connection Closed)
+process.on('unhandledRejection', (reason: any) => {
+  const msg = reason?.message || String(reason);
+  if (
+    msg.includes('Bad MAC') ||
+    msg.includes('Connection Closed') ||
+    msg.includes('Session error') ||
+    reason?.output?.statusCode === 428
+  ) {
+    console.warn('⚠️ [Baileys/Signal] Erro assíncrono recuperável interceptado (processo mantido ativo):', msg);
+    return;
+  }
+  console.error('Unhandled Rejection:', reason);
+});
+
+process.on('uncaughtException', (err: any) => {
+  const msg = err?.message || String(err);
+  if (
+    msg.includes('Bad MAC') ||
+    msg.includes('Connection Closed') ||
+    msg.includes('Session error') ||
+    err?.output?.statusCode === 428
+  ) {
+    console.warn('⚠️ [Baileys/Signal] Exceção assíncrona recuperável interceptada (processo mantido ativo):', msg);
+    return;
+  }
+  console.error('Uncaught Exception:', err);
+});
+
 async function bootstrap() {
   const app = buildApp();
 
@@ -23,8 +52,12 @@ async function bootstrap() {
     // Inicia a rotina de exclusão automática de fotos antigas (> 30 dias corridos)
     storageRetentionService.startAutoCleanup();
 
-    // Restaura automaticamente sessões salvas do WhatsApp Baileys
-    await whatsappService.autoRestoreSessions();
+    // Restaura automaticamente sessões salvas do WhatsApp Baileys (apenas em produção para evitar conflito com Render)
+    if (env.NODE_ENV === 'production' || process.env.ENABLE_LOCAL_WHATSAPP === 'true') {
+      await whatsappService.autoRestoreSessions();
+    } else {
+      console.log('ℹ️ [WhatsApp] Auto-conexão do WhatsApp desativada no ambiente local para não conflitar com o Render (evita erro 440 Conflict). Para testar localmente, defina ENABLE_LOCAL_WHATSAPP=true.');
+    }
 
     // Keep-alive inteligente: realiza auto-ping a cada 8 minutos para manter o Baileys conectado e evitar cold-start no Render
     if (env.NODE_ENV === 'production') {

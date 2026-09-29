@@ -11,6 +11,14 @@ const createUserSchema = z.object({
   phone: z.string().optional(),
 });
 
+const updateUserSchema = z.object({
+  name: z.string().min(2, 'Nome deve ter no mínimo 2 caracteres').optional(),
+  email: z.string().email('E-mail inválido').optional(),
+  phone: z.string().optional().nullable(),
+  role: z.enum(['ADMIN', 'SUPERVISOR', 'CONCIERGE']).optional(),
+  newPassword: z.string().min(6, 'Senha deve ter no mínimo 6 caracteres').optional(),
+});
+
 const listUsersQuerySchema = z.object({
   role: z.string().optional(),
   search: z.string().optional(),
@@ -124,6 +132,31 @@ export class UserController {
           code: err.code || 'INTERNAL_ERROR',
           message: err.message,
         },
+      });
+    }
+  }
+
+  async updateUser(request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) {
+    const parseResult = updateUserSchema.safeParse(request.body);
+    if (!parseResult.success) {
+      return reply.status(400).send({
+        success: false,
+        error: { code: 'VALIDATION_ERROR', message: parseResult.error.errors[0].message },
+      });
+    }
+    try {
+      const { id } = request.params;
+      const updated = await userService.updateUser(
+        id,
+        request.user.organizationId,
+        request.user.role as Role,
+        parseResult.data
+      );
+      return reply.status(200).send({ success: true, data: { user: updated } });
+    } catch (err: any) {
+      return reply.status(err.statusCode || 500).send({
+        success: false,
+        error: { code: err.code || 'INTERNAL_ERROR', message: err.message },
       });
     }
   }

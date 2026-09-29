@@ -103,7 +103,7 @@ export class UserService {
       where: { id: userId },
     });
 
-    if (!user || user.organizationId !== organizationId || user.deletedAt) {
+    if (!user || (actorRole !== 'SUPER_ADMIN' && user.organizationId !== organizationId) || user.deletedAt) {
       throw new AppError('Usuário não encontrado.', 404, 'USER_NOT_FOUND');
     }
 
@@ -125,7 +125,7 @@ export class UserService {
       where: { id: userId },
     });
 
-    if (!user || user.organizationId !== organizationId || user.deletedAt) {
+    if (!user || (actorRole !== 'SUPER_ADMIN' && user.organizationId !== organizationId) || user.deletedAt) {
       throw new AppError('Usuário não encontrado.', 404, 'USER_NOT_FOUND');
     }
 
@@ -143,6 +143,67 @@ export class UserService {
     });
 
     return { success: true };
+  }
+
+  async updateUser(
+    userId: string,
+    organizationId: string,
+    actorRole: Role,
+    data: { name?: string; email?: string; role?: Role; phone?: string | null; newPassword?: string }
+  ) {
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+
+    if (!user || (actorRole !== 'SUPER_ADMIN' && user.organizationId !== organizationId) || user.deletedAt) {
+      throw new AppError('Usuário não encontrado.', 404, 'USER_NOT_FOUND');
+    }
+
+    if (actorRole === 'SUPERVISOR' && user.role !== 'CONCIERGE') {
+      throw new AppError('Supervisores só possuem permissão para editar porteiros.', 403, 'FORBIDDEN');
+    }
+
+    if (actorRole === 'SUPERVISOR' && data.role && data.role !== 'CONCIERGE') {
+      throw new AppError('Supervisores não podem alterar o perfil do porteiro.', 403, 'FORBIDDEN');
+    }
+
+    const updateData: any = {};
+    if (data.name?.trim()) updateData.name = data.name.trim();
+
+    if (data.email?.trim()) {
+      const normalizedEmail = data.email.trim().toLowerCase();
+      if (normalizedEmail !== user.email) {
+        const existing = await prisma.user.findFirst({
+          where: { email: normalizedEmail, deletedAt: null, id: { not: userId } },
+        });
+        if (existing) {
+          throw new AppError('Este e-mail já está sendo utilizado por outro usuário.', 409, 'EMAIL_IN_USE');
+        }
+        updateData.email = normalizedEmail;
+      }
+    }
+
+    if (data.role) {
+      if (actorRole !== 'SUPER_ADMIN' && data.role === 'SUPER_ADMIN') {
+        throw new AppError('Apenas o Superadministrador pode conceder este nível de acesso.', 403, 'FORBIDDEN');
+      }
+      updateData.role = data.role;
+    }
+
+    if (data.phone !== undefined) updateData.phone = data.phone?.trim() || null;
+
+    if (data.newPassword) {
+      if (data.newPassword.length < 6) {
+        throw new AppError('A nova senha deve ter no mínimo 6 caracteres.', 400, 'INVALID_PASSWORD');
+      }
+      updateData.passwordHash = await bcrypt.hash(data.newPassword, 12);
+    }
+
+    const updated = await prisma.user.update({
+      where: { id: userId },
+      data: updateData,
+      select: { id: true, name: true, email: true, role: true, phone: true, isActive: true },
+    });
+
+    return updated;
   }
 
   async updateProfile(userId: string, data: { name?: string; phone?: string; currentPassword?: string; newPassword?: string }) {

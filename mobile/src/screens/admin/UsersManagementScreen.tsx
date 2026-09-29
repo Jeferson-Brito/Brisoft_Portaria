@@ -12,6 +12,7 @@ import {
   RefreshControl,
   Platform,
   StatusBar,
+  ScrollView,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
@@ -26,18 +27,31 @@ import {
   CircleX,
   Trash2,
   UserCheck,
+  Pencil,
+  Key,
+  MoreVertical,
+  Power,
+  ShieldAlert,
 } from 'lucide-react-native';
 import { colors } from '../../theme/colors';
 import { api } from '../../config/api';
+import { useAuth } from '../../contexts/AuthContext';
 
 interface UsersManagementScreenProps {
   onBack?: () => void;
 }
 
 export const UsersManagementScreen: React.FC<UsersManagementScreenProps> = ({ onBack }) => {
+  const { user: currentUser } = useAuth();
+  const isAdmin = currentUser?.role === 'ADMIN' || currentUser?.role === 'SUPER_ADMIN';
+  const isSupervisor = currentUser?.role === 'SUPERVISOR';
+
   const [users, setUsers] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+
+  // Menu de ações por card
+  const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
 
   // Modal Novo Usuário
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -47,6 +61,21 @@ export const UsersManagementScreen: React.FC<UsersManagementScreenProps> = ({ on
   const [phone, setPhone] = useState('');
   const [role, setRole] = useState<'CONCIERGE' | 'SUPERVISOR' | 'ADMIN'>('CONCIERGE');
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Modal Editar Usuário
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editingUser, setEditingUser] = useState<any>(null);
+  const [editName, setEditName] = useState('');
+  const [editEmail, setEditEmail] = useState('');
+  const [editPhone, setEditPhone] = useState('');
+  const [editRole, setEditRole] = useState<'CONCIERGE' | 'SUPERVISOR' | 'ADMIN'>('CONCIERGE');
+  const [isSubmittingEdit, setIsSubmittingEdit] = useState(false);
+
+  // Modal Alterar Senha
+  const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
+  const [targetUserForPassword, setTargetUserForPassword] = useState<any>(null);
+  const [newPassword, setNewPassword] = useState('');
+  const [isSubmittingPassword, setIsSubmittingPassword] = useState(false);
 
   const loadUsers = async () => {
     try {
@@ -65,9 +94,23 @@ export const UsersManagementScreen: React.FC<UsersManagementScreenProps> = ({ on
     loadUsers();
   }, []);
 
+  // Verifica se o usuário atual tem permissão para editar/excluir este membro
+  const canManageUser = (targetUser: any) => {
+    if (isAdmin) return true;
+    if (isSupervisor) {
+      return targetUser.role === 'CONCIERGE';
+    }
+    return false;
+  };
+
   const handleCreateUser = async () => {
     if (!name.trim() || !email.trim() || !password.trim()) {
       Alert.alert('Atenção', 'Preencha o nome, e-mail e senha do usuário.');
+      return;
+    }
+
+    if (password.trim().length < 6) {
+      Alert.alert('Atenção', 'A senha deve conter no mínimo 6 caracteres.');
       return;
     }
 
@@ -77,12 +120,12 @@ export const UsersManagementScreen: React.FC<UsersManagementScreenProps> = ({ on
         name: name.trim(),
         email: email.trim(),
         password: password.trim(),
-        role,
+        role: isSupervisor ? 'CONCIERGE' : role,
         phone: phone.trim() || undefined,
       });
 
       if (res.data.success) {
-        Alert.alert('Sucesso', 'Porteiro/Usuário cadastrado com sucesso!');
+        Alert.alert('Sucesso', 'Membro cadastrado com sucesso!');
         setIsModalOpen(false);
         setName('');
         setEmail('');
@@ -98,8 +141,132 @@ export const UsersManagementScreen: React.FC<UsersManagementScreenProps> = ({ on
     }
   };
 
+  const openEditModal = (u: any) => {
+    setEditingUser(u);
+    setEditName(u.name);
+    setEditEmail(u.email);
+    setEditPhone(u.phone || '');
+    setEditRole(u.role || 'CONCIERGE');
+    setActiveMenuId(null);
+    setIsEditModalOpen(true);
+  };
+
+  const handleEditUser = async () => {
+    if (!editName.trim()) {
+      Alert.alert('Atenção', 'O nome não pode ficar em branco.');
+      return;
+    }
+    if (!editEmail.trim()) {
+      Alert.alert('Atenção', 'O e-mail não pode ficar em branco.');
+      return;
+    }
+
+    try {
+      setIsSubmittingEdit(true);
+      await api.patch(`/users/${editingUser.id}`, {
+        name: editName.trim(),
+        email: editEmail.trim(),
+        phone: editPhone.trim() || null,
+        role: isAdmin ? editRole : undefined,
+      });
+
+      Alert.alert('Sucesso', 'Dados do usuário atualizados com sucesso!');
+      setIsEditModalOpen(false);
+      loadUsers();
+    } catch (err: any) {
+      Alert.alert('Erro', err.response?.data?.error?.message || 'Falha ao atualizar dados');
+    } finally {
+      setIsSubmittingEdit(false);
+    }
+  };
+
+  const openPasswordModal = (u: any) => {
+    setTargetUserForPassword(u);
+    setNewPassword('');
+    setActiveMenuId(null);
+    setIsPasswordModalOpen(true);
+  };
+
+  const handleChangePassword = async () => {
+    if (!newPassword.trim() || newPassword.trim().length < 6) {
+      Alert.alert('Atenção', 'A nova senha deve ter no mínimo 6 caracteres.');
+      return;
+    }
+
+    try {
+      setIsSubmittingPassword(true);
+      await api.patch(`/users/${targetUserForPassword.id}`, {
+        newPassword: newPassword.trim(),
+      });
+
+      Alert.alert('Sucesso', `Senha de ${targetUserForPassword.name} alterada com sucesso!`);
+      setIsPasswordModalOpen(false);
+      setNewPassword('');
+    } catch (err: any) {
+      Alert.alert('Erro', err.response?.data?.error?.message || 'Falha ao alterar senha');
+    } finally {
+      setIsSubmittingPassword(false);
+    }
+  };
+
+  const handleToggleActive = async (u: any) => {
+    setActiveMenuId(null);
+    const actionText = u.isActive ? 'desativar' : 'reativar';
+    Alert.alert(
+      `${actionText.charAt(0).toUpperCase() + actionText.slice(1)} Acesso`,
+      `Deseja realmente ${actionText} o acesso de ${u.name}?`,
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: u.isActive ? 'Desativar' : 'Reativar',
+          style: u.isActive ? 'destructive' : 'default',
+          onPress: async () => {
+            try {
+              await api.patch(`/users/${u.id}/toggle-active`);
+              Alert.alert('Sucesso', `Status de ${u.name} atualizado.`);
+              loadUsers();
+            } catch (err: any) {
+              Alert.alert('Erro', err.response?.data?.error?.message || 'Falha ao alterar status');
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleDeleteUser = (u: any) => {
+    setActiveMenuId(null);
+    if (u.id === currentUser?.id) {
+      Alert.alert('Atenção', 'Você não pode excluir sua própria conta.');
+      return;
+    }
+
+    Alert.alert(
+      'Excluir Usuário',
+      `Tem certeza que deseja excluir ${u.name}? O operador perderá o acesso à portaria.`,
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Excluir',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await api.delete(`/users/${u.id}`);
+              Alert.alert('Sucesso', 'Usuário removido com sucesso.');
+              loadUsers();
+            } catch (err: any) {
+              Alert.alert('Erro', err.response?.data?.error?.message || 'Falha ao excluir usuário');
+            }
+          },
+        },
+      ]
+    );
+  };
+
   const getRoleLabel = (r: string) => {
     switch (r) {
+      case 'SUPER_ADMIN':
+        return 'Super Admin';
       case 'ADMIN':
         return 'Administrador';
       case 'SUPERVISOR':
@@ -111,6 +278,8 @@ export const UsersManagementScreen: React.FC<UsersManagementScreenProps> = ({ on
 
   const getRoleBadgeStyle = (r: string) => {
     switch (r) {
+      case 'SUPER_ADMIN':
+        return { backgroundColor: '#F3E8FF', color: '#7E22CE' };
       case 'ADMIN':
         return { backgroundColor: '#FEE2E2', color: '#B91C1C' };
       case 'SUPERVISOR':
@@ -137,8 +306,12 @@ export const UsersManagementScreen: React.FC<UsersManagementScreenProps> = ({ on
             <UserCheck size={22} color={colors.white} />
           </View>
           <View style={{ flex: 1, marginLeft: 10 }}>
-            <Text style={styles.headerTitle}>Gestão de Porteiros & Equipe</Text>
-            <Text style={styles.headerSubtitle}>Cadastro de operadores da portaria</Text>
+            <Text style={styles.headerTitle}>Gestão da Equipe & Porteiros</Text>
+            <Text style={styles.headerSubtitle}>
+              {isAdmin
+                ? 'Administração de porteiros, supervisores e acessos'
+                : 'Gerenciamento de operadores e senhas da portaria'}
+            </Text>
           </View>
         </View>
 
@@ -148,7 +321,9 @@ export const UsersManagementScreen: React.FC<UsersManagementScreenProps> = ({ on
           activeOpacity={0.85}
         >
           <Plus size={18} color="#165337" style={{ marginRight: 6 }} />
-          <Text style={styles.addBtnText}>Cadastrar Novo Porteiro</Text>
+          <Text style={styles.addBtnText}>
+            {isSupervisor && !isAdmin ? 'Cadastrar Novo Porteiro' : 'Cadastrar Novo Membro'}
+          </Text>
         </TouchableOpacity>
       </View>
 
@@ -178,21 +353,33 @@ export const UsersManagementScreen: React.FC<UsersManagementScreenProps> = ({ on
               <User size={48} color="#94A3B8" style={{ marginBottom: 12 }} />
               <Text style={styles.emptyTitle}>Nenhum usuário cadastrado</Text>
               <Text style={styles.emptySub}>
-                Toque no botão acima para adicionar porteiros ou administradores.
+                Toque no botão acima para adicionar membros à equipe.
               </Text>
             </View>
           }
           renderItem={({ item }) => {
             const badge = getRoleBadgeStyle(item.role);
+            const canManage = canManageUser(item);
+            const menuOpen = activeMenuId === item.id;
+
             return (
-              <View style={styles.userCard}>
+              <View style={[styles.userCard, !item.isActive && styles.userCardInactive]}>
                 <View style={styles.userCardTop}>
                   <View style={{ flex: 1 }}>
-                    <Text style={styles.userName}>{item.name}</Text>
+                    <View style={styles.userNameRow}>
+                      <Text style={styles.userName}>{item.name}</Text>
+                      {!item.isActive && (
+                        <View style={styles.inactiveBadge}>
+                          <Text style={styles.inactiveBadgeText}>INATIVO</Text>
+                        </View>
+                      )}
+                    </View>
+
                     <View style={styles.userContactRow}>
                       <Mail size={13} color="#64748B" style={{ marginRight: 4 }} />
                       <Text style={styles.userEmail}>{item.email}</Text>
                     </View>
+
                     {item.phone && (
                       <View style={styles.userContactRow}>
                         <Phone size={13} color="#64748B" style={{ marginRight: 4 }} />
@@ -200,123 +387,330 @@ export const UsersManagementScreen: React.FC<UsersManagementScreenProps> = ({ on
                       </View>
                     )}
                   </View>
-                  <View style={[styles.roleBadge, { backgroundColor: badge.backgroundColor }]}>
-                    <Text style={[styles.roleBadgeText, { color: badge.color }]}>
-                      {getRoleLabel(item.role)}
-                    </Text>
+
+                  <View style={styles.topRightCol}>
+                    <View style={[styles.roleBadge, { backgroundColor: badge.backgroundColor }]}>
+                      <Text style={[styles.roleBadgeText, { color: badge.color }]}>
+                        {getRoleLabel(item.role)}
+                      </Text>
+                    </View>
+
+                    {canManage && (
+                      <TouchableOpacity
+                        style={styles.menuBtn}
+                        onPress={() => setActiveMenuId(menuOpen ? null : item.id)}
+                        activeOpacity={0.7}
+                      >
+                        <MoreVertical size={18} color="#64748B" />
+                      </TouchableOpacity>
+                    )}
                   </View>
                 </View>
+
+                {/* Menu de Ações Expandido */}
+                {menuOpen && canManage && (
+                  <View style={styles.actionMenu}>
+                    <TouchableOpacity style={styles.actionItem} onPress={() => openEditModal(item)}>
+                      <Pencil size={15} color="#1D4ED8" />
+                      <Text style={[styles.actionText, { color: '#1D4ED8' }]}>Editar dados</Text>
+                    </TouchableOpacity>
+
+                    <View style={styles.actionDivider} />
+
+                    <TouchableOpacity style={styles.actionItem} onPress={() => openPasswordModal(item)}>
+                      <Key size={15} color="#D97706" />
+                      <Text style={[styles.actionText, { color: '#D97706' }]}>Alterar senha</Text>
+                    </TouchableOpacity>
+
+                    <View style={styles.actionDivider} />
+
+                    <TouchableOpacity style={styles.actionItem} onPress={() => handleToggleActive(item)}>
+                      <Power size={15} color={item.isActive ? '#64748B' : '#16A34A'} />
+                      <Text style={[styles.actionText, { color: item.isActive ? '#64748B' : '#16A34A' }]}>
+                        {item.isActive ? 'Desativar acesso' : 'Reativar acesso'}
+                      </Text>
+                    </TouchableOpacity>
+
+                    <View style={styles.actionDivider} />
+
+                    <TouchableOpacity style={styles.actionItem} onPress={() => handleDeleteUser(item)}>
+                      <Trash2 size={15} color="#DC2626" />
+                      <Text style={[styles.actionText, { color: '#DC2626' }]}>Excluir usuário</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
               </View>
             );
           }}
         />
       )}
 
-      {/* Modal Cadastro de Usuário */}
+      {/* Modal 1: Cadastrar Novo Membro */}
       <Modal visible={isModalOpen} animationType="slide" transparent onRequestClose={() => setIsModalOpen(false)}>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Cadastrar Novo Membro</Text>
-            <Text style={styles.modalSubtitle}>Crie o acesso de porteiro, supervisor ou admin.</Text>
+            <Text style={styles.modalTitle}>
+              {isSupervisor && !isAdmin ? 'Cadastrar Novo Porteiro' : 'Cadastrar Novo Membro'}
+            </Text>
+            <Text style={styles.modalSubtitle}>
+              {isSupervisor && !isAdmin
+                ? 'Crie o acesso do operador da portaria.'
+                : 'Crie o acesso de porteiro, supervisor ou admin.'}
+            </Text>
 
-            <View style={styles.formGroup}>
-              <Text style={styles.inputLabel}>Nome Completo *</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="Ex: Porteiro Silva"
-                placeholderTextColor="#94A3B8"
-                value={name}
-                onChangeText={setName}
-              />
-            </View>
+            <ScrollView showsVerticalScrollIndicator={false}>
+              <View style={styles.formGroup}>
+                <Text style={styles.inputLabel}>Nome Completo *</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Ex: Porteiro Silva"
+                  placeholderTextColor="#94A3B8"
+                  value={name}
+                  onChangeText={setName}
+                />
+              </View>
 
-            <View style={styles.formGroup}>
-              <Text style={styles.inputLabel}>E-mail de Acesso *</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="porteiro@grupocombate.com.br"
-                placeholderTextColor="#94A3B8"
-                value={email}
-                onChangeText={setEmail}
-                keyboardType="email-address"
-                autoCapitalize="none"
-              />
-            </View>
+              <View style={styles.formGroup}>
+                <Text style={styles.inputLabel}>E-mail de Acesso *</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="porteiro@grupocombate.com.br"
+                  placeholderTextColor="#94A3B8"
+                  value={email}
+                  onChangeText={setEmail}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                />
+              </View>
 
-            <View style={styles.formGroup}>
-              <Text style={styles.inputLabel}>Senha de Acesso *</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="Mínimo 6 caracteres"
-                placeholderTextColor="#94A3B8"
-                value={password}
-                onChangeText={setPassword}
-                secureTextEntry
-              />
-            </View>
+              <View style={styles.formGroup}>
+                <Text style={styles.inputLabel}>Senha de Acesso * (Mínimo 6 caracteres)</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Digite a senha provisória"
+                  placeholderTextColor="#94A3B8"
+                  value={password}
+                  onChangeText={setPassword}
+                  secureTextEntry
+                />
+              </View>
 
-            <View style={styles.formGroup}>
-              <Text style={styles.inputLabel}>Telefone / WhatsApp (Opcional)</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="11999998888"
-                placeholderTextColor="#94A3B8"
-                value={phone}
-                onChangeText={setPhone}
-                keyboardType="phone-pad"
-              />
-            </View>
+              <View style={styles.formGroup}>
+                <Text style={styles.inputLabel}>Telefone / WhatsApp (Opcional)</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="11999998888"
+                  placeholderTextColor="#94A3B8"
+                  value={phone}
+                  onChangeText={setPhone}
+                  keyboardType="phone-pad"
+                />
+              </View>
 
-            <View style={styles.formGroup}>
-              <Text style={styles.inputLabel}>Perfil de Acesso *</Text>
-              <View style={styles.rolePickerRow}>
+              {isAdmin && (
+                <View style={styles.formGroup}>
+                  <Text style={styles.inputLabel}>Perfil de Acesso *</Text>
+                  <View style={styles.rolePickerRow}>
+                    <TouchableOpacity
+                      style={[styles.roleOption, role === 'CONCIERGE' && styles.roleOptionSelected]}
+                      onPress={() => setRole('CONCIERGE')}
+                    >
+                      <Text style={[styles.roleOptionText, role === 'CONCIERGE' && styles.roleOptionTextSelected]}>
+                        Porteiro
+                      </Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={[styles.roleOption, role === 'SUPERVISOR' && styles.roleOptionSelected]}
+                      onPress={() => setRole('SUPERVISOR')}
+                    >
+                      <Text style={[styles.roleOptionText, role === 'SUPERVISOR' && styles.roleOptionTextSelected]}>
+                        Supervisor
+                      </Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={[styles.roleOption, role === 'ADMIN' && styles.roleOptionSelected]}
+                      onPress={() => setRole('ADMIN')}
+                    >
+                      <Text style={[styles.roleOptionText, role === 'ADMIN' && styles.roleOptionTextSelected]}>
+                        Admin
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              )}
+
+              <View style={styles.modalActions}>
                 <TouchableOpacity
-                  style={[styles.roleOption, role === 'CONCIERGE' && styles.roleOptionSelected]}
-                  onPress={() => setRole('CONCIERGE')}
+                  style={styles.cancelBtn}
+                  onPress={() => setIsModalOpen(false)}
+                  disabled={isSubmitting}
                 >
-                  <Text style={[styles.roleOptionText, role === 'CONCIERGE' && styles.roleOptionTextSelected]}>
-                    Porteiro
-                  </Text>
+                  <Text style={styles.cancelBtnText}>Cancelar</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
-                  style={[styles.roleOption, role === 'SUPERVISOR' && styles.roleOptionSelected]}
-                  onPress={() => setRole('SUPERVISOR')}
+                  style={styles.saveBtn}
+                  onPress={handleCreateUser}
+                  disabled={isSubmitting}
                 >
-                  <Text style={[styles.roleOptionText, role === 'SUPERVISOR' && styles.roleOptionTextSelected]}>
-                    Supervisor
-                  </Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[styles.roleOption, role === 'ADMIN' && styles.roleOptionSelected]}
-                  onPress={() => setRole('ADMIN')}
-                >
-                  <Text style={[styles.roleOptionText, role === 'ADMIN' && styles.roleOptionTextSelected]}>
-                    Admin
-                  </Text>
+                  {isSubmitting ? (
+                    <ActivityIndicator color={colors.white} size="small" />
+                  ) : (
+                    <Text style={styles.saveBtnText}>Salvar Cadastro</Text>
+                  )}
                 </TouchableOpacity>
               </View>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Modal 2: Editar Membro */}
+      <Modal visible={isEditModalOpen} animationType="slide" transparent onRequestClose={() => setIsEditModalOpen(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Editar Usuário</Text>
+            <Text style={styles.modalSubtitle}>Atualize os dados cadastrais do membro.</Text>
+
+            <ScrollView showsVerticalScrollIndicator={false}>
+              <View style={styles.formGroup}>
+                <Text style={styles.inputLabel}>Nome Completo *</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Nome do usuário"
+                  placeholderTextColor="#94A3B8"
+                  value={editName}
+                  onChangeText={setEditName}
+                />
+              </View>
+
+              <View style={styles.formGroup}>
+                <Text style={styles.inputLabel}>E-mail de Acesso *</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="email@grupocombate.com.br"
+                  placeholderTextColor="#94A3B8"
+                  value={editEmail}
+                  onChangeText={setEditEmail}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                />
+              </View>
+
+              <View style={styles.formGroup}>
+                <Text style={styles.inputLabel}>Telefone / WhatsApp</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="11999998888"
+                  placeholderTextColor="#94A3B8"
+                  value={editPhone}
+                  onChangeText={setEditPhone}
+                  keyboardType="phone-pad"
+                />
+              </View>
+
+              {isAdmin && (
+                <View style={styles.formGroup}>
+                  <Text style={styles.inputLabel}>Perfil de Acesso</Text>
+                  <View style={styles.rolePickerRow}>
+                    <TouchableOpacity
+                      style={[styles.roleOption, editRole === 'CONCIERGE' && styles.roleOptionSelected]}
+                      onPress={() => setEditRole('CONCIERGE')}
+                    >
+                      <Text style={[styles.roleOptionText, editRole === 'CONCIERGE' && styles.roleOptionTextSelected]}>
+                        Porteiro
+                      </Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={[styles.roleOption, editRole === 'SUPERVISOR' && styles.roleOptionSelected]}
+                      onPress={() => setEditRole('SUPERVISOR')}
+                    >
+                      <Text style={[styles.roleOptionText, editRole === 'SUPERVISOR' && styles.roleOptionTextSelected]}>
+                        Supervisor
+                      </Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={[styles.roleOption, editRole === 'ADMIN' && styles.roleOptionSelected]}
+                      onPress={() => setEditRole('ADMIN')}
+                    >
+                      <Text style={[styles.roleOptionText, editRole === 'ADMIN' && styles.roleOptionTextSelected]}>
+                        Admin
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              )}
+
+              <View style={styles.modalActions}>
+                <TouchableOpacity
+                  style={styles.cancelBtn}
+                  onPress={() => setIsEditModalOpen(false)}
+                  disabled={isSubmittingEdit}
+                >
+                  <Text style={styles.cancelBtnText}>Cancelar</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.saveBtn}
+                  onPress={handleEditUser}
+                  disabled={isSubmittingEdit}
+                >
+                  {isSubmittingEdit ? (
+                    <ActivityIndicator color={colors.white} size="small" />
+                  ) : (
+                    <Text style={styles.saveBtnText}>Salvar Alterações</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Modal 3: Alterar Senha */}
+      <Modal visible={isPasswordModalOpen} animationType="slide" transparent onRequestClose={() => setIsPasswordModalOpen(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Redefinir Senha de Acesso</Text>
+            <Text style={styles.modalSubtitle}>
+              Digite a nova senha para {targetUserForPassword?.name}.
+            </Text>
+
+            <View style={styles.formGroup}>
+              <Text style={styles.inputLabel}>Nova Senha * (Mínimo 6 caracteres)</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Digite a nova senha"
+                placeholderTextColor="#94A3B8"
+                value={newPassword}
+                onChangeText={setNewPassword}
+                secureTextEntry
+                autoFocus
+              />
             </View>
 
             <View style={styles.modalActions}>
               <TouchableOpacity
                 style={styles.cancelBtn}
-                onPress={() => setIsModalOpen(false)}
-                disabled={isSubmitting}
+                onPress={() => setIsPasswordModalOpen(false)}
+                disabled={isSubmittingPassword}
               >
                 <Text style={styles.cancelBtnText}>Cancelar</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
-                style={styles.saveBtn}
-                onPress={handleCreateUser}
-                disabled={isSubmitting}
+                style={[styles.saveBtn, { backgroundColor: '#D97706' }]}
+                onPress={handleChangePassword}
+                disabled={isSubmittingPassword}
               >
-                {isSubmitting ? (
+                {isSubmittingPassword ? (
                   <ActivityIndicator color={colors.white} size="small" />
                 ) : (
-                  <Text style={styles.saveBtnText}>Salvar Acesso</Text>
+                  <Text style={styles.saveBtnText}>Atualizar Senha</Text>
                 )}
               </TouchableOpacity>
             </View>
@@ -423,20 +817,41 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#E2E8F0',
   },
+  userCardInactive: {
+    opacity: 0.7,
+    backgroundColor: '#F1F5F9',
+  },
   userCardTop: {
     flexDirection: 'row',
     alignItems: 'flex-start',
+  },
+  userNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginBottom: 4,
   },
   userName: {
     fontSize: 15,
     fontWeight: '700',
     color: '#0F172A',
-    marginBottom: 4,
+  },
+  inactiveBadge: {
+    backgroundColor: '#FEE2E2',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  inactiveBadgeText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#DC2626',
   },
   userContactRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 2,
+    marginTop: 3,
   },
   userEmail: {
     fontSize: 12,
@@ -446,6 +861,10 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#64748B',
   },
+  topRightCol: {
+    alignItems: 'flex-end',
+    gap: 8,
+  },
   roleBadge: {
     paddingHorizontal: 8,
     paddingVertical: 4,
@@ -454,6 +873,38 @@ const styles = StyleSheet.create({
   roleBadgeText: {
     fontSize: 11,
     fontWeight: '700',
+  },
+  menuBtn: {
+    padding: 4,
+  },
+  actionMenu: {
+    marginTop: 12,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-around',
+    backgroundColor: '#F8FAFC',
+    borderRadius: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 4,
+  },
+  actionItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: 4,
+    paddingHorizontal: 6,
+  },
+  actionText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  actionDivider: {
+    width: 1,
+    height: 16,
+    backgroundColor: '#CBD5E1',
   },
   modalOverlay: {
     flex: 1,
@@ -466,6 +917,7 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 24,
     padding: 20,
     paddingBottom: 36,
+    maxHeight: '90%',
   },
   modalTitle: {
     fontSize: 18,
@@ -527,6 +979,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 10,
     marginTop: 18,
+    marginBottom: 10,
   },
   cancelBtn: {
     flex: 1,

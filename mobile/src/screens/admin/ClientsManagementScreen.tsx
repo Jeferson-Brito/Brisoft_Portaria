@@ -26,6 +26,9 @@ import {
   Home,
   CircleCheck,
   MessageCircle,
+  Pencil,
+  Trash2,
+  MoreVertical,
 } from 'lucide-react-native';
 import { colors } from '../../theme/colors';
 import { api } from '../../config/api';
@@ -56,6 +59,19 @@ export const ClientsManagementScreen: React.FC<ClientsManagementScreenProps> = (
   const [destBlock, setDestBlock] = useState('');
   const [destCode, setDestCode] = useState('');
   const [isSubmittingDest, setIsSubmittingDest] = useState(false);
+
+  // Modal Editar Morador
+  const [isEditClientModalOpen, setIsEditClientModalOpen] = useState(false);
+  const [editingClient, setEditingClient] = useState<any>(null);
+  const [editClientName, setEditClientName] = useState('');
+  const [editWhatsapp, setEditWhatsapp] = useState('');
+  const [editEmail, setEditEmail] = useState('');
+  const [editDocument, setEditDocument] = useState('');
+  const [editSelectedDestId, setEditSelectedDestId] = useState('');
+  const [isSubmittingEdit, setIsSubmittingEdit] = useState(false);
+
+  // Menu de ações por card
+  const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
 
   const loadData = async () => {
     try {
@@ -166,6 +182,65 @@ export const ClientsManagementScreen: React.FC<ClientsManagementScreenProps> = (
     }
   };
 
+  const openEditClient = (c: any) => {
+    setEditingClient(c);
+    setEditClientName(c.name);
+    setEditWhatsapp(c.whatsappNumber?.replace(/^55/, '') || '');
+    setEditEmail(c.email || '');
+    setEditDocument(c.document || '');
+    const firstDest = (c.destinations || [])[0]?.destination?.id || (c.destinations || [])[0]?.id || '';
+    setEditSelectedDestId(firstDest);
+    setActiveMenuId(null);
+    setIsEditClientModalOpen(true);
+  };
+
+  const handleEditClient = async () => {
+    if (!editClientName.trim()) { Alert.alert('Atenção', 'O nome não pode ficar em branco.'); return; }
+    const cleanPhone = editWhatsapp.replace(/\D/g, '');
+    if (cleanPhone.length < 10) { Alert.alert('Atenção', 'WhatsApp deve conter DDD e número.'); return; }
+    const formattedPhone = cleanPhone.startsWith('55') ? cleanPhone : `55${cleanPhone}`;
+    try {
+      setIsSubmittingEdit(true);
+      await api.put(`/clients/${editingClient.id}`, {
+        name: editClientName.trim(),
+        whatsappNumber: formattedPhone,
+        email: editEmail.trim() || undefined,
+        document: editDocument.trim() || undefined,
+        destinationIds: editSelectedDestId ? [editSelectedDestId] : undefined,
+      });
+      Alert.alert('Sucesso', 'Dados do morador atualizados com sucesso!');
+      setIsEditClientModalOpen(false);
+      loadData();
+    } catch (err: any) {
+      Alert.alert('Erro', err.response?.data?.error?.message || 'Falha ao atualizar morador');
+    } finally {
+      setIsSubmittingEdit(false);
+    }
+  };
+
+  const handleDeleteClient = (c: any) => {
+    Alert.alert(
+      'Excluir morador',
+      `Tem certeza que deseja excluir ${c.name}? O histórico de visitas será mantido.`,
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Excluir', style: 'destructive',
+          onPress: async () => {
+            try {
+              await api.delete(`/clients/${c.id}`);
+              Alert.alert('Sucesso', 'Morador removido com sucesso.');
+              loadData();
+            } catch (err: any) {
+              Alert.alert('Erro', err.response?.data?.error?.message || 'Falha ao excluir morador');
+            }
+          },
+        },
+      ]
+    );
+    setActiveMenuId(null);
+  };
+
   const insets = useSafeAreaInsets();
   const topPadding = Math.max(insets.top, Platform.OS === 'android' ? (StatusBar.currentHeight || 28) : 0) + 14;
 
@@ -257,17 +332,27 @@ export const ClientsManagementScreen: React.FC<ClientsManagementScreenProps> = (
               .map((d: any) => d.destination?.name || d.name)
               .filter(Boolean)
               .join(', ');
+            const menuOpen = activeMenuId === item.id;
 
             return (
               <View style={styles.clientCard}>
                 <View style={styles.clientCardHeader}>
-                  <Text style={styles.clientName}>{item.name}</Text>
-                  {destNames ? (
-                    <View style={styles.destBadge}>
-                      <Building2 size={12} color="#1D4ED8" style={{ marginRight: 4 }} />
-                      <Text style={styles.destBadgeText}>{destNames}</Text>
-                    </View>
-                  ) : null}
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.clientName}>{item.name}</Text>
+                    {destNames ? (
+                      <View style={[styles.destBadge, { alignSelf: 'flex-start', marginTop: 4 }]}>
+                        <Building2 size={12} color="#1D4ED8" style={{ marginRight: 4 }} />
+                        <Text style={styles.destBadgeText}>{destNames}</Text>
+                      </View>
+                    ) : null}
+                  </View>
+                  <TouchableOpacity
+                    style={styles.menuBtn}
+                    onPress={() => setActiveMenuId(menuOpen ? null : item.id)}
+                    activeOpacity={0.7}
+                  >
+                    <MoreVertical size={18} color="#64748B" />
+                  </TouchableOpacity>
                 </View>
 
                 <View style={styles.clientDetailRow}>
@@ -277,6 +362,20 @@ export const ClientsManagementScreen: React.FC<ClientsManagementScreenProps> = (
 
                 {item.document && (
                   <Text style={styles.clientDocText}>Doc: {item.document}</Text>
+                )}
+
+                {menuOpen && (
+                  <View style={styles.actionMenu}>
+                    <TouchableOpacity style={styles.actionItem} onPress={() => openEditClient(item)}>
+                      <Pencil size={15} color="#1D4ED8" />
+                      <Text style={[styles.actionText, { color: '#1D4ED8' }]}>Editar dados</Text>
+                    </TouchableOpacity>
+                    <View style={styles.actionDivider} />
+                    <TouchableOpacity style={styles.actionItem} onPress={() => handleDeleteClient(item)}>
+                      <Trash2 size={15} color="#DC2626" />
+                      <Text style={[styles.actionText, { color: '#DC2626' }]}>Excluir morador</Text>
+                    </TouchableOpacity>
+                  </View>
                 )}
               </View>
             );
@@ -442,6 +541,109 @@ export const ClientsManagementScreen: React.FC<ClientsManagementScreenProps> = (
                   <ActivityIndicator color={colors.white} size="small" />
                 ) : (
                   <Text style={styles.saveBtnText}>Criar Unidade</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Modal 3: Editar Morador */}
+      <Modal visible={isEditClientModalOpen} animationType="slide" transparent onRequestClose={() => setIsEditClientModalOpen(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Editar Dados do Morador</Text>
+            <Text style={styles.modalSubtitle}>Atualize as informações do morador e seus destinos.</Text>
+
+            <View style={styles.formGroup}>
+              <Text style={styles.inputLabel}>Nome Completo *</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Ex: Carlos Oliveira"
+                placeholderTextColor="#94A3B8"
+                value={editClientName}
+                onChangeText={setEditClientName}
+              />
+            </View>
+
+            <View style={styles.formGroup}>
+              <Text style={styles.inputLabel}>WhatsApp para Autorizações *</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="11999998888 (com DDD)"
+                placeholderTextColor="#94A3B8"
+                value={editWhatsapp}
+                onChangeText={setEditWhatsapp}
+                keyboardType="phone-pad"
+              />
+            </View>
+
+            <View style={styles.formGroup}>
+              <Text style={styles.inputLabel}>Unidade / Apartamento</Text>
+              {destinations.length === 0 ? (
+                <Text style={styles.noDestText}>Nenhuma unidade cadastrada.</Text>
+              ) : (
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexDirection: 'row', marginTop: 4 }}>
+                  {destinations.map((d) => {
+                    const isSelected = editSelectedDestId === d.id;
+                    return (
+                      <TouchableOpacity
+                        key={d.id}
+                        style={[styles.destChip, isSelected && styles.destChipSelected]}
+                        onPress={() => setEditSelectedDestId(d.id)}
+                      >
+                        <Text style={[styles.destChipText, isSelected && styles.destChipTextSelected]}>
+                          {d.name} {d.block ? `(${d.block})` : ''}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
+              )}
+            </View>
+
+            <View style={styles.formGroup}>
+              <Text style={styles.inputLabel}>E-mail (Opcional)</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="morador@email.com"
+                placeholderTextColor="#94A3B8"
+                value={editEmail}
+                onChangeText={setEditEmail}
+                keyboardType="email-address"
+                autoCapitalize="none"
+              />
+            </View>
+
+            <View style={styles.formGroup}>
+              <Text style={styles.inputLabel}>Documento (Opcional)</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="CPF ou RG"
+                placeholderTextColor="#94A3B8"
+                value={editDocument}
+                onChangeText={setEditDocument}
+              />
+            </View>
+
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={styles.cancelBtn}
+                onPress={() => setIsEditClientModalOpen(false)}
+                disabled={isSubmittingEdit}
+              >
+                <Text style={styles.cancelBtnText}>Cancelar</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.saveBtn}
+                onPress={handleEditClient}
+                disabled={isSubmittingEdit}
+              >
+                {isSubmittingEdit ? (
+                  <ActivityIndicator color={colors.white} size="small" />
+                ) : (
+                  <Text style={styles.saveBtnText}>Salvar Alterações</Text>
                 )}
               </TouchableOpacity>
             </View>
@@ -725,6 +927,38 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     height: 46,
     borderRadius: 8,
+  },
+  menuBtn: {
+    padding: 4,
+  },
+  actionMenu: {
+    marginTop: 10,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-around',
+    backgroundColor: '#F8FAFC',
+    borderRadius: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 4,
+  },
+  actionItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+  },
+  actionText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  actionDivider: {
+    width: 1,
+    height: 16,
+    backgroundColor: '#CBD5E1',
   },
   saveBtnText: {
     fontSize: 14,

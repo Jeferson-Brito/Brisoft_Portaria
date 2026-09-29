@@ -58,7 +58,9 @@ export const api = axios.create({
 api.interceptors.request.use(
   async (config) => {
     try {
-      const token = await AsyncStorage.getItem('@combate_portaria:token');
+      const token =
+        (await AsyncStorage.getItem('@brisoft_portaria:token')) ||
+        (await AsyncStorage.getItem('@combate_portaria:token'));
       if (token) {
         config.headers.Authorization = `Bearer ${token}`;
       }
@@ -80,8 +82,11 @@ api.interceptors.response.use(
   (response) => response,
   async (error) => {
     if (error.response?.status === 401) {
-      // Sessão expirada ou token inválido
+      // Sessão expirada ou token inválido — limpa ambas as chaves (antiga e nova)
       try {
+        await AsyncStorage.removeItem('@brisoft_portaria:token');
+        await AsyncStorage.removeItem('@brisoft_portaria:refreshToken');
+        await AsyncStorage.removeItem('@brisoft_portaria:user');
         await AsyncStorage.removeItem('@combate_portaria:token');
         await AsyncStorage.removeItem('@combate_portaria:refreshToken');
         await AsyncStorage.removeItem('@combate_portaria:user');

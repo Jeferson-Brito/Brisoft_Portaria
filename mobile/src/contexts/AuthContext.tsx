@@ -148,6 +148,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const signOut = async () => {
     try {
+      await AsyncStorage.removeItem('@brisoft_portaria:token');
+      await AsyncStorage.removeItem('@brisoft_portaria:refreshToken');
+      await AsyncStorage.removeItem('@brisoft_portaria:user');
       await AsyncStorage.removeItem('@combate_portaria:token');
       await AsyncStorage.removeItem('@combate_portaria:refreshToken');
       await AsyncStorage.removeItem('@combate_portaria:user');

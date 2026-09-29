@@ -47,6 +47,8 @@ export class BaileysProvider implements IWhatsAppProvider {
   private messageStore = new Map<string, proto.IMessage>();
   private jidCache = new Map<string, string>();
   private msgRetryCounterCache = new MemoryCache();
+  private reconnectAttempts = 0;
+  private reconnectTimer: NodeJS.Timeout | null = null;
 
   private getStoreFilePath(): string {
     return this.orgSessionPath
@@ -329,19 +331,63 @@ export class BaileysProvider implements IWhatsAppProvider {
 
       if (connection === 'close') {
         const statusCode = (lastDisconnect?.error as any)?.output?.statusCode;
-        const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
+        const errorMessage = (lastDisconnect?.error as any)?.message || '';
+        const isLoggedOut = statusCode === DisconnectReason.loggedOut;
+        const isRestartRequired = statusCode === DisconnectReason.restartRequired || statusCode === 515;
+        const isReplaced = statusCode === DisconnectReason.connectionReplaced || statusCode === 440 || errorMessage.toLowerCase().includes('conflict');
 
-        this.statusInfo = {
-          status: 'DISCONNECTED',
-        };
+        console.warn(`⚠️ [Baileys] Conexão fechada. Status: ${statusCode}, Erro: ${errorMessage}`);
 
-        if (shouldReconnect && env.WHATSAPP_AUTO_RECONNECT) {
-          console.log('🔄 Reconectando Baileys automaticamente...');
-          setTimeout(() => this.connect(organizationId), 3000);
+        this.statusInfo = { status: 'DISCONNECTED' };
+
+        // 1. Se outra instância conectou (Status 440 Conflict / Stream Errored), NÃO reconecta para não derrubar a outra instância em loop!
+        if (isReplaced) {
+          console.warn('⚠️ [Baileys] Conexão substituída por outra instância ativa (Status 440: Conflict). Interrompendo reconexão para evitar loop.');
+          return;
+        }
+
+        // 2. Se a sessão foi desconectada pelo usuário no celular (Logged Out), limpa as credenciais
+        if (isLoggedOut) {
+          console.warn(`[Baileys] Sessão desconectada/expirada pelo WhatsApp (Logged Out). Limpando credenciais.`);
+          this.disconnect(organizationId);
+          return;
+        }
+
+        if (env.WHATSAPP_AUTO_RECONNECT) {
+          // Se for reinício exigido pelo Baileys (515), reconecta imediatamente sem penalizar backoff
+          if (isRestartRequired) {
+            console.log('🔄 [Baileys] Reinício solicitado pelo protocolo (515). Reconectando em 1s...');
+            if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
+            this.reconnectTimer = setTimeout(() => this.connect(organizationId), 1000);
+            return;
+          }
+
+          // Backoff exponencial: 3s, 6s, 12s, 24s, ... até no máximo 5 minutos
+          const isBadMac = errorMessage.toLowerCase().includes('bad mac');
+          const MAX_ATTEMPTS = 10;
+          const BASE_DELAY_MS = isBadMac ? 15000 : 3000;
+          const delay = Math.min(BASE_DELAY_MS * Math.pow(2, this.reconnectAttempts), 300000);
+          this.reconnectAttempts++;
+
+          if (this.reconnectAttempts <= MAX_ATTEMPTS) {
+            console.log(`🔄 Reconectando Baileys (tentativa ${this.reconnectAttempts}/${MAX_ATTEMPTS}) em ${Math.round(delay / 1000)}s...`);
+            if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
+            this.reconnectTimer = setTimeout(() => this.connect(organizationId), delay);
+          } else {
+            console.error(`❌ [Baileys] Máximo de tentativas de reconexão atingido (${MAX_ATTEMPTS}). Aguardando intervenção manual.`);
+            this.statusInfo = { status: 'DISCONNECTED' };
+          }
         }
       } else if (connection === 'open') {
         const userJid = this.sock?.user?.id || '';
         const phone = userJid.split(':')[0] || userJid.split('@')[0];
+
+        // Conexão bem-sucedida: zera o contador de tentativas de reconexão
+        this.reconnectAttempts = 0;
+        if (this.reconnectTimer) {
+          clearTimeout(this.reconnectTimer);
+          this.reconnectTimer = null;
+        }
 
         this.statusInfo = {
           status: 'CONNECTED',
@@ -351,6 +397,7 @@ export class BaileysProvider implements IWhatsAppProvider {
 
         console.log(`✅ WhatsApp Baileys conectado com sucesso para o número: ${phone}`);
       }
+
     });
 
     // Escuta mensagens recebidas (respostas dos moradores)
