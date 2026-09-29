@@ -81,11 +81,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     loadStorageData();
   }, []);
 
-  // Verifica se a assinatura bloqueia o uso do app
+  // Verifica se a assinatura bloqueia o uso do app (exceto SUPER_ADMIN)
   const isSubscriptionBlocked =
     user?.role !== 'SUPER_ADMIN' &&
     !!user?.subscription &&
-    BLOCKED_STATUSES.includes(user.subscription.status);
+    (BLOCKED_STATUSES.includes(user.subscription.status) || (user.subscription as any).isBlocked === true);
 
   const signIn = async (email: string, password: string) => {
     try {

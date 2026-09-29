@@ -10,6 +10,7 @@ import {
   ActivityIndicator,
   Alert,
   Modal,
+  Linking,
 } from 'react-native';
 import {
   Clock,
@@ -42,6 +43,10 @@ import {
   X,
   List,
   History,
+  Lock,
+  CreditCard,
+  ExternalLink,
+  AlertCircle,
 } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from '../../theme/colors';
@@ -105,11 +110,36 @@ const matchesDateFilter = (dateString: string, filter: DateFilterType) => {
 };
 
 export const DashboardScreen: React.FC = () => {
-  const { user, signOut } = useAuth();
+  const { user, signOut, isSubscriptionBlocked, refreshSubscription } = useAuth();
   const insets = useSafeAreaInsets();
   const scrollRef = useRef<ScrollView>(null);
   const [showScrollTop, setShowScrollTop] = useState(false);
   const [showCompactActions, setShowCompactActions] = useState(false);
+
+  // Link Oficial Stripe do Cliente
+  const STRIPE_PAYMENT_URL = 'https://buy.stripe.com/4gM3coh0P3IWdi6dGfg7e00';
+  const [isBlockedModalOpen, setIsBlockedModalOpen] = useState(false);
+
+  const handleOpenStripe = async () => {
+    try {
+      const supported = await Linking.canOpenURL(STRIPE_PAYMENT_URL);
+      if (supported) {
+        await Linking.openURL(STRIPE_PAYMENT_URL);
+      } else {
+        Alert.alert('Erro', 'Não foi possível abrir o link de pagamento do Stripe.');
+      }
+    } catch (err) {
+      Alert.alert('Erro', 'Não foi possível abrir o navegador.');
+    }
+  };
+
+  const handleGuardedAction = (action: () => void) => {
+    if (isSubscriptionBlocked) {
+      setIsBlockedModalOpen(true);
+      return;
+    }
+    action();
+  };
 
   const [activeTab, setActiveTab] = useState<
     | 'dashboard'
@@ -221,8 +251,15 @@ export const DashboardScreen: React.FC = () => {
   const fetchOrgProfile = useCallback(async () => {
     try {
       const res = await api.get('/organizations/current');
-      if (res.data?.success && res.data?.data?.profile) {
-        setOrgProfile(res.data.data.profile);
+      if (res.data?.success && res.data?.data) {
+        const org = res.data.data;
+        const profile = org.profile || {};
+        setOrgProfile({
+          companyName: profile.companyName || org.name || '',
+          unitLabel: profile.unitLabel,
+          clientLabel: profile.clientLabel,
+          type: profile.type,
+        });
       }
     } catch (e) {}
   }, []);
@@ -240,6 +277,18 @@ export const DashboardScreen: React.FC = () => {
       fetchSummaryAndRequests();
     });
 
+    // Desbloqueio e sincronização em tempo real quando o webhook do Stripe ou SuperAdmin atualizar
+    const unsubSubscription = addListener('subscription:updated', (payload: any) => {
+      console.log('Realtime subscription updated:', payload);
+      refreshSubscription();
+      fetchOrgProfile();
+      fetchSummaryAndRequests();
+      Alert.alert(
+        'Assinatura Atualizada! 🎉',
+        'O acesso completo da empresa foi liberado com sucesso no sistema!'
+      );
+    });
+
     const interval = setInterval(fetchSummaryAndRequests, 15000);
 
     return () => {
@@ -248,9 +297,10 @@ export const DashboardScreen: React.FC = () => {
       unsubPkgCreated();
       unsubPkgPicked();
       unsubAlert();
+      unsubSubscription();
       clearInterval(interval);
     };
-  }, [addListener, fetchSummaryAndRequests, fetchOrgProfile]);
+  }, [addListener, fetchSummaryAndRequests, fetchOrgProfile, refreshSubscription]);
 
   // Reset da barra de ações compactas e botão voltar ao topo na troca de aba
   useEffect(() => {
@@ -444,8 +494,8 @@ export const DashboardScreen: React.FC = () => {
                 <Text style={styles.greetingTitle}>
                   Olá, {user?.name ? user.name.split(' ')[0] : 'Jeferson'}
                 </Text>
-                <Text style={styles.greetingSubtitle}>
-                  {orgProfile.companyName || 'Brisoft Portaria'}
+                <Text style={styles.greetingSubtitle} numberOfLines={1}>
+                  {orgProfile.companyName || user?.organizationName || 'Portaria'}
                 </Text>
               </View>
             </TouchableOpacity>
@@ -497,45 +547,129 @@ export const DashboardScreen: React.FC = () => {
             }}
           >
           <View style={styles.bodyContainer}>
+            {/* Aviso de Assinatura: Bloqueio ou Contagem de Teste Gratuito */}
+            {isSubscriptionBlocked ? (
+              <View style={styles.subscriptionBannerBlocked}>
+                <View style={styles.subscriptionBannerHeader}>
+                  <View style={styles.subscriptionLockIcon}>
+                    <Lock size={18} color="#FFFFFF" strokeWidth={2.4} />
+                  </View>
+                  <View style={{ flex: 1, marginLeft: 12 }}>
+                    <Text style={styles.subscriptionBannerTitleBlocked}>
+                      Período de Teste Expirado
+                    </Text>
+                    <Text style={styles.subscriptionBannerDescBlocked}>
+                      O teste gratuito de 7 dias desta empresa foi encerrado. Todas as ações do sistema foram bloqueadas até a regularização do pagamento.
+                    </Text>
+                  </View>
+                </View>
+                <TouchableOpacity
+                  style={styles.subscriptionPayBtn}
+                  onPress={handleOpenStripe}
+                  activeOpacity={0.88}
+                >
+                  <CreditCard size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
+                  <Text style={styles.subscriptionPayBtnText}>Pagar no Stripe para Desbloquear</Text>
+                  <ExternalLink size={14} color="#FFFFFF" style={{ marginLeft: 6 }} />
+                </TouchableOpacity>
+              </View>
+            ) : (user?.subscription?.status === 'TRIAL' || user?.subscription?.plan === 'TRIAL') ? (
+              <View style={styles.subscriptionBannerTrial}>
+                <View style={styles.subscriptionBannerHeader}>
+                  <View style={styles.subscriptionClockIcon}>
+                    <Clock size={16} color="#B45309" strokeWidth={2.4} />
+                  </View>
+                  <View style={{ flex: 1, marginLeft: 12 }}>
+                    <Text style={styles.subscriptionBannerTitleTrial}>
+                      Período de Teste Gratuito: {user.subscription.daysRemaining != null ? `${user.subscription.daysRemaining} dia(s) restante(s)` : '7 dias'}
+                    </Text>
+                    <Text style={styles.subscriptionBannerDescTrial}>
+                      Aproveite todos os recursos da portaria. Você pode antecipar a assinatura para garantir continuidade do serviço sem bloqueios.
+                    </Text>
+                  </View>
+                </View>
+                <TouchableOpacity
+                  style={styles.subscriptionTrialPayBtn}
+                  onPress={handleOpenStripe}
+                  activeOpacity={0.88}
+                >
+                  <CreditCard size={14} color="#92400E" style={{ marginRight: 6 }} />
+                  <Text style={styles.subscriptionTrialPayBtnText}>Antecipar Assinatura Mensal</Text>
+                  <ExternalLink size={13} color="#92400E" style={{ marginLeft: 4 }} />
+                </TouchableOpacity>
+              </View>
+            ) : null}
+
             {/* Ação Principal Hero: Nova Solicitação em Grande Destaque */}
             <TouchableOpacity
-              style={styles.heroNewVisitBtn}
-              onPress={() => setIsModalOpen(true)}
+              style={[
+                styles.heroNewVisitBtn,
+                isSubscriptionBlocked && styles.heroNewVisitBtnBlocked,
+              ]}
+              onPress={() => handleGuardedAction(() => setIsModalOpen(true))}
               activeOpacity={0.88}
             >
-              <View style={styles.heroNewVisitIconCircle}>
-                <Plus size={26} color="#165337" strokeWidth={2.8} />
+              <View style={[styles.heroNewVisitIconCircle, isSubscriptionBlocked && { backgroundColor: '#64748B' }]}>
+                {isSubscriptionBlocked ? (
+                  <Lock size={22} color="#FFFFFF" strokeWidth={2.5} />
+                ) : (
+                  <Plus size={26} color="#165337" strokeWidth={2.8} />
+                )}
               </View>
               <View style={{ flex: 1, marginLeft: 14 }}>
-                <Text style={styles.heroNewVisitTitle}>Nova Solicitação</Text>
+                <Text style={[styles.heroNewVisitTitle, isSubscriptionBlocked && { color: '#94A3B8' }]}>
+                  {isSubscriptionBlocked ? 'Ação Bloqueada (Assinatura Necessária)' : 'Nova Solicitação'}
+                </Text>
               </View>
-              <ChevronRight size={22} color="#FFFFFF" />
+              {isSubscriptionBlocked ? (
+                <Lock size={18} color="#94A3B8" />
+              ) : (
+                <ChevronRight size={22} color="#FFFFFF" />
+              )}
             </TouchableOpacity>
 
             {/* Cards Lado a Lado: Agendamento & Encomendas Centralizados */}
             <View style={styles.secondaryCardsRow}>
               {/* Card Agendamento */}
               <TouchableOpacity
-                style={styles.secondaryCard}
-                onPress={() => setActiveTab('preauthorizations')}
+                style={[
+                  styles.secondaryCard,
+                  isSubscriptionBlocked && styles.secondaryCardBlocked,
+                ]}
+                onPress={() => handleGuardedAction(() => setActiveTab('preauthorizations'))}
                 activeOpacity={0.85}
               >
-                <View style={styles.secondaryIconCircle}>
-                  <CalendarCheck size={26} color="#165337" />
+                <View style={[styles.secondaryIconCircle, isSubscriptionBlocked && { backgroundColor: '#E2E8F0' }]}>
+                  {isSubscriptionBlocked ? (
+                    <Lock size={22} color="#94A3B8" />
+                  ) : (
+                    <CalendarCheck size={26} color="#165337" />
+                  )}
                 </View>
-                <Text style={styles.secondaryCardTitle}>Agendamentos</Text>
+                <Text style={[styles.secondaryCardTitle, isSubscriptionBlocked && { color: '#94A3B8' }]}>
+                  Agendamentos
+                </Text>
               </TouchableOpacity>
 
               {/* Card Encomendas */}
               <TouchableOpacity
-                style={styles.secondaryCard}
-                onPress={() => setActiveTab('packages')}
+                style={[
+                  styles.secondaryCard,
+                  isSubscriptionBlocked && styles.secondaryCardBlocked,
+                ]}
+                onPress={() => handleGuardedAction(() => setActiveTab('packages'))}
                 activeOpacity={0.85}
               >
-                <View style={styles.secondaryIconCircle}>
-                  <Package size={26} color="#165337" />
+                <View style={[styles.secondaryIconCircle, isSubscriptionBlocked && { backgroundColor: '#E2E8F0' }]}>
+                  {isSubscriptionBlocked ? (
+                    <Lock size={22} color="#94A3B8" />
+                  ) : (
+                    <Package size={26} color="#165337" />
+                  )}
                 </View>
-                <Text style={styles.secondaryCardTitle}>Encomendas</Text>
+                <Text style={[styles.secondaryCardTitle, isSubscriptionBlocked && { color: '#94A3B8' }]}>
+                  Encomendas
+                </Text>
               </TouchableOpacity>
             </View>
 
@@ -911,8 +1045,11 @@ export const DashboardScreen: React.FC = () => {
                       {/* Botão de Ação Rápida para Liberados */}
                       {isAuthorized && (
                         <TouchableOpacity
-                          style={styles.compactEntryBtn}
-                          onPress={() => handleRegisterEntry(req.id, req.visitor?.name)}
+                          style={[
+                            styles.compactEntryBtn,
+                            isSubscriptionBlocked && { backgroundColor: '#94A3B8' },
+                          ]}
+                          onPress={() => handleGuardedAction(() => handleRegisterEntry(req.id, req.visitor?.name))}
                           disabled={entryProcessingId === req.id}
                           activeOpacity={0.85}
                         >
@@ -920,8 +1057,14 @@ export const DashboardScreen: React.FC = () => {
                             <ActivityIndicator size="small" color="#FFFFFF" />
                           ) : (
                             <>
-                              <LogIn size={14} color="#FFFFFF" style={{ marginRight: 4 }} />
-                              <Text style={styles.compactEntryBtnText}>ENTRAR</Text>
+                              {isSubscriptionBlocked ? (
+                                <Lock size={13} color="#FFFFFF" style={{ marginRight: 4 }} />
+                              ) : (
+                                <LogIn size={14} color="#FFFFFF" style={{ marginRight: 4 }} />
+                              )}
+                              <Text style={styles.compactEntryBtnText}>
+                                {isSubscriptionBlocked ? 'BLOQUEADO' : 'ENTRAR'}
+                              </Text>
                             </>
                           )}
                         </TouchableOpacity>
@@ -1013,22 +1156,32 @@ export const DashboardScreen: React.FC = () => {
         {showCompactActions && (
           <View style={styles.compactActionsBar}>
             <TouchableOpacity
-              style={styles.compactActionBtnPrimary}
+              style={[
+                styles.compactActionBtnPrimary,
+                isSubscriptionBlocked && { backgroundColor: '#64748B' },
+              ]}
               onPress={() => {
                 setShowCompactActions(false);
-                setIsModalOpen(true);
+                handleGuardedAction(() => setIsModalOpen(true));
               }}
               activeOpacity={0.85}
             >
-              <Plus size={15} color="#FFFFFF" strokeWidth={2.5} />
+              {isSubscriptionBlocked ? (
+                <Lock size={15} color="#FFFFFF" strokeWidth={2.5} />
+              ) : (
+                <Plus size={15} color="#FFFFFF" strokeWidth={2.5} />
+              )}
               <Text style={styles.compactActionBtnPrimaryText}>Nova Solicitação</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={styles.compactActionBtnSecondary}
+              style={[
+                styles.compactActionBtnSecondary,
+                isSubscriptionBlocked && { opacity: 0.6 },
+              ]}
               onPress={() => {
                 setShowCompactActions(false);
-                setActiveTab('preauthorizations');
+                handleGuardedAction(() => setActiveTab('preauthorizations'));
               }}
               activeOpacity={0.85}
             >
@@ -1037,10 +1190,13 @@ export const DashboardScreen: React.FC = () => {
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={styles.compactActionBtnSecondary}
+              style={[
+                styles.compactActionBtnSecondary,
+                isSubscriptionBlocked && { opacity: 0.6 },
+              ]}
               onPress={() => {
                 setShowCompactActions(false);
-                setActiveTab('packages');
+                handleGuardedAction(() => setActiveTab('packages'));
               }}
               activeOpacity={0.85}
             >
@@ -1093,16 +1249,16 @@ export const DashboardScreen: React.FC = () => {
 
           {/* 2. Aguardando */}
           <TouchableOpacity
-            style={styles.tabItem}
-            onPress={() => setActiveTab('pending')}
+            style={[styles.tabItem, isSubscriptionBlocked && { opacity: 0.45 }]}
+            onPress={() => handleGuardedAction(() => setActiveTab('pending'))}
             activeOpacity={0.8}
           >
             <View>
               <Clock
                 size={22}
-                color={activeTab === 'pending' ? '#165337' : '#94A3B8'}
+                color={!isSubscriptionBlocked && activeTab === 'pending' ? '#165337' : '#94A3B8'}
               />
-              {summary.pendingCount > 0 && (
+              {summary.pendingCount > 0 && !isSubscriptionBlocked && (
                 <View style={styles.tabBadgeDot}>
                   <Text style={styles.tabBadgeText}>{summary.pendingCount}</Text>
                 </View>
@@ -1111,26 +1267,26 @@ export const DashboardScreen: React.FC = () => {
             <Text
               style={[
                 styles.tabLabel,
-                activeTab === 'pending' && styles.tabLabelActive,
+                !isSubscriptionBlocked && activeTab === 'pending' && styles.tabLabelActive,
               ]}
             >
               Aguardando
             </Text>
-            {activeTab === 'pending' && <View style={styles.activeTabIndicator} />}
+            {!isSubscriptionBlocked && activeTab === 'pending' && <View style={styles.activeTabIndicator} />}
           </TouchableOpacity>
 
           {/* 3. Autorizados */}
           <TouchableOpacity
-            style={styles.tabItem}
-            onPress={() => setActiveTab('authorized')}
+            style={[styles.tabItem, isSubscriptionBlocked && { opacity: 0.45 }]}
+            onPress={() => handleGuardedAction(() => setActiveTab('authorized'))}
             activeOpacity={0.8}
           >
             <View>
               <ShieldCheck
                 size={22}
-                color={activeTab === 'authorized' ? '#165337' : '#94A3B8'}
+                color={!isSubscriptionBlocked && activeTab === 'authorized' ? '#165337' : '#94A3B8'}
               />
-              {summary.authorizedCount > 0 && (
+              {summary.authorizedCount > 0 && !isSubscriptionBlocked && (
                 <View style={[styles.tabBadgeDot, { backgroundColor: '#165337' }]}>
                   <Text style={styles.tabBadgeText}>{summary.authorizedCount}</Text>
                 </View>
@@ -1139,56 +1295,56 @@ export const DashboardScreen: React.FC = () => {
             <Text
               style={[
                 styles.tabLabel,
-                activeTab === 'authorized' && { color: '#165337', fontWeight: '700' },
+                !isSubscriptionBlocked && activeTab === 'authorized' && { color: '#165337', fontWeight: '700' },
               ]}
             >
               Autorizados
             </Text>
-            {activeTab === 'authorized' && (
+            {!isSubscriptionBlocked && activeTab === 'authorized' && (
               <View style={styles.activeTabIndicator} />
             )}
           </TouchableOpacity>
 
           {/* 4. Histórico de Solicitações (Nova Aba) */}
           <TouchableOpacity
-            style={styles.tabItem}
-            onPress={() => setActiveTab('history')}
+            style={[styles.tabItem, isSubscriptionBlocked && { opacity: 0.45 }]}
+            onPress={() => handleGuardedAction(() => setActiveTab('history'))}
             activeOpacity={0.8}
           >
             <History
               size={22}
-              color={activeTab === 'history' ? '#165337' : '#94A3B8'}
+              color={!isSubscriptionBlocked && activeTab === 'history' ? '#165337' : '#94A3B8'}
             />
             <Text
               style={[
                 styles.tabLabel,
-                activeTab === 'history' && styles.tabLabelActive,
+                !isSubscriptionBlocked && activeTab === 'history' && styles.tabLabelActive,
               ]}
             >
               Histórico
             </Text>
-            {activeTab === 'history' && <View style={styles.activeTabIndicator} />}
+            {!isSubscriptionBlocked && activeTab === 'history' && <View style={styles.activeTabIndicator} />}
           </TouchableOpacity>
 
           {/* 5. Relatórios */}
           <TouchableOpacity
-            style={styles.tabItem}
-            onPress={() => setActiveTab('reports')}
+            style={[styles.tabItem, isSubscriptionBlocked && { opacity: 0.45 }]}
+            onPress={() => handleGuardedAction(() => setActiveTab('reports'))}
             activeOpacity={0.8}
           >
             <BarChart3
               size={22}
-              color={activeTab === 'reports' ? '#165337' : '#94A3B8'}
+              color={!isSubscriptionBlocked && activeTab === 'reports' ? '#165337' : '#94A3B8'}
             />
             <Text
               style={[
                 styles.tabLabel,
-                activeTab === 'reports' && styles.tabLabelActive,
+                !isSubscriptionBlocked && activeTab === 'reports' && styles.tabLabelActive,
               ]}
             >
               Relatórios
             </Text>
-            {activeTab === 'reports' && <View style={styles.activeTabIndicator} />}
+            {!isSubscriptionBlocked && activeTab === 'reports' && <View style={styles.activeTabIndicator} />}
           </TouchableOpacity>
         </View>
 
@@ -1520,12 +1676,238 @@ export const DashboardScreen: React.FC = () => {
           }}
           bottom={bottomInset + 65}
         />
+
+        {/* MODAL DE BLOQUEIO DE ASSINATURA STRIPE */}
+        <Modal
+          visible={isBlockedModalOpen}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setIsBlockedModalOpen(false)}
+        >
+          <View style={styles.blockedModalOverlay}>
+            <View style={styles.blockedModalCard}>
+              <View style={styles.blockedModalIconCircle}>
+                <Lock size={32} color="#FFFFFF" strokeWidth={2.4} />
+              </View>
+
+              <Text style={styles.blockedModalTitle}>Assinatura Necessária</Text>
+              <Text style={styles.blockedModalDesc}>
+                O período de teste gratuito de 7 dias da sua empresa encerrou ou o acesso foi pausado.
+                {'\n\n'}
+                Para continuar utilizando todas as funcionalidades, cadastrar visitas, encomendas e autorizações, ative sua assinatura mensal pelo Stripe.
+              </Text>
+
+              <TouchableOpacity
+                style={styles.blockedModalPayBtn}
+                onPress={handleOpenStripe}
+                activeOpacity={0.88}
+              >
+                <CreditCard size={18} color="#FFFFFF" style={{ marginRight: 8 }} />
+                <Text style={styles.blockedModalPayBtnText}>Pagar no Stripe Agora</Text>
+                <ExternalLink size={16} color="#FFFFFF" style={{ marginLeft: 6 }} />
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.blockedModalVerifyBtn}
+                onPress={async () => {
+                  await refreshSubscription();
+                  await fetchSummaryAndRequests();
+                  Alert.alert('Verificação', 'Status de pagamento consultado.');
+                }}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.blockedModalVerifyBtnText}>Já realizei o pagamento (Verificar)</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.blockedModalCloseBtn}
+                onPress={() => setIsBlockedModalOpen(false)}
+              >
+                <Text style={styles.blockedModalCloseBtnText}>Fechar</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
       </View>
     </View>
   );
 };
 
 const styles = StyleSheet.create({
+  // Banners de Assinatura
+  subscriptionBannerBlocked: {
+    backgroundColor: '#FEF2F2',
+    borderColor: '#FECACA',
+    borderWidth: 1.5,
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 16,
+  },
+  subscriptionBannerTrial: {
+    backgroundColor: '#FFFBEB',
+    borderColor: '#FDE68A',
+    borderWidth: 1.5,
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 16,
+  },
+  subscriptionBannerHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+  },
+  subscriptionLockIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: '#DC2626',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  subscriptionClockIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: '#FEF3C7',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  subscriptionBannerTitleBlocked: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#991B1B',
+  },
+  subscriptionBannerDescBlocked: {
+    fontSize: 12,
+    color: '#B91C1C',
+    marginTop: 3,
+    lineHeight: 17,
+  },
+  subscriptionBannerTitleTrial: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#92400E',
+  },
+  subscriptionBannerDescTrial: {
+    fontSize: 12,
+    color: '#B45309',
+    marginTop: 3,
+    lineHeight: 17,
+  },
+  subscriptionPayBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#DC2626',
+    borderRadius: 10,
+    paddingVertical: 11,
+    marginTop: 12,
+  },
+  subscriptionPayBtnText: {
+    color: '#FFFFFF',
+    fontWeight: '800',
+    fontSize: 13,
+  },
+  subscriptionTrialPayBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FEF3C7',
+    borderColor: '#F59E0B',
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingVertical: 9,
+    marginTop: 12,
+  },
+  subscriptionTrialPayBtnText: {
+    color: '#92400E',
+    fontWeight: '700',
+    fontSize: 13,
+  },
+  heroNewVisitBtnBlocked: {
+    backgroundColor: '#94A3B8',
+    opacity: 0.75,
+  },
+  secondaryCardBlocked: {
+    backgroundColor: '#F1F5F9',
+    borderColor: '#CBD5E1',
+    opacity: 0.65,
+  },
+
+  // Modal de Bloqueio
+  blockedModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.75)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  blockedModalCard: {
+    width: '100%',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 22,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.2,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  blockedModalIconCircle: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: '#DC2626',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+  },
+  blockedModalTitle: {
+    fontSize: 18,
+    fontWeight: '900',
+    color: '#0F172A',
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  blockedModalDesc: {
+    fontSize: 13,
+    color: '#475569',
+    textAlign: 'center',
+    lineHeight: 19,
+    marginBottom: 20,
+  },
+  blockedModalPayBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#165337',
+    width: '100%',
+    paddingVertical: 14,
+    borderRadius: 12,
+    marginBottom: 10,
+  },
+  blockedModalPayBtnText: {
+    color: '#FFFFFF',
+    fontWeight: '800',
+    fontSize: 15,
+  },
+  blockedModalVerifyBtn: {
+    paddingVertical: 10,
+    marginBottom: 8,
+  },
+  blockedModalVerifyBtnText: {
+    color: '#2563EB',
+    fontWeight: '700',
+    fontSize: 13,
+  },
+  blockedModalCloseBtn: {
+    paddingVertical: 8,
+  },
+  blockedModalCloseBtnText: {
+    color: '#94A3B8',
+    fontWeight: '600',
+    fontSize: 13,
+  },
   safeArea: {
     flex: 1,
     backgroundColor: '#F4F7F5',

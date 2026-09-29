@@ -29,6 +29,9 @@ import {
   FileText,
   Power,
   X,
+  AlertTriangle,
+  CheckCircle2,
+  CreditCard,
 } from 'lucide-react-native';
 import { api } from '../../config/api';
 import { AppHeader } from '../../components/AppHeader';
@@ -135,6 +138,59 @@ export const SuperAdminOrganizationsScreen: React.FC<SuperAdminOrganizationsScre
               }
             } catch (err: any) {
               Alert.alert('Erro', err.response?.data?.message || 'Falha ao alterar status.');
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleExpireTrial = (org: OrganizationItem | any) => {
+    Alert.alert(
+      'Remover Período de Teste?',
+      `Deseja cancelar o teste gratuito de 7 dias da empresa "${org.name}"? As ações dos usuários serão imediatamente bloqueadas até que realizem o pagamento no Stripe.`,
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Sim, Encerrar Teste',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              setIsSubmitting(true);
+              const res = await api.post(`/super-admin/organizations/${org.id}/expire-trial`);
+              Alert.alert('Sucesso', res.data?.message || 'Período de teste removido.');
+              fetchOrganizations();
+              if (selectedOrg?.id === org.id) handleOpenDetails(org.id);
+            } catch (err: any) {
+              Alert.alert('Erro', err.response?.data?.message || 'Falha ao remover período de teste.');
+            } finally {
+              setIsSubmitting(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleActivateSubscription = (org: OrganizationItem | any) => {
+    Alert.alert(
+      'Ativar Assinatura (30 Dias)?',
+      `Liberar 30 dias de acesso completo para "${org.name}"?`,
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Sim, Ativar',
+          onPress: async () => {
+            try {
+              setIsSubmitting(true);
+              const res = await api.post(`/super-admin/organizations/${org.id}/activate-subscription`, { periodDays: 30 });
+              Alert.alert('Sucesso', res.data?.message || 'Assinatura ativada por 30 dias!');
+              fetchOrganizations();
+              if (selectedOrg?.id === org.id) handleOpenDetails(org.id);
+            } catch (err: any) {
+              Alert.alert('Erro', err.response?.data?.message || 'Falha ao ativar assinatura.');
+            } finally {
+              setIsSubmitting(false);
             }
           },
         },
@@ -349,8 +405,8 @@ export const SuperAdminOrganizationsScreen: React.FC<SuperAdminOrganizationsScre
                     onPress={() => handleOpenDetails(item.id)}
                     activeOpacity={0.8}
                   >
-                    <Text style={styles.viewDetailsBtnText}>Ver Usuários & Detalhes</Text>
-                    <ChevronRight size={14} color="#2563EB" />
+                    <Text style={[styles.viewDetailsBtnText, { color: '#165337' }]}>Ver Usuários & Detalhes</Text>
+                    <ChevronRight size={14} color="#165337" />
                   </TouchableOpacity>
 
                   {!isSystem && (
@@ -373,6 +429,27 @@ export const SuperAdminOrganizationsScreen: React.FC<SuperAdminOrganizationsScre
                       </Text>
                     </TouchableOpacity>
                   )}
+                </View>
+
+                {/* Linha Exclusiva: Gestão de Teste & Assinatura */}
+                <View style={styles.orgCardSubscriptionActionsRow}>
+                  <TouchableOpacity
+                    style={styles.actionExpireTrialBtn}
+                    onPress={() => handleExpireTrial(item)}
+                    activeOpacity={0.85}
+                  >
+                    <AlertTriangle size={13} color="#B91C1C" style={{ marginRight: 4 }} />
+                    <Text style={styles.actionExpireTrialBtnText}>Remover Teste (Forçar Pagamento)</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={styles.actionActivateSubBtn}
+                    onPress={() => handleActivateSubscription(item)}
+                    activeOpacity={0.85}
+                  >
+                    <CheckCircle2 size={13} color="#FFFFFF" style={{ marginRight: 4 }} />
+                    <Text style={styles.actionActivateSubBtnText}>Ativar 30 Dias</Text>
+                  </TouchableOpacity>
                 </View>
               </TouchableOpacity>
             );
@@ -625,7 +702,7 @@ const styles = StyleSheet.create({
   newOrgBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#2563EB',
+    backgroundColor: '#165337',
     paddingHorizontal: 12,
     height: 42,
     borderRadius: 10,
@@ -783,7 +860,7 @@ const styles = StyleSheet.create({
   viewDetailsBtnText: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#2563EB',
+    color: '#165337',
     marginRight: 2,
   },
   toggleActiveBtn: {
@@ -805,6 +882,44 @@ const styles = StyleSheet.create({
   toggleActiveBtnText: {
     fontSize: 11,
     fontWeight: '700',
+  },
+  orgCardSubscriptionActionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#F8FAFC',
+    flexWrap: 'wrap',
+  },
+  actionExpireTrialBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1,
+    borderColor: '#FECACA',
+  },
+  actionExpireTrialBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#B91C1C',
+  },
+  actionActivateSubBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: '#165337',
+  },
+  actionActivateSubBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
 
   // Modal Styles

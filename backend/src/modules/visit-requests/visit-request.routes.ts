@@ -1,11 +1,17 @@
 import { FastifyInstance } from 'fastify';
 import { VisitRequestController } from './visit-request.controller.js';
 import { authMiddleware } from '../../middlewares/auth.middleware.js';
+import { subscriptionGuard } from '../../middlewares/subscription.middleware.js';
 
 const visitRequestController = new VisitRequestController();
 
 export async function visitRequestRoutes(app: FastifyInstance) {
   app.addHook('preHandler', authMiddleware);
+  app.addHook('preHandler', async (request, reply) => {
+    if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(request.method)) {
+      return subscriptionGuard(request, reply);
+    }
+  });
 
   // Criar nova solicitação de acesso (+ Nova Solicitação)
   app.post('/', {

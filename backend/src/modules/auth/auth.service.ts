@@ -1,6 +1,7 @@
 import bcrypt from 'bcryptjs';
 import { prisma } from '../../lib/prisma.js';
 import { AppError } from '../../core/errors/app-error.js';
+import { subscriptionService } from '../subscriptions/subscription.service.js';
 
 export interface LoginParams {
   email: string;
@@ -180,7 +181,7 @@ export class AuthService {
     });
 
     // Calcula info da assinatura
-    let subscriptionInfo: any = { plan: 'ACTIVE', status: 'ACTIVE', daysRemaining: 9999 };
+    const subscriptionInfo = subscriptionService.calculateSubscription(user.organization);
 
     return {
       user: {
@@ -205,6 +206,8 @@ export class AuthService {
             name: true,
             slug: true,
             isActive: true,
+            createdAt: true,
+            settings: true,
           },
         },
       },
@@ -214,9 +217,7 @@ export class AuthService {
       throw new AppError('Usuário não encontrado.', 404, 'USER_NOT_FOUND');
     }
 
-    // const sub = user.organization.subscription;
-    const now = new Date();
-    let daysRemaining = 9999;
+    const subscriptionInfo = subscriptionService.calculateSubscription(user.organization);
 
     return {
       id: user.id,
@@ -230,7 +231,7 @@ export class AuthService {
         slug: user.organization.slug,
         isActive: user.organization.isActive,
       },
-      subscription: { plan: 'ACTIVE', status: 'ACTIVE', daysRemaining },
+      subscription: subscriptionInfo,
     };
   }
 }

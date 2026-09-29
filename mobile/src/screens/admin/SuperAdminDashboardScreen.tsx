@@ -233,6 +233,57 @@ export const SuperAdminDashboardScreen: React.FC = () => {
     }
   };
 
+  const handleExpireTrial = (org: any) => {
+    Alert.alert(
+      'Remover Período de Teste?',
+      `Deseja cancelar o teste gratuito de 7 dias da empresa "${org.name}"? As ações dos usuários serão imediatamente bloqueadas até que realizem o pagamento no Stripe.`,
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Sim, Encerrar Teste',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              setIsSubmitting(true);
+              const res = await api.post(`/super-admin/organizations/${org.id}/expire-trial`);
+              Alert.alert('Sucesso', res.data?.message || 'Período de teste removido.');
+              loadDashboardData();
+            } catch (err: any) {
+              Alert.alert('Erro', err.response?.data?.message || 'Falha ao remover teste.');
+            } finally {
+              setIsSubmitting(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleActivateSubscription = (org: any) => {
+    Alert.alert(
+      'Ativar Assinatura (30 Dias)?',
+      `Liberar 30 dias de acesso completo para "${org.name}"?`,
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Sim, Ativar',
+          onPress: async () => {
+            try {
+              setIsSubmitting(true);
+              const res = await api.post(`/super-admin/organizations/${org.id}/activate-subscription`, { periodDays: 30 });
+              Alert.alert('Sucesso', res.data?.message || 'Assinatura ativada por 30 dias!');
+              loadDashboardData();
+            } catch (err: any) {
+              Alert.alert('Erro', err.response?.data?.message || 'Falha ao ativar assinatura.');
+            } finally {
+              setIsSubmitting(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
   const handleToggleOrgActive = async (org: any) => {
     try {
       await api.patch(`/super-admin/organizations/${org.id}/toggle-active`);
@@ -834,8 +885,8 @@ export const SuperAdminDashboardScreen: React.FC = () => {
                       setIsEditOrgModalOpen(true);
                     }}
                   >
-                    <Edit2 size={14} color="#2563EB" />
-                    <Text style={[styles.actionBtnText, { color: '#2563EB' }]}>Editar</Text>
+                    <Edit2 size={14} color="#165337" />
+                    <Text style={[styles.actionBtnText, { color: '#165337' }]}>Editar</Text>
                   </TouchableOpacity>
 
                   <TouchableOpacity
@@ -860,6 +911,29 @@ export const SuperAdminDashboardScreen: React.FC = () => {
                     onPress={() => confirmDeleteOrg(org)}
                   >
                     <Trash2 size={16} color="#DC2626" />
+                  </TouchableOpacity>
+                </View>
+
+                {/* Linha Exclusiva: Gestão de Teste & Assinatura */}
+                <View style={styles.orgCardSubscriptionActionsRow}>
+                  {(org.paymentStatus === 'TRIAL' || org.isTrial) && (
+                    <TouchableOpacity
+                      style={styles.actionExpireTrialBtn}
+                      onPress={() => handleExpireTrial(org)}
+                      activeOpacity={0.85}
+                    >
+                      <AlertTriangle size={13} color="#B91C1C" style={{ marginRight: 5 }} />
+                      <Text style={styles.actionExpireTrialBtnText}>Remover Teste (Forçar Pagamento)</Text>
+                    </TouchableOpacity>
+                  )}
+
+                  <TouchableOpacity
+                    style={styles.actionActivateSubBtn}
+                    onPress={() => handleActivateSubscription(org)}
+                    activeOpacity={0.85}
+                  >
+                    <CheckCircle2 size={13} color="#FFFFFF" style={{ marginRight: 5 }} />
+                    <Text style={styles.actionActivateSubBtnText}>Ativar Assinatura (30d)</Text>
                   </TouchableOpacity>
                 </View>
               </View>
@@ -1293,7 +1367,7 @@ export const SuperAdminDashboardScreen: React.FC = () => {
           onPress={() => setActiveTab('overview')}
           activeOpacity={0.8}
         >
-          <BarChart3 size={22} color={activeTab === 'overview' ? '#2563EB' : '#94A3B8'} />
+          <BarChart3 size={22} color={activeTab === 'overview' ? '#165337' : '#94A3B8'} />
           <Text style={[styles.navTabLabel, activeTab === 'overview' && styles.navTabLabelActive]}>
             Visão Geral
           </Text>
@@ -1305,7 +1379,7 @@ export const SuperAdminDashboardScreen: React.FC = () => {
           onPress={() => setActiveTab('organizations')}
           activeOpacity={0.8}
         >
-          <Building2 size={22} color={activeTab === 'organizations' ? '#2563EB' : '#94A3B8'} />
+          <Building2 size={22} color={activeTab === 'organizations' ? '#165337' : '#94A3B8'} />
           <Text style={[styles.navTabLabel, activeTab === 'organizations' && styles.navTabLabelActive]}>
             Empresas
           </Text>
@@ -1317,7 +1391,7 @@ export const SuperAdminDashboardScreen: React.FC = () => {
           onPress={() => setActiveTab('users')}
           activeOpacity={0.8}
         >
-          <Users size={22} color={activeTab === 'users' ? '#2563EB' : '#94A3B8'} />
+          <Users size={22} color={activeTab === 'users' ? '#165337' : '#94A3B8'} />
           <Text style={[styles.navTabLabel, activeTab === 'users' && styles.navTabLabelActive]}>
             Usuários
           </Text>
@@ -1329,7 +1403,7 @@ export const SuperAdminDashboardScreen: React.FC = () => {
           onPress={() => setActiveTab('finance')}
           activeOpacity={0.8}
         >
-          <CreditCard size={22} color={activeTab === 'finance' ? '#2563EB' : '#94A3B8'} />
+          <CreditCard size={22} color={activeTab === 'finance' ? '#165337' : '#94A3B8'} />
           <Text style={[styles.navTabLabel, activeTab === 'finance' && styles.navTabLabelActive]}>
             Financeiro
           </Text>
@@ -1341,7 +1415,7 @@ export const SuperAdminDashboardScreen: React.FC = () => {
           onPress={() => setActiveTab('profile')}
           activeOpacity={0.8}
         >
-          <User size={22} color={activeTab === 'profile' ? '#2563EB' : '#94A3B8'} />
+          <User size={22} color={activeTab === 'profile' ? '#165337' : '#94A3B8'} />
           <Text style={[styles.navTabLabel, activeTab === 'profile' && styles.navTabLabelActive]}>
             Perfil
           </Text>
@@ -1867,7 +1941,7 @@ export const SuperAdminDashboardScreen: React.FC = () => {
 const styles = StyleSheet.create({
   mainContainer: {
     flex: 1,
-    backgroundColor: '#0B132B',
+    backgroundColor: '#0D3824',
   },
   tabScroll: {
     flex: 1,
@@ -1876,7 +1950,7 @@ const styles = StyleSheet.create({
 
   // Header Mestre
   superHeader: {
-    backgroundColor: '#0B132B',
+    backgroundColor: '#0D3824',
     paddingHorizontal: 20,
     paddingBottom: 16,
   },
@@ -1889,7 +1963,7 @@ const styles = StyleSheet.create({
   superHeaderBadge: {
     fontSize: 10,
     fontWeight: '800',
-    color: '#60A5FA',
+    color: '#F59E0B',
     letterSpacing: 1.2,
   },
   superHeaderTitle: {
@@ -2407,6 +2481,44 @@ const styles = StyleSheet.create({
     padding: 7,
     borderRadius: 8,
     backgroundColor: '#FEF2F2',
+  },
+  orgCardSubscriptionActionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#F8FAFC',
+    flexWrap: 'wrap',
+  },
+  actionExpireTrialBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 8,
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1,
+    borderColor: '#FECACA',
+  },
+  actionExpireTrialBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#B91C1C',
+  },
+  actionActivateSubBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 8,
+    backgroundColor: '#165337',
+  },
+  actionActivateSubBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
 
   // Usuários (Aba 3)

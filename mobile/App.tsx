@@ -168,17 +168,12 @@ const MainNavigator: React.FC = () => {
     return <LoginScreen onRegisterPress={() => setShowRegister(true)} />;
   }
 
-  // Logado mas assinatura bloqueada (expirada, suspensa, cancelada)
-  if (isSubscriptionBlocked) {
-    return <SubscriptionScreen />;
-  }
-
   // Super Administrador: Painel exclusivo de Gestão SaaS Master
   if (user.role === 'SUPER_ADMIN') {
     return <SuperAdminDashboardScreen />;
   }
 
-  // Logado e assinatura ok
+  // Usuários de empresas (acessam normalmente a portaria, com ações bloqueadas se a assinatura estiver expirada)
   return <DashboardScreen />;
 };
 

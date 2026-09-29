@@ -2,6 +2,7 @@ import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { authMiddleware } from '../../middlewares/auth.middleware.js';
 import { requireSuperAdmin } from '../../middlewares/rbac.middleware.js';
 import { SuperAdminService } from './super-admin.service.js';
+import { subscriptionService } from '../subscriptions/subscription.service.js';
 
 const service = new SuperAdminService();
 
@@ -54,6 +55,29 @@ export async function superAdminRoutes(app: FastifyInstance) {
       success: true,
       message: `Empresa ${updated.isActive ? 'ativada' : 'suspensa'} com sucesso.`,
       data: updated,
+    });
+  });
+
+  // Remover período de teste e forçar pagamento imediato (Requisito 4)
+  app.post('/organizations/:id/expire-trial', async (req: FastifyRequest, reply: FastifyReply) => {
+    const { id } = req.params as { id: string };
+    const result = await subscriptionService.expireTrial(id);
+    return reply.send({
+      success: true,
+      message: 'Período de teste removido com sucesso. A empresa foi bloqueada para pagamento.',
+      data: result,
+    });
+  });
+
+  // Ativar / renovar assinatura manualmente por X dias
+  app.post('/organizations/:id/activate-subscription', async (req: FastifyRequest, reply: FastifyReply) => {
+    const { id } = req.params as { id: string };
+    const { periodDays } = (req.body as any) || {};
+    const result = await subscriptionService.activateSubscription(id, periodDays || 30);
+    return reply.send({
+      success: true,
+      message: 'Assinatura ativada com sucesso!',
+      data: result,
     });
   });
 

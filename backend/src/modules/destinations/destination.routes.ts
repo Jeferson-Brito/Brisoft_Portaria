@@ -2,11 +2,17 @@ import { FastifyInstance } from 'fastify';
 import { DestinationController } from './destination.controller.js';
 import { authMiddleware } from '../../middlewares/auth.middleware.js';
 import { requireRole } from '../../middlewares/rbac.middleware.js';
+import { subscriptionGuard } from '../../middlewares/subscription.middleware.js';
 
 const destinationController = new DestinationController();
 
 export async function destinationRoutes(app: FastifyInstance) {
   app.addHook('preHandler', authMiddleware);
+  app.addHook('preHandler', async (request, reply) => {
+    if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(request.method)) {
+      return subscriptionGuard(request, reply);
+    }
+  });
 
   // Listar destinos (Porteiro, Supervisor, Admin)
   app.get('/', {

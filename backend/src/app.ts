@@ -17,6 +17,7 @@ import { auditRoutes } from './modules/audit/audit.routes.js';
 import { packageRoutes } from './modules/packages/packages.routes.js';
 import { organizationRoutes } from './modules/organizations/organization.routes.js';
 import { superAdminRoutes } from './modules/super-admin/super-admin.routes.js';
+import { subscriptionRoutes } from './modules/subscriptions/subscription.routes.js';
 
 export function buildApp() {
   const app = fastify({
@@ -81,6 +82,8 @@ export function buildApp() {
   app.register(packageRoutes, { prefix: '/api/v1/packages' });
   app.register(organizationRoutes, { prefix: '/api/v1/organizations' });
   app.register(superAdminRoutes, { prefix: '/api/v1/super-admin' });
+  app.register(subscriptionRoutes, { prefix: '/api/v1/subscriptions' });
+  app.register(subscriptionRoutes, { prefix: '/api/v1/stripe' });
 
   return app;
 }

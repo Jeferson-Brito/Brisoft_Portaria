@@ -12,9 +12,9 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../../contexts/AuthContext';
 
-// URL do seu link de pagamento (Stripe, Pix, etc.) - configure conforme necessário
-const PAYMENT_LINK = 'https://brisoftportaria.com.br/assinar';
-const SUPPORT_WHATSAPP = 'https://wa.me/5511999999999?text=Quero+assinar+o+Brisoft+Portaria';
+// URL oficial do link de pagamento da Stripe
+const PAYMENT_LINK = 'https://buy.stripe.com/4gM3coh0P3IWdi6dGfg7e00';
+const SUPPORT_WHATSAPP = 'https://wa.me/5583993858515?text=Quero+assinar+o+Brisoft+Portaria';
 
 const FEATURES = [
   { icon: '🏢', title: 'Multi-unidades', desc: 'Gerencie todos os destinos do estabelecimento' },

@@ -1,6 +1,7 @@
 import { FastifyInstance } from 'fastify';
 import { packagesController } from './packages.controller.js';
 import { authMiddleware } from '../../middlewares/auth.middleware.js';
+import { subscriptionGuard } from '../../middlewares/subscription.middleware.js';
 import { getStorageService } from '../../services/storage/storage.service.js';
 
 export async function packageRoutes(app: FastifyInstance) {
@@ -20,6 +21,11 @@ export async function packageRoutes(app: FastifyInstance) {
 
   app.register(async (protectedRoutes) => {
     protectedRoutes.addHook('preHandler', authMiddleware);
+    protectedRoutes.addHook('preHandler', async (request, reply) => {
+      if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(request.method)) {
+        return subscriptionGuard(request, reply);
+      }
+    });
 
     protectedRoutes.post('/', packagesController.create);
     protectedRoutes.get('/pending', packagesController.listPending);
