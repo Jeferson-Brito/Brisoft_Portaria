@@ -14,7 +14,7 @@ export async function userRoutes(app: FastifyInstance) {
   app.post('/push-token', async (request, reply) => {
     const { pushToken } = request.body as { pushToken?: string };
     if (pushToken && request.user?.organizationId) {
-      realtimeService.registerPushToken(request.user.organizationId, pushToken);
+      await realtimeService.registerPushToken(request.user.organizationId, pushToken);
     }
     return reply.status(200).send({ success: true });
   });

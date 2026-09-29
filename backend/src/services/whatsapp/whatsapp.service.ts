@@ -141,18 +141,21 @@ export class WhatsAppService {
       return; // Mensagem irrelevante ou não estruturada
     }
 
-    // 1. Tenta localizar o cliente pelo telefone
+    // 1. Tenta localizar o cliente pelo telefone OU pelo WhatsApp LID persistido
     let client = await prisma.client.findFirst({
       where: {
         organizationId,
-        whatsappNumber: { contains: cleanPhone.slice(-8) }, // Busca pelos últimos 8 dígitos
+        OR: [
+          { whatsappNumber: { contains: cleanPhone.slice(-8) } },
+          { notes: { contains: cleanPhone } },
+        ],
         deletedAt: null,
       },
     });
 
-    // 2. Se não encontrou pelo telefone (ex: mensagem veio de um @lid WhatsApp)
+    // 2. Se não encontrou pelo telefone/LID (ex: primeira mensagem vinda de um @lid novo)
     if (!client) {
-      console.log(`🔍 [WhatsAppService] Telefone ${cleanPhone} não encontrado diretamente. Buscando solicitações pendentes...`);
+      console.log(`🔍 [WhatsAppService] Telefone/LID ${cleanPhone} não encontrado diretamente. Buscando solicitações pendentes...`);
 
       // Se a resposta citou uma mensagem anterior com código
       if (event.quotedCode) {
@@ -193,23 +196,71 @@ export class WhatsAppService {
       return;
     }
 
-    // Busca a solicitação PENDING mais recente deste cliente
-    const pendingRequest = await prisma.visitRequest.findFirst({
-      where: {
-        organizationId,
-        clientId: client.id,
-        status: 'PENDING',
-      },
-      include: {
-        visitor: true,
-        destination: true,
-        conciergeUser: true,
-      },
-      orderBy: { createdAt: 'desc' },
-    });
+    // Associa o WhatsApp LID ao cadastro do cliente para respostas futuras serem 100% instantâneas
+    if (event.fromJid && (event.fromJid.endsWith('@lid') || cleanPhone.length > 13) && !client.notes?.includes(cleanPhone)) {
+      try {
+        const newNotes = client.notes ? `${client.notes} [LID:${cleanPhone}]` : `[LID:${cleanPhone}]`;
+        await prisma.client.update({
+          where: { id: client.id },
+          data: { notes: newNotes },
+        });
+        client.notes = newNotes;
+        console.log(`🔗 [WhatsAppService] LID ${cleanPhone} vinculado com sucesso ao cliente ${client.name} (${client.whatsappNumber})!`);
+
+        const provider = this.getProvider(organizationId);
+        if (provider.registerJidMapping) {
+          provider.registerJidMapping(client.whatsappNumber, event.fromJid);
+          provider.registerJidMapping(cleanPhone, event.fromJid);
+        }
+      } catch (err: any) {
+        console.warn('Aviso ao vincular LID ao cliente:', err?.message || err);
+      }
+    }
+
+    // Busca a solicitação PENDING deste cliente (prioriza código citado se houver)
+    let pendingRequest = null;
+    if (event.quotedCode) {
+      pendingRequest = await prisma.visitRequest.findFirst({
+        where: {
+          organizationId,
+          clientId: client.id,
+          code: { contains: event.quotedCode },
+          status: 'PENDING',
+        },
+        include: {
+          visitor: true,
+          destination: true,
+          conciergeUser: true,
+        },
+      });
+    }
+
+    if (!pendingRequest) {
+      pendingRequest = await prisma.visitRequest.findFirst({
+        where: {
+          organizationId,
+          clientId: client.id,
+          status: 'PENDING',
+        },
+        include: {
+          visitor: true,
+          destination: true,
+          conciergeUser: true,
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+    }
 
     if (!pendingRequest) {
       console.log(`ℹ️ [WhatsAppService] Cliente ${client.name} não possui solicitações pendentes no momento.`);
+      try {
+        const provider = this.getProvider(organizationId);
+        const targetDest = event.fromJid || client.whatsappNumber;
+        await provider.sendMessage(
+          targetDest,
+          `Olá, *${client.name}*! No momento você não possui nenhuma solicitação pendente de autorização na portaria.`
+        );
+      } catch (e) {}
       return; // Nenhuma solicitação pendente para este cliente
     }
 

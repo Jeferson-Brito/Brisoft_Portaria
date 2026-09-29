@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { api, setOnUnauthorizedCallback } from '../config/api';
+import { registerForPushNotificationsAsync } from '../services/notifications.service';
 
 export interface Subscription {
   plan: 'TRIAL' | 'BASIC' | 'ENTERPRISE';
@@ -58,12 +59,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     async function loadStorageData() {
       try {
-        const storedToken = await AsyncStorage.getItem('@combate_portaria:token');
-        const storedUser = await AsyncStorage.getItem('@combate_portaria:user');
+        const storedToken =
+          (await AsyncStorage.getItem('@brisoft_portaria:token')) ||
+          (await AsyncStorage.getItem('@combate_portaria:token'));
+        const storedUser =
+          (await AsyncStorage.getItem('@brisoft_portaria:user')) ||
+          (await AsyncStorage.getItem('@combate_portaria:user'));
 
         if (storedToken && storedUser) {
           setToken(storedToken);
           setUser(JSON.parse(storedUser));
+          registerForPushNotificationsAsync();
         }
       } catch (err) {
         console.error('Erro ao restaurar sessão local:', err);
@@ -89,9 +95,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setUser(loggedUser);
       setToken(authToken);
 
-      await AsyncStorage.setItem('@combate_portaria:token', authToken);
-      await AsyncStorage.setItem('@combate_portaria:refreshToken', refreshToken);
-      await AsyncStorage.setItem('@combate_portaria:user', JSON.stringify(loggedUser));
+      await AsyncStorage.setItem('@brisoft_portaria:token', authToken);
+      await AsyncStorage.setItem('@brisoft_portaria:refreshToken', refreshToken);
+      await AsyncStorage.setItem('@brisoft_portaria:user', JSON.stringify(loggedUser));
+
+      // Registra o aparelho imediatamente para push notifications
+      registerForPushNotificationsAsync();
     } catch (err: any) {
       const errorMsg =
         err.response?.data?.error?.message ||

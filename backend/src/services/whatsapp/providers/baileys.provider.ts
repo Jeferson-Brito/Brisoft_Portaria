@@ -108,6 +108,19 @@ export class BaileysProvider implements IWhatsAppProvider {
     this.loadMessageStoreFromDisk();
   }
 
+  public registerJidMapping(phoneOrClean: string, targetJid: string) {
+    if (!phoneOrClean || !targetJid) return;
+    const clean = phoneOrClean.replace(/\D/g, '');
+    this.jidCache.set(clean, targetJid);
+    if (clean.startsWith('55') && clean.length === 13 && clean[4] === '9') {
+      this.jidCache.set(`${clean.slice(0, 4)}${clean.slice(5)}`, targetJid);
+    }
+    if (clean.startsWith('55') && clean.length === 12) {
+      this.jidCache.set(`${clean.slice(0, 4)}9${clean.slice(4)}`, targetJid);
+    }
+    console.log(`📱 [Baileys] JID mapping registrado: ${phoneOrClean} -> ${targetJid}`);
+  }
+
   private debounceSaveToDb(organizationId: string, orgSessionPath: string) {
     if (this.saveTimeout) clearTimeout(this.saveTimeout);
     this.saveTimeout = setTimeout(() => {
@@ -121,8 +134,6 @@ export class BaileysProvider implements IWhatsAppProvider {
       const files = fs.readdirSync(orgSessionPath);
       const sessionMap: Record<string, string> = {};
       for (const f of files) {
-        // Exclui sessões individuais de contatos (session-*.json) para evitar ratchets Signal desincronizados entre reinicializações
-        if (f.startsWith('session-')) continue;
         const fullPath = path.join(orgSessionPath, f);
         if (fs.statSync(fullPath).isFile()) {
           sessionMap[f] = fs.readFileSync(fullPath, 'utf8');
@@ -145,7 +156,33 @@ export class BaileysProvider implements IWhatsAppProvider {
           value: dataStr,
         },
       });
-      console.log(`💾 [WhatsApp] Sessão da organização ${organizationId} persistida com sucesso no banco de dados!`);
+
+      // Persiste as últimas 200 mensagens para responder a retries de descriptografia
+      if (this.messageStore.size > 0) {
+        const obj: Record<string, any> = {};
+        const entries = Array.from(this.messageStore.entries()).slice(-200);
+        for (const [id, msg] of entries) {
+          obj[id] = msg;
+        }
+        await prisma.systemSetting.upsert({
+          where: {
+            organizationId_key: {
+              organizationId,
+              key: 'whatsapp_messages_cache',
+            },
+          },
+          create: {
+            organizationId,
+            key: 'whatsapp_messages_cache',
+            value: JSON.stringify(obj),
+          },
+          update: {
+            value: JSON.stringify(obj),
+          },
+        });
+      }
+
+      console.log(`💾 [WhatsApp] Sessão da organização ${organizationId} persistida com sucesso (${Object.keys(sessionMap).length} arquivos)!`);
     } catch (err: any) {
       console.warn(`Aviso ao persistir sessão no banco para ${organizationId}:`, err?.message || err);
     }
@@ -169,10 +206,34 @@ export class BaileysProvider implements IWhatsAppProvider {
 
       const sessionMap: Record<string, string> = JSON.parse(setting.value);
       for (const [filename, content] of Object.entries(sessionMap)) {
-        if (filename.startsWith('session-')) continue;
         const fullPath = path.join(orgSessionPath, filename);
         fs.writeFileSync(fullPath, content, 'utf8');
       }
+
+      // Restaura mensagens recentes para atender retries do WhatsApp
+      try {
+        const msgSetting = await prisma.systemSetting.findUnique({
+          where: {
+            organizationId_key: {
+              organizationId,
+              key: 'whatsapp_messages_cache',
+            },
+          },
+        });
+        if (msgSetting && msgSetting.value) {
+          const parsed = JSON.parse(msgSetting.value, (key, value) => {
+            if (value && typeof value === 'object' && value.type === 'Buffer' && Array.isArray(value.data)) {
+              return Buffer.from(value.data);
+            }
+            return value;
+          });
+          for (const [id, msg] of Object.entries(parsed)) {
+            this.messageStore.set(id, msg as proto.IMessage);
+          }
+          console.log(`📦 [Baileys] ${this.messageStore.size} mensagens de retry restauradas do banco.`);
+        }
+      } catch (e) {}
+
       console.log(`📥 [WhatsApp] Sessão da organização ${organizationId} restaurada com sucesso do banco de dados (${Object.keys(sessionMap).length} arquivos)!`);
       return true;
     } catch (err: any) {
@@ -428,6 +489,28 @@ export class BaileysProvider implements IWhatsAppProvider {
       return cached;
     }
 
+    // Se o cliente tem um WhatsApp LID mapeado no banco, usa diretamente o @lid
+    try {
+      const clientWithLid = await prisma.client.findFirst({
+        where: {
+          whatsappNumber: { contains: clean.slice(-8) },
+          notes: { contains: '[LID:' },
+          deletedAt: null,
+        },
+        select: { notes: true, whatsappNumber: true },
+      });
+      if (clientWithLid?.notes) {
+        const match = clientWithLid.notes.match(/\[LID:([0-9]+)\]/);
+        if (match && match[1]) {
+          const lidJid = `${match[1]}@lid`;
+          this.registerJidMapping(clean, lidJid);
+          this.registerJidMapping(clientWithLid.whatsappNumber, lidJid);
+          console.log(`📱 [Baileys] JID recuperado de LID persistido para ${clean}: ${lidJid}`);
+          return lidJid;
+        }
+      }
+    } catch (e) {}
+
     if (this.sock) {
       try {
         // 1. Para números brasileiros com 13 dígitos (55 + DDD + 9 dígitos):
@@ -633,27 +716,18 @@ export class BaileysProvider implements IWhatsAppProvider {
       }
     }
 
-    let thumbnailBuffer: Buffer | undefined = undefined;
     if (imageContent instanceof Buffer) {
       try {
         const sharpModule = await import('sharp');
         const sharp = sharpModule.default || sharpModule;
-        // 1. Otimiza a foto para Web (reduz de ~500KB para ~70KB para tráfego instantâneo)
+        // Otimiza a foto para Web (reduz de ~500KB para ~70KB para tráfego instantâneo)
         const optimized = await sharp(imageContent)
           .resize({ width: 1024, height: 1024, fit: 'inside', withoutEnlargement: true })
           .jpeg({ quality: 75, progressive: true })
           .toBuffer();
         imageContent = optimized;
         mimeType = 'image/jpeg';
-
-        // 2. Gera thumbnail minúsculo (~1KB) embutido diretamente no frame criptográfico
-        // Isso permite que o app do WhatsApp renderize o preview imediatamente sem travar em "Aguardando mensagem"
-        const thumb = await sharp(imageContent)
-          .resize(72, 72, { fit: 'inside' })
-          .jpeg({ quality: 40 })
-          .toBuffer();
-        thumbnailBuffer = thumb;
-        console.log(`⚡ [Baileys] Foto otimizada com sharp (${optimized.length} bytes, thumb: ${thumb.length} bytes)`);
+        console.log(`⚡ [Baileys] Foto otimizada com sharp (${optimized.length} bytes)`);
       } catch (sharpErr: any) {
         console.warn('⚠️ [Baileys] Erro ao otimizar imagem com sharp:', sharpErr?.message || sharpErr);
       }
@@ -663,7 +737,6 @@ export class BaileysProvider implements IWhatsAppProvider {
       image: imageContent,
       mimetype: mimeType,
       caption: caption || '',
-      jpegThumbnail: thumbnailBuffer,
     });
     if (sent?.key?.id && sent.message) {
       this.saveMessageToStore(sent.key.id, sent.message);

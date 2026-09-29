@@ -26,6 +26,19 @@ async function bootstrap() {
     // Restaura automaticamente sessões salvas do WhatsApp Baileys
     await whatsappService.autoRestoreSessions();
 
+    // Keep-alive inteligente: realiza auto-ping a cada 8 minutos para manter o Baileys conectado e evitar cold-start no Render
+    if (env.NODE_ENV === 'production') {
+      const pingUrl = process.env.RENDER_EXTERNAL_URL
+        ? `${process.env.RENDER_EXTERNAL_URL}/health`
+        : 'https://combate-portaria-backend.onrender.com/health';
+      setInterval(async () => {
+        try {
+          await fetch(pingUrl);
+          console.log(`💓 [KeepAlive] Auto-ping enviado para ${pingUrl}`);
+        } catch (e) {}
+      }, 8 * 60 * 1000);
+    }
+
     console.log(`
 🚀 ========================================================
    SISTEMA DE CONTROLE DE ACESSO E GESTÃO DE VISITANTES

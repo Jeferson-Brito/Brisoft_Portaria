@@ -70,20 +70,30 @@ export async function registerForPushNotificationsAsync(): Promise<string | null
     }
 
     // Obtém o token do Expo Push (apenas em APK standalone / development build)
-    const tokenData = await Notifications.getExpoPushTokenAsync().catch((err: any) => {
-      console.warn('Aviso: getExpoPushTokenAsync:', err.message);
+    const projectId =
+      Constants.expoConfig?.extra?.eas?.projectId ??
+      Constants.easConfig?.projectId ??
+      '6bbcb9f7-7eae-44e1-b8cb-2bd2219e081f';
+
+    const tokenData = await Notifications.getExpoPushTokenAsync({
+      projectId,
+    }).catch((err: any) => {
+      console.warn('⚠️ [Notifications] Falha ao obter getExpoPushTokenAsync:', err.message);
       return null;
     });
 
     const token = tokenData?.data || null;
 
     if (token) {
-      console.log('📱 [Notifications] Expo Push Token obtido:', token);
+      console.log('📱 [Notifications] Expo Push Token obtido com sucesso:', token);
       try {
         await api.post('/users/push-token', { pushToken: token });
-      } catch (err) {
-        // Ignora se o endpoint não estiver pronto
+        console.log('✅ [Notifications] Token registrado no servidor com sucesso.');
+      } catch (err: any) {
+        console.warn('⚠️ [Notifications] Falha ao enviar token para o servidor:', err?.message || err);
       }
+    } else {
+      console.warn('⚠️ [Notifications] getExpoPushTokenAsync retornou token vazio.');
     }
 
     return token;
@@ -104,6 +114,7 @@ export async function triggerLocalAlertNotification(title: string, body: string,
         body,
         sound: true,
         priority: Notifications.AndroidNotificationPriority.MAX,
+        channelId: 'portaria-alerts',
         color: isAuthorized ? '#10B981' : '#EF4444',
       },
       trigger: null, // Disparo imediato
