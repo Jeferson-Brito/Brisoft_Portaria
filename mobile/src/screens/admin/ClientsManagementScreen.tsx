@@ -17,18 +17,16 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   Users,
-  Plus,
   Building2,
   Phone,
   Search,
   ArrowLeft,
-  Mail,
   Home,
-  CircleCheck,
   MessageCircle,
   Pencil,
   Trash2,
   MoreVertical,
+  Plus,
 } from 'lucide-react-native';
 import { colors } from '../../theme/colors';
 import { api } from '../../config/api';
@@ -38,6 +36,9 @@ interface ClientsManagementScreenProps {
 }
 
 export const ClientsManagementScreen: React.FC<ClientsManagementScreenProps> = ({ onBack }) => {
+  // Aba ativa: 'clients' (Moradores) por padrão ou 'destinations' (Unidades / Aptos)
+  const [activeTab, setActiveTab] = useState<'clients' | 'destinations'>('clients');
+
   const [clients, setClients] = useState<any[]>([]);
   const [destinations, setDestinations] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -69,6 +70,14 @@ export const ClientsManagementScreen: React.FC<ClientsManagementScreenProps> = (
   const [editDocument, setEditDocument] = useState('');
   const [editSelectedDestId, setEditSelectedDestId] = useState('');
   const [isSubmittingEdit, setIsSubmittingEdit] = useState(false);
+
+  // Modal Editar Unidade
+  const [isEditDestModalOpen, setIsEditDestModalOpen] = useState(false);
+  const [editingDest, setEditingDest] = useState<any>(null);
+  const [editDestName, setEditDestName] = useState('');
+  const [editDestBlock, setEditDestBlock] = useState('');
+  const [editDestCode, setEditDestCode] = useState('');
+  const [isSubmittingEditDest, setIsSubmittingEditDest] = useState(false);
 
   // Menu de ações por card
   const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
@@ -106,12 +115,28 @@ export const ClientsManagementScreen: React.FC<ClientsManagementScreenProps> = (
       return;
     }
 
-    try {
-      const res = await api.get(`/clients/search?q=${encodeURIComponent(text.trim())}`);
-      setClients(res.data.data?.clients || []);
-    } catch (err) {}
+    if (activeTab === 'clients') {
+      try {
+        const res = await api.get(`/clients/search?q=${encodeURIComponent(text.trim())}`);
+        setClients(res.data.data?.clients || []);
+      } catch (err) {}
+    } else {
+      try {
+        const res = await api.get(`/destinations?search=${encodeURIComponent(text.trim())}`);
+        setDestinations(res.data.data?.destinations || []);
+      } catch (err) {}
+    }
   };
 
+  // Alterna aba e limpa a busca
+  const handleSwitchTab = (tab: 'clients' | 'destinations') => {
+    setActiveTab(tab);
+    setSearchQuery('');
+    setActiveMenuId(null);
+    loadData();
+  };
+
+  // ==================== AÇÕES DE UNIDADE ====================
   const handleCreateDestination = async () => {
     if (!destName.trim()) {
       Alert.alert('Atenção', 'Informe o nome da unidade (ex: Apartamento 101).');
@@ -141,13 +166,70 @@ export const ClientsManagementScreen: React.FC<ClientsManagementScreenProps> = (
     }
   };
 
+  const openEditDest = (d: any) => {
+    setEditingDest(d);
+    setEditDestName(d.name || '');
+    setEditDestBlock(d.block || '');
+    setEditDestCode(d.code || '');
+    setActiveMenuId(null);
+    setIsEditDestModalOpen(true);
+  };
+
+  const handleEditDestination = async () => {
+    if (!editDestName.trim()) {
+      Alert.alert('Atenção', 'O nome da unidade não pode ficar em branco.');
+      return;
+    }
+
+    try {
+      setIsSubmittingEditDest(true);
+      await api.put(`/destinations/${editingDest.id}`, {
+        name: editDestName.trim(),
+        block: editDestBlock.trim() || undefined,
+        code: editDestCode.trim() || undefined,
+      });
+
+      Alert.alert('Sucesso', 'Unidade atualizada com sucesso!');
+      setIsEditDestModalOpen(false);
+      loadData();
+    } catch (err: any) {
+      Alert.alert('Erro', err.response?.data?.error?.message || 'Falha ao atualizar unidade');
+    } finally {
+      setIsSubmittingEditDest(false);
+    }
+  };
+
+  const handleDeleteDestination = (d: any) => {
+    setActiveMenuId(null);
+    Alert.alert(
+      'Excluir Unidade',
+      `Tem certeza que deseja excluir ${d.name}? Os moradores vinculados permanecerão no sistema, mas sem esta unidade.`,
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Excluir',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await api.delete(`/destinations/${d.id}`);
+              Alert.alert('Sucesso', 'Unidade removida com sucesso.');
+              loadData();
+            } catch (err: any) {
+              Alert.alert('Erro', err.response?.data?.error?.message || 'Falha ao excluir unidade');
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  // ==================== AÇÕES DE MORADOR ====================
   const handleCreateClient = async () => {
     if (!clientName.trim() || !whatsapp.trim()) {
       Alert.alert('Atenção', 'Preencha o nome do morador e o WhatsApp.');
       return;
     }
 
-    // Limpa pontuação do WhatsApp
     const cleanPhone = whatsapp.replace(/\D/g, '');
     if (cleanPhone.length < 10) {
       Alert.alert('Atenção', 'WhatsApp deve conter DDD e número (ex: 11999998888 ou 5511999998888).');
@@ -195,9 +277,15 @@ export const ClientsManagementScreen: React.FC<ClientsManagementScreenProps> = (
   };
 
   const handleEditClient = async () => {
-    if (!editClientName.trim()) { Alert.alert('Atenção', 'O nome não pode ficar em branco.'); return; }
+    if (!editClientName.trim()) {
+      Alert.alert('Atenção', 'O nome não pode ficar em branco.');
+      return;
+    }
     const cleanPhone = editWhatsapp.replace(/\D/g, '');
-    if (cleanPhone.length < 10) { Alert.alert('Atenção', 'WhatsApp deve conter DDD e número.'); return; }
+    if (cleanPhone.length < 10) {
+      Alert.alert('Atenção', 'WhatsApp deve conter DDD e número.');
+      return;
+    }
     const formattedPhone = cleanPhone.startsWith('55') ? cleanPhone : `55${cleanPhone}`;
     try {
       setIsSubmittingEdit(true);
@@ -225,7 +313,8 @@ export const ClientsManagementScreen: React.FC<ClientsManagementScreenProps> = (
       [
         { text: 'Cancelar', style: 'cancel' },
         {
-          text: 'Excluir', style: 'destructive',
+          text: 'Excluir',
+          style: 'destructive',
           onPress: async () => {
             try {
               await api.delete(`/clients/${c.id}`);
@@ -254,56 +343,86 @@ export const ClientsManagementScreen: React.FC<ClientsManagementScreenProps> = (
               <ArrowLeft size={20} color={colors.white} />
             </TouchableOpacity>
           )}
-          <View style={styles.iconCircle}>
-            <Building2 size={22} color={colors.white} />
-          </View>
-          <View style={{ flex: 1, marginLeft: 10 }}>
+          <View style={{ flex: 1 }}>
             <Text style={styles.headerTitle}>Gestão de Moradores & Unidades</Text>
-            <Text style={styles.headerSubtitle}>Cadastro de destinos e contatos WhatsApp</Text>
+            <Text style={styles.headerSubtitle}>Cadastro de residentes e apartamentos</Text>
           </View>
         </View>
 
-        {/* 2 Botões de Ação Rápida */}
-        <View style={styles.headerActionsRow}>
+        {/* Abas Internas (Moradores e Unidades / Aptos) */}
+        <View style={styles.tabsContainer}>
           <TouchableOpacity
-            style={styles.addClientBtn}
-            onPress={() => setIsClientModalOpen(true)}
-            activeOpacity={0.85}
+            style={[styles.tabButton, activeTab === 'clients' && styles.tabButtonActive]}
+            onPress={() => handleSwitchTab('clients')}
+            activeOpacity={0.8}
           >
-            <Plus size={16} color="#165337" style={{ marginRight: 4 }} />
-            <Text style={styles.addClientBtnText}>+ Morador</Text>
+            <Users size={16} color={activeTab === 'clients' ? '#165337' : 'rgba(255,255,255,0.75)'} style={{ marginRight: 6 }} />
+            <Text style={[styles.tabButtonText, activeTab === 'clients' && styles.tabButtonTextActive]}>
+              Morador
+            </Text>
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={styles.addDestBtn}
-            onPress={() => setIsDestModalOpen(true)}
-            activeOpacity={0.85}
+            style={[styles.tabButton, activeTab === 'destinations' && styles.tabButtonActive]}
+            onPress={() => handleSwitchTab('destinations')}
+            activeOpacity={0.8}
           >
-            <Home size={16} color={colors.white} style={{ marginRight: 4 }} />
-            <Text style={styles.addDestBtnText}>+ Unidade / Apto</Text>
+            <Home size={16} color={activeTab === 'destinations' ? '#165337' : 'rgba(255,255,255,0.75)'} style={{ marginRight: 6 }} />
+            <Text style={[styles.tabButtonText, activeTab === 'destinations' && styles.tabButtonTextActive]}>
+              Unidade / Apto
+            </Text>
           </TouchableOpacity>
         </View>
 
-        {/* Barra de Busca */}
-        <View style={styles.searchBar}>
-          <Search size={18} color="#94A3B8" style={{ marginRight: 8 }} />
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Buscar por morador, apartamento ou celular..."
-            placeholderTextColor="#94A3B8"
-            value={searchQuery}
-            onChangeText={handleSearch}
-          />
+        {/* Linha de Busca + Botão Adicionar ao lado */}
+        <View style={styles.searchActionRow}>
+          <View style={styles.searchBar}>
+            <Search size={18} color="#94A3B8" style={{ marginRight: 8 }} />
+            <TextInput
+              style={styles.searchInput}
+              placeholder={
+                activeTab === 'clients'
+                  ? 'Buscar morador ou celular...'
+                  : 'Buscar unidade, bloco ou código...'
+              }
+              placeholderTextColor="#94A3B8"
+              value={searchQuery}
+              onChangeText={handleSearch}
+            />
+          </View>
+
+          {activeTab === 'clients' ? (
+            <TouchableOpacity
+              style={styles.actionBtnHeader}
+              onPress={() => setIsClientModalOpen(true)}
+              activeOpacity={0.85}
+            >
+              <Plus size={16} color="#165337" style={{ marginRight: 4 }} />
+              <Text style={styles.actionBtnHeaderText}>Morador</Text>
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity
+              style={styles.actionBtnHeader}
+              onPress={() => setIsDestModalOpen(true)}
+              activeOpacity={0.85}
+            >
+              <Plus size={16} color="#165337" style={{ marginRight: 4 }} />
+              <Text style={styles.actionBtnHeaderText}>Unidade</Text>
+            </TouchableOpacity>
+          )}
         </View>
       </View>
 
-      {/* Lista */}
+      {/* Conteúdo Principal da Aba Selecionada */}
       {isLoading ? (
         <View style={styles.centerContainer}>
           <ActivityIndicator size="large" color="#2563EB" />
-          <Text style={styles.loadingText}>Carregando moradores...</Text>
+          <Text style={styles.loadingText}>
+            {activeTab === 'clients' ? 'Carregando moradores...' : 'Carregando unidades...'}
+          </Text>
         </View>
-      ) : (
+      ) : activeTab === 'clients' ? (
+        /* ================= LISTA DE MORADORES ================= */
         <FlatList
           data={clients}
           keyExtractor={(item) => item.id}
@@ -323,7 +442,7 @@ export const ClientsManagementScreen: React.FC<ClientsManagementScreenProps> = (
               <Users size={48} color="#94A3B8" style={{ marginBottom: 12 }} />
               <Text style={styles.emptyTitle}>Nenhum morador cadastrado</Text>
               <Text style={styles.emptySub}>
-                Cadastre os apartamentos e moradores para enviar autorizações pelo WhatsApp.
+                Toque no botão "Morador" acima para cadastrar os residentes.
               </Text>
             </View>
           }
@@ -374,6 +493,90 @@ export const ClientsManagementScreen: React.FC<ClientsManagementScreenProps> = (
                     <TouchableOpacity style={styles.actionItem} onPress={() => handleDeleteClient(item)}>
                       <Trash2 size={15} color="#DC2626" />
                       <Text style={[styles.actionText, { color: '#DC2626' }]}>Excluir morador</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+              </View>
+            );
+          }}
+        />
+      ) : (
+        /* ================= LISTA DE UNIDADES / APTOS ================= */
+        <FlatList
+          data={destinations}
+          keyExtractor={(item) => item.id}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={() => {
+                setRefreshing(true);
+                loadData();
+              }}
+              colors={['#2563EB']}
+            />
+          }
+          contentContainerStyle={styles.listContent}
+          ListEmptyComponent={
+            <View style={styles.emptyContainer}>
+              <Home size={48} color="#94A3B8" style={{ marginBottom: 12 }} />
+              <Text style={styles.emptyTitle}>Nenhuma unidade cadastrada</Text>
+              <Text style={styles.emptySub}>
+                Toque no botão "Unidade" acima para cadastrar apartamentos e blocos.
+              </Text>
+            </View>
+          }
+          renderItem={({ item }) => {
+            const menuOpen = activeMenuId === item.id;
+            const residentsCount = item.clients?.length || 0;
+
+            return (
+              <View style={styles.clientCard}>
+                <View style={styles.clientCardHeader}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.clientName}>{item.name}</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 }}>
+                      {item.block && (
+                        <View style={styles.destMetaBadge}>
+                          <Text style={styles.destMetaBadgeText}>Bloco: {item.block}</Text>
+                        </View>
+                      )}
+                      {item.code && (
+                        <View style={styles.destMetaBadge}>
+                          <Text style={styles.destMetaBadgeText}>Cód: {item.code}</Text>
+                        </View>
+                      )}
+                    </View>
+                  </View>
+                  <TouchableOpacity
+                    style={styles.menuBtn}
+                    onPress={() => setActiveMenuId(menuOpen ? null : item.id)}
+                    activeOpacity={0.7}
+                  >
+                    <MoreVertical size={18} color="#64748B" />
+                  </TouchableOpacity>
+                </View>
+
+                <View style={styles.clientDetailRow}>
+                  <Users size={14} color="#2563EB" style={{ marginRight: 6 }} />
+                  <Text style={styles.unitResidentsText}>
+                    {residentsCount === 0
+                      ? 'Nenhum morador vinculado'
+                      : residentsCount === 1
+                      ? '1 morador vinculado'
+                      : `${residentsCount} moradores vinculados`}
+                  </Text>
+                </View>
+
+                {menuOpen && (
+                  <View style={styles.actionMenu}>
+                    <TouchableOpacity style={styles.actionItem} onPress={() => openEditDest(item)}>
+                      <Pencil size={15} color="#1D4ED8" />
+                      <Text style={[styles.actionText, { color: '#1D4ED8' }]}>Editar unidade</Text>
+                    </TouchableOpacity>
+                    <View style={styles.actionDivider} />
+                    <TouchableOpacity style={styles.actionItem} onPress={() => handleDeleteDestination(item)}>
+                      <Trash2 size={15} color="#DC2626" />
+                      <Text style={[styles.actionText, { color: '#DC2626' }]}>Excluir unidade</Text>
                     </TouchableOpacity>
                   </View>
                 )}
@@ -650,6 +853,71 @@ export const ClientsManagementScreen: React.FC<ClientsManagementScreenProps> = (
           </View>
         </View>
       </Modal>
+
+      {/* Modal 4: Editar Unidade / Apto */}
+      <Modal visible={isEditDestModalOpen} animationType="slide" transparent onRequestClose={() => setIsEditDestModalOpen(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Editar Unidade / Apto</Text>
+            <Text style={styles.modalSubtitle}>Atualize os dados desta unidade ou apartamento.</Text>
+
+            <View style={styles.formGroup}>
+              <Text style={styles.inputLabel}>Nome da Unidade *</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Ex: Apartamento 101"
+                placeholderTextColor="#94A3B8"
+                value={editDestName}
+                onChangeText={setEditDestName}
+              />
+            </View>
+
+            <View style={styles.formGroup}>
+              <Text style={styles.inputLabel}>Bloco / Torre (Opcional)</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Ex: Bloco A"
+                placeholderTextColor="#94A3B8"
+                value={editDestBlock}
+                onChangeText={setEditDestBlock}
+              />
+            </View>
+
+            <View style={styles.formGroup}>
+              <Text style={styles.inputLabel}>Código Rápido (Opcional)</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Ex: 101-A"
+                placeholderTextColor="#94A3B8"
+                value={editDestCode}
+                onChangeText={setEditDestCode}
+              />
+            </View>
+
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={styles.cancelBtn}
+                onPress={() => setIsEditDestModalOpen(false)}
+                disabled={isSubmittingEditDest}
+              >
+                <Text style={styles.cancelBtnText}>Cancelar</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.saveBtn}
+                onPress={handleEditDestination}
+                disabled={isSubmittingEditDest}
+              >
+                {isSubmittingEditDest ? (
+                  <ActivityIndicator color={colors.white} size="small" />
+                ) : (
+                  <Text style={styles.saveBtnText}>Salvar Unidade</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
@@ -668,7 +936,7 @@ const styles = StyleSheet.create({
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 14,
   },
   backBtn: {
     width: 36,
@@ -679,16 +947,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginRight: 10,
   },
-  iconCircle: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   headerTitle: {
-    fontSize: 17,
+    fontSize: 18,
     fontWeight: '800',
     color: colors.white,
   },
@@ -697,46 +957,46 @@ const styles = StyleSheet.create({
     color: '#94A3B8',
     marginTop: 2,
   },
-  headerActionsRow: {
+  // Container de Abas (Morador / Unidade)
+  tabsContainer: {
     flexDirection: 'row',
-    gap: 10,
+    backgroundColor: 'rgba(0,0,0,0.2)',
+    borderRadius: 10,
+    padding: 3,
     marginBottom: 12,
   },
-  addClientBtn: {
+  tabButton: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    paddingVertical: 9,
+    borderRadius: 8,
+  },
+  tabButtonActive: {
     backgroundColor: colors.white,
-    borderRadius: 8,
-    paddingVertical: 10,
   },
-  addClientBtnText: {
+  tabButtonText: {
     fontSize: 13,
     fontWeight: '700',
-    color: '#165337',
+    color: 'rgba(255,255,255,0.85)',
   },
-  addDestBtn: {
-    flex: 1,
+  tabButtonTextActive: {
+    color: '#165337',
+    fontWeight: '800',
+  },
+  // Linha de Busca + Ação
+  searchActionRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.18)',
-    borderRadius: 8,
-    paddingVertical: 10,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
-  },
-  addDestBtnText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: colors.white,
+    gap: 8,
   },
   searchBar: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 8,
+    backgroundColor: colors.white,
+    borderRadius: 10,
     paddingHorizontal: 12,
     height: 42,
   },
@@ -744,6 +1004,20 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 13,
     color: '#0F172A',
+  },
+  actionBtnHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.white,
+    height: 42,
+    paddingHorizontal: 14,
+    borderRadius: 10,
+  },
+  actionBtnHeaderText: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#165337',
   },
   listContent: {
     padding: 16,
@@ -787,7 +1061,7 @@ const styles = StyleSheet.create({
   },
   clientCardHeader: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     justifyContent: 'space-between',
     marginBottom: 6,
   },
@@ -810,20 +1084,70 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#1D4ED8',
   },
+  destMetaBadge: {
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 5,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  destMetaBadgeText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#475569',
+  },
   clientDetailRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 2,
+    marginTop: 3,
   },
   clientPhoneText: {
     fontSize: 13,
     fontWeight: '600',
     color: '#16A34A',
   },
+  unitResidentsText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#2563EB',
+  },
   clientDocText: {
     fontSize: 12,
     color: '#64748B',
     marginTop: 4,
+  },
+  menuBtn: {
+    padding: 4,
+  },
+  actionMenu: {
+    marginTop: 10,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-around',
+    backgroundColor: '#F8FAFC',
+    borderRadius: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 4,
+  },
+  actionItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+  },
+  actionText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  actionDivider: {
+    width: 1,
+    height: 16,
+    backgroundColor: '#CBD5E1',
   },
   modalOverlay: {
     flex: 1,
@@ -927,38 +1251,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     height: 46,
     borderRadius: 8,
-  },
-  menuBtn: {
-    padding: 4,
-  },
-  actionMenu: {
-    marginTop: 10,
-    paddingTop: 8,
-    borderTopWidth: 1,
-    borderTopColor: '#F1F5F9',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-around',
-    backgroundColor: '#F8FAFC',
-    borderRadius: 8,
-    paddingVertical: 8,
-    paddingHorizontal: 4,
-  },
-  actionItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingVertical: 4,
-    paddingHorizontal: 8,
-  },
-  actionText: {
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  actionDivider: {
-    width: 1,
-    height: 16,
-    backgroundColor: '#CBD5E1',
   },
   saveBtnText: {
     fontSize: 14,
