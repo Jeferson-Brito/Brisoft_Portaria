@@ -216,6 +216,7 @@ export const DashboardScreen: React.FC = () => {
   });
 
   const [isTutorialModalOpen, setIsTutorialModalOpen] = useState(false);
+  const [isTrialModalOpen, setIsTrialModalOpen] = useState(false);
 
   useEffect(() => {
     const checkTutorialStatus = async () => {
@@ -602,7 +603,7 @@ export const DashboardScreen: React.FC = () => {
             }}
           >
           <View style={styles.bodyContainer}>
-            {/* Aviso de Assinatura: Bloqueio ou Contagem de Teste Gratuito */}
+            {/* Aviso de Assinatura: Bloqueio Vermelho (Mantido) */}
             {isSubscriptionBlocked ? (
               <View style={styles.subscriptionBannerBlocked}>
                 <View style={styles.subscriptionBannerHeader}>
@@ -628,31 +629,24 @@ export const DashboardScreen: React.FC = () => {
                   <ExternalLink size={14} color="#FFFFFF" style={{ marginLeft: 6 }} />
                 </TouchableOpacity>
               </View>
-            ) : (user?.subscription?.status === 'TRIAL' || user?.subscription?.plan === 'TRIAL') ? (
-              <View style={styles.subscriptionBannerTrial}>
-                <View style={styles.subscriptionBannerHeader}>
-                  <View style={styles.subscriptionClockIcon}>
-                    <Clock size={16} color="#B45309" strokeWidth={2.4} />
-                  </View>
-                  <View style={{ flex: 1, marginLeft: 12 }}>
-                    <Text style={styles.subscriptionBannerTitleTrial}>
-                      Período de Teste Gratuito: {user.subscription.daysRemaining != null ? `${user.subscription.daysRemaining} dia(s) restante(s)` : '7 dias'}
-                    </Text>
-                    <Text style={styles.subscriptionBannerDescTrial}>
-                      Aproveite todos os recursos da portaria. Você pode antecipar a assinatura para garantir continuidade do serviço sem bloqueios.
-                    </Text>
-                  </View>
+            ) : null}
+
+            {/* Balão Discreto e Elegante de Teste Gratuito */}
+            {!isSubscriptionBlocked && (user?.subscription?.status === 'TRIAL' || user?.subscription?.plan === 'TRIAL') ? (
+              <TouchableOpacity
+                style={styles.trialBalloonBadge}
+                onPress={() => setIsTrialModalOpen(true)}
+                activeOpacity={0.85}
+              >
+                <View style={styles.trialBalloonIconWrap}>
+                  <Clock size={12} color="#B45309" strokeWidth={2.5} />
                 </View>
-                <TouchableOpacity
-                  style={styles.subscriptionTrialPayBtn}
-                  onPress={handleOpenStripe}
-                  activeOpacity={0.88}
-                >
-                  <CreditCard size={14} color="#92400E" style={{ marginRight: 6 }} />
-                  <Text style={styles.subscriptionTrialPayBtnText}>Antecipar Assinatura Mensal</Text>
-                  <ExternalLink size={13} color="#92400E" style={{ marginLeft: 4 }} />
-                </TouchableOpacity>
-              </View>
+                <Text style={styles.trialBalloonText}>
+                  Teste Grátis: <Text style={styles.trialBalloonBold}>{user.subscription.daysRemaining != null ? `${user.subscription.daysRemaining}d restantes` : '7 dias'}</Text>
+                </Text>
+                <Sparkles size={12} color="#D97706" style={{ marginLeft: 6 }} />
+                <ChevronRight size={13} color="#B45309" style={{ marginLeft: 2 }} />
+              </TouchableOpacity>
             ) : null}
 
             {/* Guia de Início Rápido / Checklist */}
@@ -1741,6 +1735,56 @@ export const DashboardScreen: React.FC = () => {
           bottom={bottomInset + 65}
         />
 
+        {/* MODAL DETALHES DO TESTE GRATUITO */}
+        <Modal
+          visible={isTrialModalOpen}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setIsTrialModalOpen(false)}
+        >
+          <View style={styles.blockedModalOverlay}>
+            <View style={styles.blockedModalCard}>
+              <View style={[styles.blockedModalIconCircle, { backgroundColor: '#FEF3C7' }]}>
+                <Sparkles size={30} color="#D97706" strokeWidth={2.2} />
+              </View>
+
+              <Text style={styles.blockedModalTitle}>Período de Teste Gratuito</Text>
+              <View style={styles.trialDaysRemainingBadge}>
+                <Clock size={14} color="#B45309" style={{ marginRight: 6 }} />
+                <Text style={styles.trialDaysRemainingText}>
+                  {user?.subscription?.daysRemaining != null ? `${user.subscription.daysRemaining} dia(s) restante(s)` : '7 dias restantes'}
+                </Text>
+              </View>
+
+              <Text style={styles.blockedModalDesc}>
+                Sua empresa está com todas as funcionalidades e acessos liberados durante os 7 dias de avaliação gratuita.
+                {'\n\n'}
+                Você pode antecipar a assinatura a qualquer momento para garantir a continuidade da portaria sem interrupções.
+              </Text>
+
+              <TouchableOpacity
+                style={[styles.blockedModalPayBtn, { backgroundColor: '#165337' }]}
+                onPress={() => {
+                  setIsTrialModalOpen(false);
+                  handleOpenStripe();
+                }}
+                activeOpacity={0.88}
+              >
+                <CreditCard size={18} color="#FFFFFF" style={{ marginRight: 8 }} />
+                <Text style={styles.blockedModalPayBtnText}>Antecipar Assinatura (Stripe)</Text>
+                <ExternalLink size={16} color="#FFFFFF" style={{ marginLeft: 6 }} />
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.blockedModalCloseBtn}
+                onPress={() => setIsTrialModalOpen(false)}
+              >
+                <Text style={styles.blockedModalCloseBtnText}>Fechar</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
+
         {/* MODAL DE BLOQUEIO DE ASSINATURA STRIPE */}
         <Modal
           visible={isBlockedModalOpen}
@@ -1756,7 +1800,7 @@ export const DashboardScreen: React.FC = () => {
 
               <Text style={styles.blockedModalTitle}>Assinatura Necessária</Text>
               <Text style={styles.blockedModalDesc}>
-                O período de teste gratuito de 7 dias da sua empresa encerrou ou o acesso foi pausado.
+                O período de teste gratuito da sua empresa foi encerrado.
                 {'\n\n'}
                 Para continuar utilizando todas as funcionalidades, cadastrar visitas, encomendas e autorizações, ative sua assinatura mensal pelo Stripe.
               </Text>
@@ -1818,13 +1862,50 @@ const styles = StyleSheet.create({
     padding: 14,
     marginBottom: 16,
   },
-  subscriptionBannerTrial: {
-    backgroundColor: '#FFFBEB',
+  // Balão Discreto de Teste
+  trialBalloonBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    backgroundColor: '#FEF3C7',
+    borderWidth: 1,
     borderColor: '#FDE68A',
-    borderWidth: 1.5,
-    borderRadius: 14,
-    padding: 14,
-    marginBottom: 16,
+    borderRadius: 20,
+    paddingVertical: 5,
+    paddingHorizontal: 11,
+    marginBottom: 12,
+  },
+  trialBalloonIconWrap: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: '#FDE68A',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 6,
+  },
+  trialBalloonText: {
+    fontSize: 12,
+    color: '#92400E',
+    fontWeight: '500',
+  },
+  trialBalloonBold: {
+    fontWeight: '800',
+    color: '#78350F',
+  },
+  trialDaysRemainingBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FEF3C7',
+    borderRadius: 10,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    marginBottom: 14,
+  },
+  trialDaysRemainingText: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#B45309',
   },
   subscriptionBannerHeader: {
     flexDirection: 'row',
