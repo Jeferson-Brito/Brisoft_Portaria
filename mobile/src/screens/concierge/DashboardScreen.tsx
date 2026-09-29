@@ -122,11 +122,22 @@ export const DashboardScreen: React.FC = () => {
 
   const handleOpenStripe = async () => {
     try {
-      const supported = await Linking.canOpenURL(STRIPE_PAYMENT_URL);
+      let url = STRIPE_PAYMENT_URL;
+      const params: string[] = [];
+      if (user?.organizationId) {
+        params.push(`client_reference_id=${user.organizationId}`);
+      }
+      if (user?.email) {
+        params.push(`prefilled_email=${encodeURIComponent(user.email)}`);
+      }
+      if (params.length > 0) {
+        url += `?${params.join('&')}`;
+      }
+      const supported = await Linking.canOpenURL(url);
       if (supported) {
-        await Linking.openURL(STRIPE_PAYMENT_URL);
+        await Linking.openURL(url);
       } else {
-        Alert.alert('Erro', 'Não foi possível abrir o link de pagamento do Stripe.');
+        await Linking.openURL(STRIPE_PAYMENT_URL);
       }
     } catch (err) {
       Alert.alert('Erro', 'Não foi possível abrir o navegador.');

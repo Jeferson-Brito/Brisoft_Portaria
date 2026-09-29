@@ -57,7 +57,18 @@ export const SubscriptionScreen: React.FC<{ onBack?: () => void }> = ({ onBack }
     : 'Seus 7 dias de teste gratuito chegaram ao fim.';
 
   const handleSubscribe = () => {
-    Linking.openURL(PAYMENT_LINK).catch(() => {
+    let url = PAYMENT_LINK;
+    const params: string[] = [];
+    if (user?.organizationId) {
+      params.push(`client_reference_id=${user.organizationId}`);
+    }
+    if (user?.email) {
+      params.push(`prefilled_email=${encodeURIComponent(user.email)}`);
+    }
+    if (params.length > 0) {
+      url += `?${params.join('&')}`;
+    }
+    Linking.openURL(url).catch(() => {
       Alert.alert('Erro', 'Não foi possível abrir o link de pagamento.');
     });
   };
