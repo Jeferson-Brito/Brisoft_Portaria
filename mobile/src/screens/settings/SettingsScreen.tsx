@@ -9,6 +9,7 @@ import {
   Alert,
   Platform,
   RefreshControl,
+  Linking,
 } from 'react-native';
 import { ScrollToTopButton } from '../../components/ScrollToTopButton';
 import {
@@ -54,12 +55,14 @@ interface SettingsScreenProps {
     type?: string;
   };
   bottomInset: number;
+  onOpenTutorial?: () => void;
 }
 
 export const SettingsScreen: React.FC<SettingsScreenProps> = ({
   onNavigate,
   orgProfile,
   bottomInset,
+  onOpenTutorial,
 }) => {
   const { user, signOut, refreshSubscription } = useAuth();
   const scrollRef = useRef<ScrollView>(null);
@@ -465,6 +468,52 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
           </TouchableOpacity>
         </View>
       )}
+
+      {/* 6. SEÇÃO: AJUDA & SUPORTE */}
+      <View style={styles.section}>
+        <Text style={styles.sectionHeader}>AJUDA & SUPORTE</Text>
+        <Text style={styles.sectionDescription}>
+          Tutoriais de uso da portaria e suporte direto com a equipe
+        </Text>
+
+        <TouchableOpacity
+          style={styles.menuItem}
+          onPress={() => onOpenTutorial && onOpenTutorial()}
+          activeOpacity={0.7}
+        >
+          <View style={[styles.menuIconBox, { backgroundColor: '#DCFCE7' }]}>
+            <HelpCircle size={22} color="#15803D" />
+          </View>
+          <View style={styles.menuContent}>
+            <Text style={styles.menuTitle}>Guia de Implantação & Tutorial</Text>
+            <Text style={styles.menuSubtitle}>
+              Reveja o passo a passo de configuração e rotinas da portaria
+            </Text>
+          </View>
+          <ChevronRight size={18} color="#94A3B8" />
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.menuItem}
+          onPress={() => {
+            Linking.openURL(
+              'https://wa.me/5511999999999?text=Ol%C3%A1%2C%20gostaria%20de%20tirar%20uma%20d%C3%BAvida%20sobre%20o%20Combate%20Portaria'
+            );
+          }}
+          activeOpacity={0.7}
+        >
+          <View style={[styles.menuIconBox, { backgroundColor: '#EFF6FF' }]}>
+            <MessageSquare size={22} color="#2563EB" />
+          </View>
+          <View style={styles.menuContent}>
+            <Text style={styles.menuTitle}>Suporte Técnico Oficial</Text>
+            <Text style={styles.menuSubtitle}>
+              Fale com um especialista da equipe Combate no WhatsApp
+            </Text>
+          </View>
+          <ExternalLink size={16} color="#94A3B8" />
+        </TouchableOpacity>
+      </View>
 
       {/* 7. BOTÃO LOGOUT / SAIR */}
       <TouchableOpacity

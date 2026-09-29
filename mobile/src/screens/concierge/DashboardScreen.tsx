@@ -47,7 +47,10 @@ import {
   CreditCard,
   ExternalLink,
   AlertCircle,
+  HelpCircle,
+  BookOpen,
 } from 'lucide-react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from '../../theme/colors';
 import { useAuth } from '../../contexts/AuthContext';
@@ -72,6 +75,8 @@ import { SuperAdminOrganizationsScreen } from '../admin/SuperAdminOrganizationsS
 import { CustomConfirmModal } from '../../components/CustomConfirmModal';
 import { AppHeader } from '../../components/AppHeader';
 import { ScrollToTopButton } from '../../components/ScrollToTopButton';
+import { OnboardingTutorialModal } from '../../components/OnboardingTutorialModal';
+import { SetupGuideBanner } from '../../components/SetupGuideBanner';
 import { useRealtime, RealtimeAlert } from '../../contexts/RealtimeContext';
 
 type DateFilterType = 'ALL' | 'TODAY' | 'YESTERDAY' | 'LAST_7_DAYS';
@@ -209,6 +214,36 @@ export const DashboardScreen: React.FC = () => {
     presentCount: 0,
     deniedTodayCount: 0,
   });
+
+  const [isTutorialModalOpen, setIsTutorialModalOpen] = useState(false);
+
+  useEffect(() => {
+    const checkTutorialStatus = async () => {
+      if (!user?.id) return;
+      if (user.role === 'ADMIN' || user.role === 'SUPER_ADMIN') {
+        try {
+          const completed = await AsyncStorage.getItem(`@combate_portaria:tutorial_completed_${user.id}`);
+          if (!completed) {
+            setIsTutorialModalOpen(true);
+          }
+        } catch (err) {
+          // ignore
+        }
+      }
+    };
+    checkTutorialStatus();
+  }, [user?.id, user?.role]);
+
+  const handleCloseTutorial = async () => {
+    setIsTutorialModalOpen(false);
+    if (user?.id) {
+      try {
+        await AsyncStorage.setItem(`@combate_portaria:tutorial_completed_${user.id}`, 'true');
+      } catch (err) {
+        // ignore
+      }
+    }
+  };
 
   const { addListener } = useRealtime();
 
@@ -406,6 +441,7 @@ export const DashboardScreen: React.FC = () => {
             onNavigate={(screen) => setActiveTab(screen)}
             orgProfile={orgProfile}
             bottomInset={bottomInset}
+            onOpenTutorial={() => setIsTutorialModalOpen(true)}
           />
         </View>
       );
@@ -515,6 +551,14 @@ export const DashboardScreen: React.FC = () => {
             <View style={styles.headerActions}>
               <TouchableOpacity
                 style={styles.headerIconButton}
+                onPress={() => setIsTutorialModalOpen(true)}
+                activeOpacity={0.75}
+              >
+                <HelpCircle size={20} color="#0F172A" />
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.headerIconButton, { marginLeft: 8 }]}
                 onPress={() => setIsNotificationsModalOpen(true)}
                 activeOpacity={0.75}
               >
@@ -525,7 +569,7 @@ export const DashboardScreen: React.FC = () => {
               </TouchableOpacity>
 
               <TouchableOpacity
-                style={[styles.headerIconButton, { marginLeft: 10 }]}
+                style={[styles.headerIconButton, { marginLeft: 8 }]}
                 onPress={() => setActiveTab('settings')}
                 activeOpacity={0.75}
               >
@@ -610,6 +654,15 @@ export const DashboardScreen: React.FC = () => {
                 </TouchableOpacity>
               </View>
             ) : null}
+
+            {/* Guia de Início Rápido / Checklist */}
+            {(user?.role === 'ADMIN' || user?.role === 'SUPER_ADMIN') && (
+              <SetupGuideBanner
+                userId={user?.id}
+                onOpenTutorial={() => setIsTutorialModalOpen(true)}
+                onNavigate={(screen) => setActiveTab(screen)}
+              />
+            )}
 
             {/* Ação Principal Hero: Nova Solicitação em Grande Destaque */}
             <TouchableOpacity
@@ -1739,6 +1792,17 @@ export const DashboardScreen: React.FC = () => {
             </View>
           </View>
         </Modal>
+
+        {/* MODAL TUTORIAL / GUIA DE IMPLANTAÇÃO */}
+        <OnboardingTutorialModal
+          visible={isTutorialModalOpen}
+          onClose={handleCloseTutorial}
+          onNavigate={(screen) => {
+            handleCloseTutorial();
+            setActiveTab(screen as any);
+          }}
+          orgProfile={orgProfile}
+        />
       </View>
     </View>
   );
