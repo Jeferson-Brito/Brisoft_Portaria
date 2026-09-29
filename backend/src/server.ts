@@ -5,6 +5,19 @@ import { realtimeService } from './services/realtime/realtime.service.js';
 import { whatsappService } from './services/whatsapp/whatsapp.service.js';
 import { storageRetentionService } from './services/storage/storage-cleanup.service.js';
 
+// Suprime ruído de logs internos do libsignal sobre mensagens antigas não descriptografadas (Bad MAC)
+const originalConsoleError = console.error;
+console.error = (...args: any[]) => {
+  const msg = typeof args[0] === 'string' ? args[0] : (args[0]?.message || String(args[0] || ''));
+  if (
+    msg.includes('Failed to decrypt message with any known session') ||
+    msg.includes('Bad MAC')
+  ) {
+    return;
+  }
+  originalConsoleError.apply(console, args);
+};
+
 // Previne crash fatal do processo Node.js por exceções assíncronas do Baileys/libsignal (ex: Bad MAC, 428 Connection Closed)
 process.on('unhandledRejection', (reason: any) => {
   const msg = reason?.message || String(reason);
