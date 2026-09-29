@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "677568286020",
+    "project_id": "brisoft-portaria",
+    "storage_bucket": "brisoft-portaria.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:677568286020:android:92ddda5932ff1d35169b11",
+        "android_client_info": {
+          "package_name": "com.brisoft.portaria"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyASX5bXkuoDZbcHdqcZUCKndie1FXbFleI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
