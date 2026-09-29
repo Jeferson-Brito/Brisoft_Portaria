@@ -2,7 +2,7 @@
   "expo": {
     "name": "Brisoft Portaria",
     "slug": "combate-portaria",
-    "version": "1.0.2",
+    "version": "1.0.3",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
@@ -19,7 +19,7 @@
       }
     },
     "android": {
-      "versionCode": 4,
+      "versionCode": 5,
       "softwareKeyboardLayoutMode": "pan",
       "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
