@@ -21,7 +21,7 @@ export const getHostIp = (): string => {
   return '192.168.15.115';
 };
 
-const PRODUCTION_API_URL = 'https://combate-portaria-backend.onrender.com/api/v1';
+const PRODUCTION_API_URL = 'https://portaria.brisoft.com.br/api/v1';
 
 export const getBaseUrl = () => {
   if (process.env.EXPO_PUBLIC_API_URL) {

@@ -13,7 +13,7 @@
         "buildType": "apk"
       },
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://combate-portaria-backend.onrender.com/api/v1"
+        "EXPO_PUBLIC_API_URL": "https://portaria.brisoft.com.br/api/v1"
       }
     },
     "production": {
@@ -24,7 +24,7 @@
         "simulator": false
       },
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://combate-portaria-backend.onrender.com/api/v1"
+        "EXPO_PUBLIC_API_URL": "https://portaria.brisoft.com.br/api/v1"
       }
     }
   },
