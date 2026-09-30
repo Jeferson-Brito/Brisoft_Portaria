@@ -13,6 +13,8 @@ export async function preAuthorizationRoutes(app: FastifyInstance) {
   // Listar ativas de hoje com busca rápida (para a portaria)
   app.get('/today', controller.listActiveToday.bind(controller));
 
+  app.get('/token/:token', controller.findByToken.bind(controller));
+
   // Listar todas com paginação
   app.get('/', controller.listAll.bind(controller));
 

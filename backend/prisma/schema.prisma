@@ -255,6 +255,7 @@ model PreAuthorization {
   notes             String?
   vehicleModel      String?
   vehiclePlate      String?
+  qrToken           String?
   isUsed            Boolean   @default(false)
   cancelledAt       DateTime?
   createdAt         DateTime  @default(now())
@@ -265,6 +266,7 @@ model PreAuthorization {
   destination  Destination  @relation(fields: [destinationId], references: [id])
 
   @@index([organizationId, isUsed])
+  @@index([qrToken])
   @@map("pre_authorizations")
 }
 

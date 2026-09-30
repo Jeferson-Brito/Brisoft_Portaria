@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   Alert,
   RefreshControl,
+  Modal,
 } from 'react-native';
 import {
   Search,
@@ -22,6 +23,7 @@ import {
   ShieldCheck,
   UserCheck,
   ArrowLeft,
+  QrCode,
 } from 'lucide-react-native';
 import { colors } from '../../theme/colors';
 import { api } from '../../config/api';
@@ -67,6 +69,10 @@ export const PreAuthorizationsScreen: React.FC<PreAuthorizationsScreenProps> = (
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [checkingInId, setCheckingInId] = useState<string | null>(null);
+  const [isScanOpen, setIsScanOpen] = useState(false);
+  const [inviteCode, setInviteCode] = useState('');
+  const [invitePreview, setInvitePreview] = useState<any>(null);
+  const [isLookingUp, setIsLookingUp] = useState(false);
 
   const { addListener } = useRealtime();
 
@@ -103,6 +109,21 @@ export const PreAuthorizationsScreen: React.FC<PreAuthorizationsScreenProps> = (
   const handleSearchSubmit = () => {
     setIsLoading(true);
     fetchPreAuthorizations();
+  };
+
+  const lookupInvite = async () => {
+    const code = inviteCode.trim().toUpperCase();
+    if (!code) return;
+    try {
+      setIsLookingUp(true);
+      const res = await api.get(`/pre-authorizations/token/${encodeURIComponent(code)}`);
+      setInvitePreview(res.data.data);
+    } catch (err: any) {
+      setInvitePreview(null);
+      Alert.alert('Convite inválido', err.response?.data?.error?.message || 'Não foi possível localizar o convite.');
+    } finally {
+      setIsLookingUp(false);
+    }
   };
 
   const handleCheckIn = (item: PreAuthItem) => {
@@ -252,6 +273,14 @@ export const PreAuthorizationsScreen: React.FC<PreAuthorizationsScreenProps> = (
           <CirclePlus size={20} color={colors.white} style={{ marginRight: 8 }} />
           <Text style={styles.newAppointmentBtnText}>Novo Agendamento</Text>
         </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.newAppointmentBtn, { backgroundColor: '#0F3D2E', marginTop: 8 }]}
+          onPress={() => { setInviteCode(''); setInvitePreview(null); setIsScanOpen(true); }}
+          activeOpacity={0.85}
+        >
+          <QrCode size={20} color={colors.white} style={{ marginRight: 8 }} />
+          <Text style={styles.newAppointmentBtnText}>Ler convite</Text>
+        </TouchableOpacity>
       </View>
 
       {/* Lista de Pré-Autorizações */}
@@ -304,6 +333,40 @@ export const PreAuthorizationsScreen: React.FC<PreAuthorizationsScreenProps> = (
         onClose={() => setIsModalOpen(false)}
         onSuccess={() => fetchPreAuthorizations()}
       />
+      <Modal visible={isScanOpen} animationType="slide" onRequestClose={() => setIsScanOpen(false)}>
+        <View style={styles.container}>
+          <AppHeader title="Ler convite" subtitle="Digite o código do QR" onBack={() => setIsScanOpen(false)} />
+          <View style={{ padding: 16 }}>
+            <TextInput
+              value={inviteCode}
+              onChangeText={setInviteCode}
+              autoCapitalize="characters"
+              placeholder="VIS-00000000"
+              placeholderTextColor={colors.textSecondary}
+              style={{ backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 12, minHeight: 48, paddingHorizontal: 12, marginBottom: 12 }}
+            />
+            <TouchableOpacity style={styles.newAppointmentBtn} onPress={lookupInvite} disabled={isLookingUp}>
+              {isLookingUp ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.newAppointmentBtnText}>Buscar visita</Text>}
+            </TouchableOpacity>
+            {invitePreview ? (
+              <View style={{ marginTop: 16, backgroundColor: '#FFFFFF', borderRadius: 16, padding: 16 }}>
+                <Text style={{ fontWeight: '800', fontSize: 18, color: '#0F172A' }}>{invitePreview.visitorName}</Text>
+                <Text style={{ color: '#64748B', marginTop: 6 }}>{invitePreview.destination?.name} · {invitePreview.client?.name}</Text>
+                <Text style={{ color: '#64748B', marginTop: 4 }}>{invitePreview.expectedTimeStart || '00:00'} até {invitePreview.expectedTimeEnd || '23:59'}</Text>
+                <TouchableOpacity
+                  style={[styles.newAppointmentBtn, { marginTop: 16 }]}
+                  onPress={() => {
+                    setIsScanOpen(false);
+                    handleCheckIn(invitePreview);
+                  }}
+                >
+                  <Text style={styles.newAppointmentBtnText}>Confirmar entrada</Text>
+                </TouchableOpacity>
+              </View>
+            ) : null}
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };

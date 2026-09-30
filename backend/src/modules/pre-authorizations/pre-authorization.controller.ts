@@ -126,6 +126,19 @@ export class PreAuthorizationController {
     }
   }
 
+  async findByToken(request: FastifyRequest, reply: FastifyReply) {
+    const { token } = request.params as { token: string };
+    try {
+      const preAuth = await preAuthorizationService.findByToken(token, request.user.organizationId);
+      return reply.status(200).send({ success: true, data: preAuth });
+    } catch (err: any) {
+      return reply.status(err.statusCode || 500).send({
+        success: false,
+        error: { code: err.code || 'QR_LOOKUP_ERROR', message: err.message },
+      });
+    }
+  }
+
   // Check-in / Liberação na portaria
   async checkIn(request: FastifyRequest, reply: FastifyReply) {
     const { id } = request.params as { id: string };

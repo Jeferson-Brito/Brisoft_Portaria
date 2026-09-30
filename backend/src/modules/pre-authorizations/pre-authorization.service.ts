@@ -1,6 +1,7 @@
 import { prisma } from '../../lib/prisma.js';
 import { AppError } from '../../core/errors/app-error.js';
 import { realtimeService } from '../../services/realtime/realtime.service.js';
+import { randomBytes } from 'crypto';
 
 export interface CreatePreAuthorizationParams {
   organizationId: string;
@@ -97,6 +98,7 @@ export class PreAuthorizationService {
         notes: data.notes ? data.notes.trim() : null,
         vehicleModel: data.vehicleModel ? data.vehicleModel.trim() : null,
         vehiclePlate: data.vehiclePlate ? data.vehiclePlate.trim() : null,
+        qrToken: `VIS-${randomBytes(4).toString('hex').toUpperCase()}`,
         isUsed: false,
       },
       include: {
@@ -333,6 +335,28 @@ export class PreAuthorizationService {
       message: `Entrada do visitante pré-autorizado ${preAuth.visitorName} liberada com sucesso!`,
       visitRequest,
     };
+  }
+
+  async findByToken(token: string, organizationId: string) {
+    const code = token.trim().toUpperCase();
+    const item = await prisma.preAuthorization.findFirst({
+      where: { qrToken: code, organizationId },
+      include: { client: true, destination: true },
+    });
+    if (!item) {
+      throw new AppError('Convite não encontrado nesta empresa.', 404, 'QR_NOT_FOUND');
+    }
+    if (item.cancelledAt) {
+      throw new AppError('Este convite foi cancelado.', 400, 'QR_CANCELLED');
+    }
+    if (item.isUsed) {
+      throw new AppError('Este convite já foi utilizado.', 400, 'QR_USED');
+    }
+    const now = new Date();
+    if (now < item.startDate || now > item.endDate) {
+      throw new AppError('Este convite está fora do período autorizado.', 400, 'QR_EXPIRED');
+    }
+    return item;
   }
 
   // Cancelar ou remover pré-autorização
