@@ -1,8 +1,17 @@
 import { prisma } from '../../lib/prisma.js';
 import { subscriptionService } from '../subscriptions/subscription.service.js';
+import { whatsappService } from '../../services/whatsapp/whatsapp.service.js';
 import { AppError } from '../../core/errors/app-error.js';
 import { invalidateSubscriptionCache } from '../../middlewares/subscription.middleware.js';
 import bcrypt from 'bcryptjs';
+
+function isCustomerOrganization(org: { slug?: string | null; name?: string | null }) {
+  const slug = org.slug || '';
+  const name = org.name || '';
+  if (slug === 'saas-master' || slug.startsWith('system-')) return false;
+  if (/saas master/i.test(name)) return false;
+  return true;
+}
 
 export class SuperAdminService {
   // ─── Organizações ───────────────────────────────────────────
@@ -12,7 +21,15 @@ export class SuperAdminService {
     const limit = filters.limit || 50;
     const skip = (page - 1) * limit;
 
-    const where: any = {};
+    const where: any = {
+      NOT: {
+        OR: [
+          { slug: 'saas-master' },
+          { slug: { startsWith: 'system-' } },
+          { name: { contains: 'SaaS Master', mode: 'insensitive' } },
+        ],
+      },
+    };
     if (filters.status === 'active') where.isActive = true;
     if (filters.status === 'inactive') where.isActive = false;
     if (filters.search) {
@@ -41,31 +58,36 @@ export class SuperAdminService {
       prisma.organization.count({ where }),
     ]);
 
+    const liveWhatsApp = await whatsappService.liveStatuses();
     const organizations = organizationsRaw.map((org) => {
       let settings: any = {};
       try {
         settings = org.settings ? JSON.parse(org.settings) : {};
       } catch (e) {}
 
-      const createdTime = new Date(org.createdAt).getTime();
-      const now = Date.now();
-      const trialDurationMs = (settings.trialDays || 7) * 24 * 60 * 60 * 1000;
-      const trialEndsAt = settings.trialEndsAt ? new Date(settings.trialEndsAt) : new Date(createdTime + trialDurationMs);
-      const isTrial = settings.paymentStatus === 'TRIAL' || (!settings.paymentStatus && now < trialEndsAt.getTime());
-      
-      const paymentStatus = settings.paymentStatus || (isTrial ? 'TRIAL' : (org.isActive ? 'ACTIVE' : 'SUSPENDED'));
-      const monthlyPrice = typeof settings.monthlyPrice === 'number' ? settings.monthlyPrice : 99.9;
-      const plan = settings.plan || 'PRO';
+      const subscription = subscriptionService.calculateSubscription({
+        id: org.id,
+        createdAt: org.createdAt,
+        settings: org.settings,
+        isActive: org.isActive,
+        slug: org.slug,
+      });
+      const paymentStatus = subscription.status;
+      const monthlyPrice = paymentStatus === 'ACTIVE' ? subscription.priceMonthly : 0;
 
       return {
         ...org,
-        plan,
+        plan: subscription.plan,
         monthlyPrice,
         paymentStatus,
         address: typeof settings.address === 'string' ? settings.address : '',
-        trialEndsAt: trialEndsAt.toISOString(),
-        isTrial,
-        whatsappStatus: org.whatsappConnection?.status || 'DISCONNECTED',
+        trialEndsAt: subscription.trialEndsAt,
+        currentPeriodEnd: subscription.currentPeriodEnd,
+        paymentHistory: subscription.paymentHistory,
+        isTrial: paymentStatus === 'TRIAL',
+        whatsappStatus: liveWhatsApp[org.id]?.status === 'CONNECTED' || org.whatsappConnection?.status === 'CONNECTED'
+          ? 'CONNECTED'
+          : (liveWhatsApp[org.id]?.status || org.whatsappConnection?.status || 'DISCONNECTED'),
       };
     });
 
@@ -111,6 +133,8 @@ export class SuperAdminService {
       monthlyPrice: typeof settings.monthlyPrice === 'number' ? settings.monthlyPrice : 99.9,
       paymentStatus,
       trialEndsAt: trialEndsAt.toISOString(),
+      currentPeriodEnd: settings.currentPeriodEnd || null,
+      paymentHistory: Array.isArray(settings.paymentHistory) ? settings.paymentHistory : [],
       isTrial,
       settingsParsed: settings,
       whatsappStatus: org.whatsappConnection?.status || 'DISCONNECTED',
@@ -298,8 +322,14 @@ export class SuperAdminService {
       prisma.user.count({ where }),
     ]);
 
+    const usersView = users.map((user) => (
+      user.role === 'SUPER_ADMIN'
+        ? { ...user, organizationId: null, organization: null }
+        : user
+    ));
+
     return {
-      users,
+      users: usersView,
       meta: { total, page, limit, totalPages: Math.ceil(total / limit) },
     };
   }
@@ -459,7 +489,53 @@ export class SuperAdminService {
   }
 
   async activateSubscription(orgId: string, periodDays = 30) {
-    return subscriptionService.activateSubscription(orgId, periodDays, { source: 'COMPLIMENTARY' });
+    return subscriptionService.activateSubscription(orgId, periodDays, { source: 'MANUAL' });
+  }
+
+  async getPlanPrice() {
+    const setting = await prisma.systemSetting.findFirst({
+      where: { key: 'saas_plan_monthly_price' },
+    });
+    const parsed = setting ? Number(String(setting.value).replace(',', '.')) : 99.9;
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : 99.9;
+  }
+
+  async setPlanPrice(price: number) {
+    if (!Number.isFinite(price) || price <= 0) {
+      throw new AppError('Informe um valor maior que zero.', 400, 'INVALID_PRICE');
+    }
+    const anchor = await prisma.organization.findFirst({
+      where: {
+        OR: [
+          { slug: 'saas-master' },
+          { slug: { startsWith: 'system-' } },
+          { name: { contains: 'SaaS Master', mode: 'insensitive' } },
+        ],
+      },
+    }) || await prisma.organization.findFirst();
+    if (!anchor) throw new AppError('Nenhuma empresa base encontrada para gravar o preço.', 404, 'NOT_FOUND');
+
+    await prisma.systemSetting.upsert({
+      where: { organizationId_key: { organizationId: anchor.id, key: 'saas_plan_monthly_price' } },
+      update: { value: String(price) },
+      create: { organizationId: anchor.id, key: 'saas_plan_monthly_price', value: String(price) },
+    });
+
+    const companies = await prisma.organization.findMany();
+    for (const company of companies) {
+      if (!isCustomerOrganization(company)) continue;
+      let settings: any = {};
+      try {
+        settings = company.settings ? JSON.parse(company.settings) : {};
+      } catch (e) {}
+      settings.monthlyPrice = price;
+      await prisma.organization.update({
+        where: { id: company.id },
+        data: { settings: JSON.stringify(settings) },
+      });
+      invalidateSubscriptionCache(company.id);
+    }
+    return price;
   }
 
   async suspendSubscription(orgId: string) {
@@ -472,11 +548,19 @@ export class SuperAdminService {
   // ─── Métricas do SaaS Master ────────────────────────────────
 
   async getDashboardMetrics() {
-    const now = Date.now();
-    const thirtyDaysAgo = new Date(now - 30 * 24 * 60 * 60 * 1000);
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
 
     const [allOrgs, totalUsers, totalVisits, newOrgsLast30Days] = await Promise.all([
       prisma.organization.findMany({
+        where: {
+          NOT: {
+            OR: [
+              { slug: 'saas-master' },
+              { slug: { startsWith: 'system-' } },
+              { name: { contains: 'SaaS Master', mode: 'insensitive' } },
+            ],
+          },
+        },
         include: {
           whatsappConnection: {
             select: { status: true, phoneConnected: true, updatedAt: true },
@@ -494,7 +578,18 @@ export class SuperAdminService {
       }),
       prisma.user.count({ where: { deletedAt: null } }),
       prisma.visitRequest.count(),
-      prisma.organization.count({ where: { createdAt: { gte: thirtyDaysAgo } } }),
+      prisma.organization.count({
+        where: {
+          createdAt: { gte: thirtyDaysAgo },
+          NOT: {
+            OR: [
+              { slug: 'saas-master' },
+              { slug: { startsWith: 'system-' } },
+              { name: { contains: 'SaaS Master', mode: 'insensitive' } },
+            ],
+          },
+        },
+      }),
     ]);
 
     let trialCount = 0;
@@ -507,57 +602,65 @@ export class SuperAdminService {
     const whatsappDisconnectedAlerts: any[] = [];
     const pendingPaymentAlerts: any[] = [];
 
-    allOrgs.forEach((org) => {
-      let settings: any = {};
-      try {
-        settings = org.settings ? JSON.parse(org.settings) : {};
-      } catch (e) {}
+    const liveWhatsApp = await whatsappService.liveStatuses();
+    const customers = allOrgs.filter(isCustomerOrganization);
 
-      const createdTime = new Date(org.createdAt).getTime();
-      const trialDurationMs = (settings.trialDays || 7) * 24 * 60 * 60 * 1000;
-      const trialEndsAt = settings.trialEndsAt ? new Date(settings.trialEndsAt) : new Date(createdTime + trialDurationMs);
-      const isTrial = settings.paymentStatus === 'TRIAL' || (!settings.paymentStatus && now < trialEndsAt.getTime());
-      const paymentStatus = settings.paymentStatus || (isTrial ? 'TRIAL' : (org.isActive ? 'ACTIVE' : 'SUSPENDED'));
-      const monthlyPrice = typeof settings.monthlyPrice === 'number' ? settings.monthlyPrice : 99.9;
+    customers.forEach((org) => {
+      const subscription = subscriptionService.calculateSubscription({
+        id: org.id,
+        createdAt: org.createdAt,
+        settings: org.settings,
+        isActive: org.isActive,
+        slug: org.slug,
+      });
+      const paymentStatus = subscription.status;
+      const monthlyPrice = paymentStatus === 'ACTIVE' ? subscription.priceMonthly : 0;
 
-      if (!org.isActive || paymentStatus === 'SUSPENDED') {
+      if (paymentStatus === 'SUSPENDED' || paymentStatus === 'CANCELLED') {
         suspendedCount++;
-      } else if (paymentStatus === 'PENDING') {
+      } else if (paymentStatus === 'EXPIRED') {
         pendingPaymentCount++;
         pendingPaymentAlerts.push({
           id: org.id,
           name: org.name,
           slug: org.slug,
-          monthlyPrice,
+          monthlyPrice: subscription.priceMonthly,
           admin: org.users[0] || null,
         });
-      } else if (paymentStatus === 'TRIAL' || isTrial) {
+      } else if (paymentStatus === 'TRIAL') {
         trialCount++;
-        trialMRR += monthlyPrice;
-      } else {
+      } else if (paymentStatus === 'ACTIVE') {
         paidActiveCount++;
         totalMRR += monthlyPrice;
       }
 
-      // WhatsApp Status Check
-      const waStatus = org.whatsappConnection?.status || 'DISCONNECTED';
+      const live = liveWhatsApp[org.id];
+      const savedStatus = org.whatsappConnection?.status || 'DISCONNECTED';
+      const waStatus = live?.status === 'CONNECTED' || savedStatus === 'CONNECTED'
+        ? 'CONNECTED'
+        : (live?.status || savedStatus);
       if (waStatus !== 'CONNECTED') {
         whatsappDisconnectedAlerts.push({
           id: org.id,
           name: org.name,
           slug: org.slug,
           status: waStatus,
-          phoneConnected: org.whatsappConnection?.phoneConnected || null,
+          phoneConnected: live?.phoneConnected || org.whatsappConnection?.phoneConnected || null,
           admin: org.users[0] || null,
         });
       }
     });
 
-    const recentOrganizations = allOrgs.slice(0, 6).map((org) => {
-      let settings: any = {};
-      try {
-        settings = org.settings ? JSON.parse(org.settings) : {};
-      } catch (e) {}
+    const recentOrganizations = customers.slice(0, 6).map((org) => {
+      const subscription = subscriptionService.calculateSubscription({
+        id: org.id,
+        createdAt: org.createdAt,
+        settings: org.settings,
+        isActive: org.isActive,
+        slug: org.slug,
+      });
+      const live = liveWhatsApp[org.id];
+      const savedStatus = org.whatsappConnection?.status || 'DISCONNECTED';
       return {
         id: org.id,
         name: org.name,
@@ -565,20 +668,20 @@ export class SuperAdminService {
         document: org.document,
         createdAt: org.createdAt,
         isActive: org.isActive,
-        plan: settings.plan || 'PRO',
-        monthlyPrice: settings.monthlyPrice ?? 99.9,
-        paymentStatus: settings.paymentStatus || 'TRIAL',
+        plan: subscription.plan,
+        monthlyPrice: subscription.status === 'ACTIVE' ? subscription.priceMonthly : 0,
+        paymentStatus: subscription.status,
         admin: org.users[0] || null,
         usersCount: org._count.users,
         clientsCount: org._count.clients,
-        whatsappStatus: org.whatsappConnection?.status || 'DISCONNECTED',
+        whatsappStatus: live?.status === 'CONNECTED' || savedStatus === 'CONNECTED' ? 'CONNECTED' : (live?.status || savedStatus),
       };
     });
 
     return {
       organizations: {
-        total: allOrgs.length,
-        active: allOrgs.filter((o) => o.isActive).length,
+        total: customers.length,
+        active: customers.filter((org) => org.isActive).length,
         suspended: suspendedCount,
         newLast30Days: newOrgsLast30Days,
       },
@@ -591,8 +694,8 @@ export class SuperAdminService {
         trialMRR,
       },
       whatsapp: {
-        total: allOrgs.length,
-        connected: allOrgs.length - whatsappDisconnectedAlerts.length,
+        total: customers.length,
+        connected: customers.length - whatsappDisconnectedAlerts.length,
         disconnected: whatsappDisconnectedAlerts.length,
         disconnectedList: whatsappDisconnectedAlerts,
       },

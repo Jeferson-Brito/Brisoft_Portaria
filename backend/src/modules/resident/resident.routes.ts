@@ -77,4 +77,45 @@ export async function residentRoutes(app: FastifyInstance) {
       return handleError(reply, err);
     }
   });
+
+  app.get('/amenities', async (request: FastifyRequest, reply: FastifyReply) => {
+    try {
+      const data = await residentService.listAmenities(request.user.sub);
+      return reply.send({ success: true, data });
+    } catch (err) {
+      return handleError(reply, err);
+    }
+  });
+
+  app.get('/amenities/calendar', async (request: FastifyRequest, reply: FastifyReply) => {
+    const { month } = request.query as { month?: string };
+    try {
+      const data = await residentService.amenityMonth(request.user.sub, month || new Date().toISOString().slice(0, 7));
+      return reply.send({ success: true, data });
+    } catch (err) {
+      return handleError(reply, err);
+    }
+  });
+
+  app.post('/amenities/:id/bookings', async (request: FastifyRequest, reply: FastifyReply) => {
+    const { id } = request.params as { id: string };
+    try {
+      await subscriptionGuard(request, reply);
+      if (reply.sent) return;
+      const data = await residentService.bookAmenity(request.user.sub, id, request.body as any);
+      return reply.status(201).send({ success: true, data });
+    } catch (err) {
+      return handleError(reply, err);
+    }
+  });
+
+  app.patch('/amenities/bookings/:id/cancel', async (request: FastifyRequest, reply: FastifyReply) => {
+    const { id } = request.params as { id: string };
+    try {
+      const data = await residentService.cancelAmenity(request.user.sub, id);
+      return reply.send({ success: true, data });
+    } catch (err) {
+      return handleError(reply, err);
+    }
+  });
 }

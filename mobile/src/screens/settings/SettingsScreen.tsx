@@ -13,13 +13,11 @@ import {
 } from 'react-native';
 import { ScrollToTopButton } from '../../components/ScrollToTopButton';
 import {
-  User,
   Users,
   Building2,
   Building,
   MessageSquare,
   ShieldCheck,
-  CreditCard,
   ChevronRight,
   LogOut,
   Sparkles,
@@ -28,10 +26,7 @@ import {
   UserCheck,
   Shield,
   HelpCircle,
-  Clock,
-  CheckCircle2,
-  AlertCircle,
-  ExternalLink,
+  Trees,
 } from 'lucide-react-native';
 import { useAuth } from '../../contexts/AuthContext';
 import { api } from '../../config/api';
@@ -45,6 +40,7 @@ interface SettingsScreenProps {
       | 'users_mgmt'
       | 'clients_mgmt'
       | 'restrictions'
+      | 'amenities'
       | 'whatsapp'
       | 'subscription'
       | 'super_admin_orgs'
@@ -182,365 +178,131 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
           />
         }
       >
-      {/* 1. CARD HERO DO USUÁRIO & ESTABELECIMENTO */}
-      <View style={styles.profileCard}>
-        <View style={styles.profileTopRow}>
-          {/* Avatar com iniciais */}
-          <View style={styles.avatarCircle}>
-            <Text style={styles.avatarInitials}>{userInitials}</Text>
-          </View>
-
-          <View style={{ flex: 1, marginLeft: 14 }}>
-            <View style={styles.nameRow}>
-              <Text style={styles.userName} numberOfLines={1}>
-                {user?.name || 'Usuário'}
-              </Text>
-            </View>
-
-            <Text style={styles.userEmail} numberOfLines={1}>
-              {user?.email || 'Acesso à Portaria'}
-            </Text>
-
-            {/* Badge do Cargo */}
-            <View style={[styles.roleBadge, { backgroundColor: roleInfo.bgColor }]}>
-              <RoleIcon size={12} color={roleInfo.textColor} />
-              <Text style={[styles.roleBadgeText, { color: roleInfo.textColor }]}>
-                {roleInfo.label}
-              </Text>
-            </View>
-          </View>
+      <View style={styles.identity}>
+        <View style={styles.avatarCircle}>
+          <Text style={styles.avatarInitials}>{userInitials}</Text>
         </View>
-
-        {/* Linha da Organização / Estabelecimento */}
-        <View style={styles.orgDivider} />
-        <View style={styles.orgRow}>
-          <Building size={16} color="#64748B" />
-          <Text style={styles.orgText} numberOfLines={1}>
-            {orgProfile.companyName || 'Portaria Principal'}
-          </Text>
-          <TouchableOpacity
-            style={styles.editProfileBtn}
-            onPress={() => onNavigate('profile')}
-            activeOpacity={0.7}
-          >
-            <Text style={styles.editProfileBtnText}>Meu Perfil</Text>
-            <ChevronRight size={14} color="#2563EB" />
-          </TouchableOpacity>
+        <View style={styles.identityText}>
+          <Text style={styles.userName} numberOfLines={1}>{user?.name || 'Usuário'}</Text>
+          <Text style={styles.userEmail} numberOfLines={1}>{user?.email || 'Acesso à portaria'}</Text>
+          <View style={[styles.roleBadge, { backgroundColor: roleInfo.bgColor }]}>
+            <RoleIcon size={12} color={roleInfo.textColor} />
+            <Text style={[styles.roleBadgeText, { color: roleInfo.textColor }]}>{roleInfo.label}</Text>
+          </View>
         </View>
       </View>
 
-      {/* 2. LIVE STATUS CARDS (Visão Geral em Tempo Real) */}
-      <View style={styles.statusRow}>
-        {/* WhatsApp Card */}
-        {isAdmin && (
-          <TouchableOpacity
-            style={styles.statusCard}
-            onPress={() => onNavigate('whatsapp')}
-            activeOpacity={0.8}
-          >
-            <View style={styles.statusCardHeader}>
-              <View
-                style={[
-                  styles.statusIconWrap,
-                  {
-                    backgroundColor:
-                      whatsappStatus === 'CONNECTED' ? '#DCFCE7' : '#FEE2E2',
-                  },
-                ]}
-              >
-                {whatsappStatus === 'CONNECTED' ? (
-                  <Wifi size={16} color="#16A34A" />
-                ) : (
-                  <WifiOff size={16} color="#DC2626" />
-                )}
-              </View>
-              <View
-                style={[
-                  styles.liveIndicatorDot,
-                  {
-                    backgroundColor:
-                      whatsappStatus === 'CONNECTED' ? '#22C55E' : '#EF4444',
-                  },
-                ]}
-              />
-            </View>
+      <TouchableOpacity style={styles.companyLine} onPress={() => onNavigate('profile')} activeOpacity={0.7}>
+        <Building size={16} color={colors.primary} />
+        <Text style={styles.orgText} numberOfLines={1}>{orgProfile.companyName || 'Portaria principal'}</Text>
+        <Text style={styles.link}>Meu perfil</Text>
+        <ChevronRight size={16} color="#94A3B8" />
+      </TouchableOpacity>
+
+      {isAdmin && (
+        <View style={styles.statusRow}>
+          <TouchableOpacity style={styles.statusCard} onPress={() => onNavigate('whatsapp')} activeOpacity={0.8}>
+            {whatsappStatus === 'CONNECTED' ? <Wifi size={16} color="#16A34A" /> : <WifiOff size={16} color="#DC2626" />}
             <Text style={styles.statusCardTitle}>WhatsApp</Text>
-            <Text
-              style={[
-                styles.statusCardSubtitle,
-                {
-                  color:
-                    whatsappStatus === 'CONNECTED' ? '#15803D' : '#B91C1C',
-                },
-              ]}
-              numberOfLines={1}
-            >
+            <Text style={[styles.statusCardSubtitle, { color: whatsappStatus === 'CONNECTED' ? '#15803D' : '#B91C1C' }]} numberOfLines={1}>
               {whatsappStatus === 'CONNECTED'
                 ? connectedPhone || 'Conectado'
-                : whatsappStatus === 'LOADING'
-                ? 'Verificando...'
-                : 'Desconectado'}
+                : whatsappStatus === 'LOADING' ? 'Verificando...' : 'Desconectado'}
             </Text>
           </TouchableOpacity>
-        )}
-
-        {/* Subscription / Plano Card */}
-        {isAdmin && (
-          <TouchableOpacity
-            style={styles.statusCard}
-            onPress={() => onNavigate('subscription')}
-            activeOpacity={0.8}
-          >
-            <View style={styles.statusCardHeader}>
-              <View
-                style={[
-                  styles.statusIconWrap,
-                  { backgroundColor: isPro ? '#E8F5E9' : '#FEF3C7' },
-                ]}
-              >
-                <Sparkles size={16} color={isPro ? '#165337' : '#D97706'} />
-              </View>
-              <Text
-                style={[
-                  styles.planPillText,
-                  { color: isPro ? '#165337' : '#B45309' },
-                ]}
-              >
-                {isPro ? 'PRO' : 'TRIAL'}
-              </Text>
-            </View>
+          <TouchableOpacity style={styles.statusCard} onPress={() => onNavigate('subscription')} activeOpacity={0.8}>
+            <Sparkles size={16} color={isPro ? colors.primary : '#D97706'} />
             <Text style={styles.statusCardTitle}>Assinatura</Text>
             <Text style={styles.statusCardSubtitle} numberOfLines={1}>
-              {isPro
-                ? 'Plano Ativo'
-                : isTrial
-                ? `${trialDays} dias restantes`
-                : 'Regularizar'}
+              {isPro ? 'Plano ativo' : isTrial ? `${trialDays} dias` : 'Regularizar'}
             </Text>
           </TouchableOpacity>
-        )}
-      </View>
+        </View>
+      )}
 
-      {/* SEÇÃO EXCLUSIVA SUPER ADMIN: GESTÃO SAAS */}
       {isSuperAdmin && (
-        <View style={styles.section}>
-          <Text style={[styles.sectionHeader, { color: '#2563EB' }]}>PAINEL SUPER ADMINISTRADOR</Text>
-          <Text style={styles.sectionDescription}>
-            Gestão global de todas as empresas e condomínios cadastrados
-          </Text>
-
-          <TouchableOpacity
-            style={[styles.menuItem, { backgroundColor: '#EFF6FF', borderColor: '#BFDBFE' }]}
-            onPress={() => onNavigate('super_admin_orgs')}
-            activeOpacity={0.7}
-          >
-            <View style={[styles.menuIconBox, { backgroundColor: '#2563EB' }]}>
-              <Building2 size={22} color="#FFFFFF" />
-            </View>
-            <View style={styles.menuContent}>
-              <Text style={[styles.menuTitle, { color: '#1E40AF', fontWeight: '800' }]}>
-                Gestão de Empresas (SaaS Master)
-              </Text>
-              <Text style={styles.menuSubtitle}>
-                Cadastrar novas empresas, ver operadores e gerenciar acessos
-              </Text>
-            </View>
-            <ChevronRight size={18} color="#2563EB" />
-          </TouchableOpacity>
+        <View style={styles.group}>
+          <Text style={styles.groupLabel}>Sistema</Text>
+          <View style={styles.groupBox}>
+            <MenuRow
+              icon={<Building2 size={18} color="#FFFFFF" />}
+              iconBg={colors.primary}
+              title="Empresas do SaaS"
+              subtitle="Cadastro e acessos das empresas"
+              onPress={() => onNavigate('super_admin_orgs')}
+            />
+          </View>
         </View>
       )}
 
-      {/* 3. SEÇÃO: OPERAÇÃO & CADASTROS */}
       {(isAdmin || isSupervisor) && (
-        <View style={styles.section}>
-          <Text style={styles.sectionHeader}>CADASTROS DA PORTARIA</Text>
-          <Text style={styles.sectionDescription}>
-            Gerenciamento de moradores, unidades e equipe de atendimento
-          </Text>
-
-          {/* Moradores & Unidades */}
-          <TouchableOpacity
-            style={styles.menuItem}
-            onPress={() => onNavigate('clients_mgmt')}
-            activeOpacity={0.7}
-          >
-            <View style={[styles.menuIconBox, { backgroundColor: '#DCFCE7' }]}>
-              <Building2 size={22} color="#16A34A" />
-            </View>
-            <View style={styles.menuContent}>
-              <Text style={styles.menuTitle}>
-                {orgProfile.clientLabel
-                  ? `${orgProfile.clientLabel}s & Unidades`
-                  : 'Moradores & Unidades'}
-              </Text>
-              <Text style={styles.menuSubtitle}>
-                Cadastre residentes, números de WhatsApp e apartamentos
-              </Text>
-            </View>
-            <ChevronRight size={18} color="#94A3B8" />
-          </TouchableOpacity>
-
-          {/* Equipe / Porteiros */}
-          <TouchableOpacity
-            style={styles.menuItem}
-            onPress={() => onNavigate('users_mgmt')}
-            activeOpacity={0.7}
-          >
-            <View style={[styles.menuIconBox, { backgroundColor: '#EFF6FF' }]}>
-              <UserCheck size={22} color="#2563EB" />
-            </View>
-            <View style={styles.menuContent}>
-              <Text style={styles.menuTitle}>Equipe de Porteiros</Text>
-              <Text style={styles.menuSubtitle}>
-                Cadastrar operadores, redefinir senhas e gerenciar acessos
-              </Text>
-            </View>
-            <ChevronRight size={18} color="#94A3B8" />
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.menuItem}
-            onPress={() => onNavigate('restrictions')}
-            activeOpacity={0.7}
-          >
-            <View style={[styles.menuIconBox, { backgroundColor: '#FEE2E2' }]}>
-              <Shield size={22} color="#B91C1C" />
-            </View>
-            <View style={styles.menuContent}>
-              <Text style={styles.menuTitle}>Lista de restrição</Text>
-              <Text style={styles.menuSubtitle}>
-                Nome ou documento que o porteiro precisa ver antes de liberar
-              </Text>
-            </View>
-            <ChevronRight size={18} color="#94A3B8" />
-          </TouchableOpacity>
+        <View style={styles.group}>
+          <Text style={styles.groupLabel}>Cadastros</Text>
+          <View style={styles.groupBox}>
+            <MenuRow
+              icon={<Users size={18} color={colors.primary} />}
+              iconBg={colors.primarySoft}
+              title={orgProfile.clientLabel ? `${orgProfile.clientLabel}s e unidades` : 'Moradores e unidades'}
+              onPress={() => onNavigate('clients_mgmt')}
+            />
+            <MenuRow
+              icon={<UserCheck size={18} color="#1D4ED8" />}
+              iconBg="#EFF6FF"
+              title="Equipe da portaria"
+              onPress={() => onNavigate('users_mgmt')}
+            />
+            <MenuRow
+              icon={<Shield size={18} color="#B91C1C" />}
+              iconBg="#FEE2E2"
+              title="Lista de restrição"
+              onPress={() => onNavigate('restrictions')}
+              last={!isAdmin}
+            />
+            {isAdmin && (
+              <>
+                <MenuRow
+                  icon={<Building size={18} color="#B45309" />}
+                  iconBg="#FEF3C7"
+                  title="Perfil do estabelecimento"
+                  subtitle={orgProfile.companyName || 'Nome, endereço e tipo do local'}
+                  onPress={() => onNavigate('org_profile')}
+                />
+                <MenuRow
+                  icon={<Trees size={18} color={colors.primary} />}
+                  iconBg={colors.primarySoft}
+                  title="Áreas comuns"
+                  subtitle="Salão, churrasqueira e reservas"
+                  onPress={() => onNavigate('amenities')}
+                  last
+                />
+              </>
+            )}
+          </View>
         </View>
       )}
 
-      {/* 4. SEÇÃO: COMUNICAÇÃO & INTEGRAÇÕES */}
-      {isAdmin && (
-        <View style={styles.section}>
-          <Text style={styles.sectionHeader}>COMUNICAÇÃO & ROBÔ</Text>
-          <Text style={styles.sectionDescription}>
-            Integração com WhatsApp para avisos e autorizações automáticas
-          </Text>
-
-          <TouchableOpacity
-            style={styles.menuItem}
-            onPress={() => onNavigate('whatsapp')}
-            activeOpacity={0.7}
-          >
-            <View style={[styles.menuIconBox, { backgroundColor: '#DCFCE7' }]}>
-              <MessageSquare size={22} color="#15803D" />
-            </View>
-            <View style={styles.menuContent}>
-              <View style={styles.menuTitleRow}>
-                <Text style={styles.menuTitle}>Robô do WhatsApp</Text>
-                {whatsappStatus === 'CONNECTED' ? (
-                  <View style={styles.connectedBadge}>
-                    <Text style={styles.connectedBadgeText}>ONLINE</Text>
-                  </View>
-                ) : (
-                  <View style={styles.disconnectedBadge}>
-                    <Text style={styles.disconnectedBadgeText}>OFFLINE</Text>
-                  </View>
-                )}
-              </View>
-              <Text style={styles.menuSubtitle}>
-                {whatsappStatus === 'CONNECTED'
-                  ? `Conectado ao telefone ${connectedPhone || ''}`
-                  : 'Escanear QR Code para ativar envio de mensagens'}
-              </Text>
-            </View>
-            <ChevronRight size={18} color="#94A3B8" />
-          </TouchableOpacity>
+      <View style={styles.group}>
+        <Text style={styles.groupLabel}>Ajuda</Text>
+        <View style={styles.groupBox}>
+          <MenuRow
+            icon={<HelpCircle size={18} color={colors.primary} />}
+            iconBg={colors.primarySoft}
+            title="Guia da portaria"
+            onPress={() => onOpenTutorial && onOpenTutorial()}
+          />
+          <MenuRow
+            icon={<MessageSquare size={18} color="#15803D" />}
+            iconBg="#DCFCE7"
+            title="Suporte"
+            onPress={() => Linking.openURL('https://wa.me/5511999999999?text=Ol%C3%A1%2C%20preciso%20de%20ajuda%20no%20Brisoft%20Portaria')}
+            last
+          />
         </View>
-      )}
-
-      {/* 5. SEÇÃO: EMPRESA & SISTEMA */}
-      {isAdmin && (
-        <View style={styles.section}>
-          <Text style={styles.sectionHeader}>EMPRESA & ASSINATURA</Text>
-          <Text style={styles.sectionDescription}>
-            Personalização do estabelecimento e gestão do plano
-          </Text>
-
-          {/* Perfil do Estabelecimento */}
-          <TouchableOpacity
-            style={styles.menuItem}
-            onPress={() => onNavigate('org_profile')}
-            activeOpacity={0.7}
-          >
-            <View style={[styles.menuIconBox, { backgroundColor: '#FEF3C7' }]}>
-              <Building size={22} color="#D97706" />
-            </View>
-            <View style={styles.menuContent}>
-              <Text style={styles.menuTitle}>Perfil do Estabelecimento</Text>
-              <Text style={styles.menuSubtitle}>
-                {orgProfile.companyName
-                  ? `${orgProfile.companyName} (${orgProfile.type || 'Personalizado'})`
-                  : 'Defina o segmento: Residencial, Comercial, Clínica, etc.'}
-              </Text>
-            </View>
-            <ChevronRight size={18} color="#94A3B8" />
-          </TouchableOpacity>
-        </View>
-      )}
-
-      {/* 6. SEÇÃO: AJUDA & SUPORTE */}
-      <View style={styles.section}>
-        <Text style={styles.sectionHeader}>AJUDA & SUPORTE</Text>
-        <Text style={styles.sectionDescription}>
-          Tutoriais de uso da portaria e suporte direto com a equipe
-        </Text>
-
-        <TouchableOpacity
-          style={styles.menuItem}
-          onPress={() => onOpenTutorial && onOpenTutorial()}
-          activeOpacity={0.7}
-        >
-          <View style={[styles.menuIconBox, { backgroundColor: '#DCFCE7' }]}>
-            <HelpCircle size={22} color="#15803D" />
-          </View>
-          <View style={styles.menuContent}>
-            <Text style={styles.menuTitle}>Guia de Implantação & Tutorial</Text>
-            <Text style={styles.menuSubtitle}>
-              Reveja o passo a passo de configuração e rotinas da portaria
-            </Text>
-          </View>
-          <ChevronRight size={18} color="#94A3B8" />
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.menuItem}
-          onPress={() => {
-            Linking.openURL(
-              'https://wa.me/5511999999999?text=Ol%C3%A1%2C%20gostaria%20de%20tirar%20uma%20d%C3%BAvida%20sobre%20o%20Combate%20Portaria'
-            );
-          }}
-          activeOpacity={0.7}
-        >
-          <View style={[styles.menuIconBox, { backgroundColor: '#EFF6FF' }]}>
-            <MessageSquare size={22} color="#2563EB" />
-          </View>
-          <View style={styles.menuContent}>
-            <Text style={styles.menuTitle}>Suporte Técnico Oficial</Text>
-            <Text style={styles.menuSubtitle}>
-              Fale com um especialista da equipe Combate no WhatsApp
-            </Text>
-          </View>
-          <ExternalLink size={16} color="#94A3B8" />
-        </TouchableOpacity>
       </View>
 
-      {/* 7. BOTÃO LOGOUT / SAIR */}
-      <TouchableOpacity
-        style={styles.logoutCard}
-        onPress={handleLogout}
-        activeOpacity={0.8}
-      >
-        <LogOut size={20} color="#DC2626" />
-        <Text style={styles.logoutText}>Sair da Conta</Text>
+      <TouchableOpacity style={styles.logout} onPress={handleLogout} activeOpacity={0.8}>
+        <LogOut size={18} color="#DC2626" />
+        <Text style={styles.logoutText}>Sair da conta</Text>
       </TouchableOpacity>
 
     </ScrollView>
@@ -553,289 +315,100 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
   );
 };
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F8FAFC',
-  },
-  content: {
-    padding: 16,
-    paddingTop: 12,
-  },
+const MenuRow: React.FC<{
+  icon: React.ReactNode;
+  iconBg: string;
+  title: string;
+  subtitle?: string;
+  onPress: () => void;
+  last?: boolean;
+}> = ({ icon, iconBg, title, subtitle, onPress, last }) => (
+  <TouchableOpacity style={[styles.row, !last && styles.rowDivider]} onPress={onPress} activeOpacity={0.7}>
+    <View style={[styles.rowIcon, { backgroundColor: iconBg }]}>{icon}</View>
+    <View style={styles.rowText}>
+      <Text style={styles.rowTitle}>{title}</Text>
+      {subtitle ? <Text style={styles.rowSub} numberOfLines={1}>{subtitle}</Text> : null}
+    </View>
+    <ChevronRight size={16} color="#94A3B8" />
+  </TouchableOpacity>
+);
 
-  // Perfil Hero Card
-  profileCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 14,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    shadowColor: '#0F172A',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 6,
-    elevation: 2,
-  },
-  profileTopRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: colors.background },
+  content: { padding: 20, paddingTop: 8 },
+  identity: { flexDirection: 'row', alignItems: 'center', marginBottom: 14 },
+  identityText: { flex: 1, marginLeft: 14 },
   avatarCircle: {
-    width: 54,
-    height: 54,
-    borderRadius: 27,
-    backgroundColor: '#1E3A8A',
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: '#3B82F6',
   },
-  avatarInitials: {
-    color: '#FFFFFF',
-    fontSize: 20,
-    fontWeight: '800',
-  },
-  nameRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  userName: {
-    fontSize: 17,
-    fontWeight: '800',
-    color: '#0F172A',
-  },
-  userEmail: {
-    fontSize: 13,
-    color: '#64748B',
-    marginTop: 2,
-  },
+  avatarInitials: { color: '#FFFFFF', fontSize: 20, fontWeight: '700' },
+  userName: { fontSize: 18, fontWeight: '700', color: colors.textPrimary },
+  userEmail: { fontSize: 13, color: colors.textSecondary, marginTop: 2 },
   roleBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     alignSelf: 'flex-start',
     paddingHorizontal: 8,
     paddingVertical: 3,
-    borderRadius: 6,
-    marginTop: 6,
+    borderRadius: 999,
+    marginTop: 8,
     gap: 4,
   },
-  roleBadgeText: {
-    fontSize: 11,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-  },
-  orgDivider: {
-    height: 1,
-    backgroundColor: '#F1F5F9',
-    marginVertical: 12,
-  },
-  orgRow: {
+  roleBadgeText: { fontSize: 11, fontWeight: '700' },
+  companyLine: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    gap: 8,
+    backgroundColor: colors.surface,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingHorizontal: 14,
+    minHeight: 48,
+    marginBottom: 14,
   },
-  orgText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#334155',
-    flex: 1,
-    marginLeft: 8,
-  },
-  editProfileBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 4,
-    paddingHorizontal: 8,
-    borderRadius: 6,
-    backgroundColor: '#EFF6FF',
-  },
-  editProfileBtnText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#2563EB',
-    marginRight: 2,
-  },
-
-  // Quick Status Row
-  statusRow: {
-    flexDirection: 'row',
-    gap: 10,
-    marginBottom: 18,
-  },
+  orgText: { flex: 1, color: colors.textPrimary, fontWeight: '600' },
+  link: { color: colors.primary, fontWeight: '700', fontSize: 13 },
+  statusRow: { flexDirection: 'row', gap: 10, marginBottom: 8 },
   statusCard: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderRadius: 14,
-    padding: 12,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    shadowColor: '#0F172A',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 3,
-    elevation: 1,
-  },
-  statusCardHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 6,
-  },
-  statusIconWrap: {
-    width: 28,
-    height: 28,
-    borderRadius: 7,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  liveIndicatorDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-  },
-  planPillText: {
-    fontSize: 10,
-    fontWeight: '800',
-  },
-  statusCardTitle: {
-    fontSize: 12,
-    color: '#64748B',
-    fontWeight: '600',
-  },
-  statusCardSubtitle: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#0F172A',
-    marginTop: 2,
-  },
-
-  // Sections
-  section: {
-    marginBottom: 18,
-  },
-  sectionHeader: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: '#94A3B8',
-    letterSpacing: 0.8,
-    marginBottom: 2,
-    textTransform: 'uppercase',
-  },
-  sectionDescription: {
-    fontSize: 12,
-    color: '#64748B',
-    marginBottom: 8,
-  },
-  menuItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 14,
+    borderColor: colors.border,
     padding: 14,
-    marginBottom: 8,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    shadowColor: '#0F172A',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.03,
-    shadowRadius: 3,
-    elevation: 1,
-  },
-  menuIconBox: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  menuContent: {
-    flex: 1,
-    marginLeft: 12,
-    marginRight: 8,
-  },
-  menuTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
     gap: 6,
   },
-  menuTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#0F172A',
-  },
-  menuSubtitle: {
+  statusCardTitle: { color: colors.textPrimary, fontWeight: '700' },
+  statusCardSubtitle: { color: colors.textSecondary, fontSize: 12 },
+  group: { marginTop: 18 },
+  groupLabel: {
+    color: colors.textSecondary,
     fontSize: 12,
-    color: '#64748B',
-    marginTop: 2,
-    lineHeight: 16,
+    fontWeight: '700',
+    letterSpacing: 0.4,
+    textTransform: 'uppercase',
+    marginBottom: 8,
+    marginLeft: 4,
   },
-  connectedBadge: {
-    backgroundColor: '#DCFCE7',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
-  },
-  connectedBadgeText: {
-    color: '#15803D',
-    fontSize: 10,
-    fontWeight: '800',
-  },
-  disconnectedBadge: {
-    backgroundColor: '#FEE2E2',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
-  },
-  disconnectedBadgeText: {
-    color: '#B91C1C',
-    fontSize: 10,
-    fontWeight: '800',
-  },
-  planBadge: {
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
-  },
-  planBadgeText: {
-    fontSize: 10,
-    fontWeight: '800',
-  },
-
-  // Logout Button
-  logoutCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#FEE2E2',
-    borderRadius: 14,
-    paddingVertical: 14,
-    marginTop: 6,
-    marginBottom: 20,
+  groupBox: {
+    backgroundColor: colors.surface,
+    borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#FECACA',
-    gap: 8,
+    borderColor: colors.border,
+    overflow: 'hidden',
   },
-  logoutText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#DC2626',
-  },
-
-  // Rodapé
-  footer: {
-    alignItems: 'center',
-    paddingVertical: 10,
-  },
-  footerTitle: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#94A3B8',
-  },
-  footerSubtitle: {
-    fontSize: 11,
-    color: '#CBD5E1',
-    marginTop: 2,
-  },
+  row: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 12, gap: 12 },
+  rowDivider: { borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
+  rowIcon: { width: 34, height: 34, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  rowText: { flex: 1 },
+  rowTitle: { color: colors.textPrimary, fontWeight: '700', fontSize: 15 },
+  rowSub: { color: colors.textSecondary, fontSize: 12, marginTop: 2 },
+  logout: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 22, minHeight: 48 },
+  logoutText: { color: '#DC2626', fontWeight: '700', fontSize: 15 },
 });

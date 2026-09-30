@@ -15,15 +15,16 @@ import {
   Switch,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Bell, CalendarCheck, ChevronLeft, ChevronRight, Home, Package, UserRound } from 'lucide-react-native';
+import { Bell, CalendarCheck, ChevronLeft, ChevronRight, Home, Package, Trees, UserRound } from 'lucide-react-native';
 import { useAuth } from '../../contexts/AuthContext';
 import { api } from '../../config/api';
 import { colors } from '../../theme/colors';
 import { AppHeader } from '../../components/AppHeader';
 import QRCode from 'react-native-qrcode-svg';
+import { ResidentAreas } from './ResidentAreas';
 import { WEEKDAY_SHORT, weekdayText } from '../../utils/release';
 
-type Tab = 'home' | 'visits' | 'packages' | 'profile' | 'alerts' | 'new';
+type Tab = 'home' | 'visits' | 'packages' | 'areas' | 'profile' | 'alerts' | 'new';
 
 type Visit = {
   id: string;
@@ -197,7 +198,7 @@ export const ResidentArea: React.FC = () => {
   const pendingPackages = packages.filter((item) => item.status === 'RECEIVED');
   const unit = context?.units?.[0];
   const unitLabel = unit ? `${unit.name}${unit.block ? ` · ${unit.block}` : ''}` : 'Unidade';
-  const mainTab = (tab === 'home' || tab === 'visits' || tab === 'packages') && !selected && !selectedPackage;
+  const mainTab = (tab === 'home' || tab === 'visits' || tab === 'packages' || tab === 'areas') && !selected && !selectedPackage;
 
   useEffect(() => {
     const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
@@ -308,6 +309,7 @@ export const ResidentArea: React.FC = () => {
             : tab === 'new' ? 'Nova visita'
             : tab === 'visits' ? 'Minhas visitas'
             : tab === 'packages' ? 'Encomendas'
+            : tab === 'areas' ? 'Áreas'
             : tab === 'profile' ? 'Meu perfil'
             : tab === 'alerts' ? 'Avisos'
             : 'Início'
@@ -484,6 +486,8 @@ export const ResidentArea: React.FC = () => {
             </View>
           )}
 
+          {tab === 'areas' && <ResidentAreas />}
+
           {tab === 'packages' && !selectedPackage && (
             packages.length === 0 ? (
               <View style={styles.emptyCard}><Text style={styles.empty}>Nenhuma encomenda para a sua unidade.</Text></View>
@@ -560,6 +564,7 @@ export const ResidentArea: React.FC = () => {
             ['home', 'Início', Home],
             ['visits', 'Visitas', CalendarCheck],
             ['packages', 'Encomendas', Package],
+            ['areas', 'Áreas', Trees],
           ] as const).map(([key, label, Icon]) => {
             const active = tab === key;
             return (

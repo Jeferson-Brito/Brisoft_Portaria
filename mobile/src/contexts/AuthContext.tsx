@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { api, setOnUnauthorizedCallback } from '../config/api';
+import { api, setOnUnauthorizedCallback, setMemoryToken } from '../config/api';
 import { registerForPushNotificationsAsync } from '../services/notifications.service';
 import { setPhotoAccessToken } from '../utils/photo';
 
@@ -29,7 +29,7 @@ interface AuthContextData {
   token: string | null;
   isLoading: boolean;
   isSubscriptionBlocked: boolean;
-  signIn: (email: string, password: string) => Promise<void>;
+  signIn: (email: string, password: string, remember?: boolean) => Promise<void>;
   signOut: () => Promise<void>;
   register: (data: RegisterData) => Promise<void>;
   refreshSubscription: () => Promise<void>;
@@ -62,6 +62,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     async function loadStorageData() {
       try {
+        const remember = await AsyncStorage.getItem('@brisoft_portaria:remember');
+        if (remember === '0') {
+          setIsLoading(false);
+          return;
+        }
+
         const storedToken =
           (await AsyncStorage.getItem('@brisoft_portaria:token')) ||
           (await AsyncStorage.getItem('@combate_portaria:token'));
@@ -70,6 +76,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           (await AsyncStorage.getItem('@combate_portaria:user'));
 
         if (storedToken && storedUser) {
+          setMemoryToken(storedToken);
           setToken(storedToken);
           setUser(JSON.parse(storedUser));
           setTimeout(() => {
@@ -92,17 +99,30 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     !!user?.subscription &&
     (BLOCKED_STATUSES.includes(user.subscription.status) || (user.subscription as any).isBlocked === true);
 
-  const signIn = async (email: string, password: string) => {
+  const signIn = async (email: string, password: string, remember = true) => {
     try {
       const response = await api.post('/auth/login', { email, password });
       const { user: loggedUser, token: authToken, refreshToken } = response.data.data;
 
       setUser(loggedUser);
       setToken(authToken);
+      setMemoryToken(authToken);
 
-      await AsyncStorage.setItem('@brisoft_portaria:token', authToken);
-      await AsyncStorage.setItem('@brisoft_portaria:refreshToken', refreshToken);
-      await AsyncStorage.setItem('@brisoft_portaria:user', JSON.stringify(loggedUser));
+      if (remember) {
+        await AsyncStorage.setItem('@brisoft_portaria:remember', '1');
+        await AsyncStorage.setItem('@brisoft_portaria:rememberedEmail', email.trim());
+        await AsyncStorage.setItem('@brisoft_portaria:token', authToken);
+        await AsyncStorage.setItem('@brisoft_portaria:refreshToken', refreshToken);
+        await AsyncStorage.setItem('@brisoft_portaria:user', JSON.stringify(loggedUser));
+      } else {
+        await AsyncStorage.setItem('@brisoft_portaria:remember', '0');
+        await AsyncStorage.removeItem('@brisoft_portaria:rememberedEmail');
+        await AsyncStorage.removeItem('@brisoft_portaria:token');
+        await AsyncStorage.removeItem('@brisoft_portaria:refreshToken');
+        await AsyncStorage.removeItem('@brisoft_portaria:user');
+        await AsyncStorage.removeItem('@combate_portaria:token');
+        await AsyncStorage.removeItem('@combate_portaria:user');
+      }
 
       setTimeout(() => {
         registerForPushNotificationsAsync();
@@ -162,9 +182,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
 
     if (nextUser) {
-      const stored = JSON.stringify(nextUser);
-      await AsyncStorage.setItem('@brisoft_portaria:user', stored);
-      await AsyncStorage.setItem('@combate_portaria:user', stored);
+      const remember = await AsyncStorage.getItem('@brisoft_portaria:remember');
+      if (remember !== '0') {
+        const stored = JSON.stringify(nextUser);
+        await AsyncStorage.setItem('@brisoft_portaria:user', stored);
+        await AsyncStorage.setItem('@combate_portaria:user', stored);
+      }
     }
 
     return nextUser?.subscription ?? null;
@@ -179,6 +202,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       await AsyncStorage.removeItem('@combate_portaria:refreshToken');
       await AsyncStorage.removeItem('@combate_portaria:user');
     } finally {
+      setMemoryToken(null);
       setUser(null);
       setToken(null);
     }

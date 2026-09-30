@@ -70,6 +70,7 @@ import { WhatsAppConfigScreen } from '../admin/WhatsAppConfigScreen';
 import { UsersManagementScreen } from '../admin/UsersManagementScreen';
 import { ClientsManagementScreen } from '../admin/ClientsManagementScreen';
 import { RestrictionsScreen } from '../admin/RestrictionsScreen';
+import { AmenitiesScreen } from '../admin/AmenitiesScreen';
 import { OrganizationProfileScreen } from '../admin/OrganizationProfileScreen';
 import { ReportsScreen } from '../reports/ReportsScreen';
 import { ProfileScreen } from '../profile/ProfileScreen';
@@ -174,6 +175,7 @@ export const DashboardScreen: React.FC = () => {
     | 'users_mgmt'
     | 'clients_mgmt'
     | 'restrictions'
+    | 'amenities'
     | 'preauthorizations'
     | 'org_profile'
     | 'profile'
@@ -184,7 +186,7 @@ export const DashboardScreen: React.FC = () => {
   useEffect(() => {
     const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
       if (activeTab === 'dashboard') return false;
-      const backToSettings = ['whatsapp', 'users_mgmt', 'clients_mgmt', 'restrictions', 'org_profile', 'subscription', 'super_admin_orgs'];
+      const backToSettings = ['whatsapp', 'users_mgmt', 'clients_mgmt', 'restrictions', 'amenities', 'org_profile', 'subscription', 'super_admin_orgs'];
       if (backToSettings.includes(activeTab)) setActiveTab('settings');
       else if (activeTab === 'profile') setActiveTab(user?.role === 'CONCIERGE' ? 'dashboard' : 'settings');
       else if (activeTab === 'settings') setActiveTab('dashboard');
@@ -426,6 +428,7 @@ export const DashboardScreen: React.FC = () => {
     if (activeTab === 'users_mgmt') return <UsersManagementScreen onBack={() => setActiveTab('settings')} />;
     if (activeTab === 'clients_mgmt') return <ClientsManagementScreen onBack={() => setActiveTab('settings')} />;
     if (activeTab === 'restrictions') return <RestrictionsScreen onBack={() => setActiveTab('settings')} />;
+    if (activeTab === 'amenities') return <AmenitiesScreen onBack={() => setActiveTab('settings')} />;
     if (activeTab === 'reports') return <ReportsScreen />;
     if (activeTab === 'org_profile') {
       return (

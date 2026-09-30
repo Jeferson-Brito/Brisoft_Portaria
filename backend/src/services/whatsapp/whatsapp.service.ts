@@ -446,6 +446,35 @@ export class WhatsAppService {
   }
 
   // Envio de imagem com legenda (ex: foto de encomenda na portaria)
+  public async liveStatuses() {
+    const statuses: Record<string, { status: string; phoneConnected?: string | null }> = {};
+    for (const [organizationId, provider] of this.providers) {
+      try {
+        const info = await provider.getStatus(organizationId);
+        statuses[organizationId] = { status: info.status, phoneConnected: info.phoneConnected || null };
+        if (info.status === 'CONNECTED') {
+          prisma.whatsAppConnection.upsert({
+            where: { organizationId },
+            update: {
+              status: 'CONNECTED',
+              phoneConnected: info.phoneConnected || null,
+              lastConnectedAt: info.lastConnectedAt || new Date(),
+            },
+            create: {
+              organizationId,
+              status: 'CONNECTED',
+              phoneConnected: info.phoneConnected || null,
+              lastConnectedAt: info.lastConnectedAt || new Date(),
+            },
+          }).catch(() => undefined);
+        }
+      } catch {
+        /* a sessão ainda sem status não altera o painel */
+      }
+    }
+    return statuses;
+  }
+
   public async sendImageMessage(
     organizationId: string,
     toPhone: string,

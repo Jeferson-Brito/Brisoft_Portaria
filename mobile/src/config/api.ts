@@ -55,10 +55,17 @@ export const api = axios.create({
   timeout: 35000, // 35 segundos para suportar eventual cold-start do Render
 });
 
+let memoryToken: string | null = null;
+
+export function setMemoryToken(token: string | null) {
+  memoryToken = token;
+}
+
 api.interceptors.request.use(
   async (config) => {
     try {
       const token =
+        memoryToken ||
         (await AsyncStorage.getItem('@brisoft_portaria:token')) ||
         (await AsyncStorage.getItem('@combate_portaria:token'));
       if (token) {

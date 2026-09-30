@@ -4,6 +4,7 @@ import { preAuthorizationService } from '../pre-authorizations/pre-authorization
 import { whatsappService } from '../../services/whatsapp/whatsapp.service.js';
 import QRCode from 'qrcode';
 import { inviteUrl } from '../invites/invite.routes.js';
+import { amenityService } from '../amenities/amenity.service.js';
 import { formatWhatsAppNumber } from '../../utils/phone.util.js';
 import { normalizeWeekdays, weekdayLabels } from '../../utils/weekdays.js';
 import { readOrganizationAddress } from '../../utils/address.js';
@@ -210,6 +211,34 @@ export class ResidentService {
     });
 
     return updated;
+  }
+
+  async listAmenities(userId: string) {
+    const { user } = await loadResident(userId);
+    return amenityService.list(user.organizationId);
+  }
+
+  async amenityMonth(userId: string, month: string) {
+    const { user, client } = await loadResident(userId);
+    return amenityService.month(user.organizationId, month, client.id);
+  }
+
+  async bookAmenity(userId: string, amenityId: string, input: { date: string; startTime: string; endTime: string; notes?: string }) {
+    const { user, client } = await loadResident(userId);
+    return amenityService.book({
+      organizationId: user.organizationId,
+      clientId: client.id,
+      amenityId,
+      date: input.date,
+      startTime: input.startTime,
+      endTime: input.endTime,
+      notes: input.notes,
+    });
+  }
+
+  async cancelAmenity(userId: string, bookingId: string) {
+    const { user, client } = await loadResident(userId);
+    return amenityService.cancel(bookingId, user.organizationId, client.id);
   }
 
   async listPackages(userId: string) {

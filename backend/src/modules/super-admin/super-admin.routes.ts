@@ -154,6 +154,17 @@ export async function superAdminRoutes(app: FastifyInstance) {
     return reply.send({ success: true, message: 'Assinatura ativada / renovada com sucesso!', data: updated });
   });
 
+  app.get('/plan-price', async (_req, reply) => {
+    const price = await service.getPlanPrice();
+    return reply.send({ success: true, data: { price } });
+  });
+
+  app.put('/plan-price', async (req: FastifyRequest, reply: FastifyReply) => {
+    const { price } = (req.body as { price?: number }) || {};
+    const updated = await service.setPlanPrice(Number(price));
+    return reply.send({ success: true, message: 'Valor do plano atualizado.', data: { price: updated } });
+  });
+
   app.post('/subscriptions/:orgId/suspend', async (req: FastifyRequest, reply: FastifyReply) => {
     const { orgId } = req.params as { orgId: string };
     const updated = await service.suspendSubscription(orgId);

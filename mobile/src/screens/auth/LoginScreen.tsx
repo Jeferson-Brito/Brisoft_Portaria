@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   View,
   Text,
@@ -15,7 +16,6 @@ import {
   Dimensions,
 } from 'react-native';
 import {
-  ShieldCheck,
   Mail,
   Lock,
   Eye,
@@ -38,6 +38,15 @@ export const LoginScreen: React.FC<{ onRegisterPress?: () => void }> = ({ onRegi
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
+  useEffect(() => {
+    AsyncStorage.getItem('@brisoft_portaria:rememberedEmail').then((saved) => {
+      if (saved) setEmail(saved);
+    });
+    AsyncStorage.getItem('@brisoft_portaria:remember').then((saved) => {
+      if (saved === '0') setRememberMe(false);
+    });
+  }, []);
+
   const handleLogin = async () => {
     if (!email.trim() || !password.trim()) {
       setErrorMessage('Por favor, preencha o e-mail e a senha.');
@@ -47,7 +56,7 @@ export const LoginScreen: React.FC<{ onRegisterPress?: () => void }> = ({ onRegi
     try {
       setIsLoading(true);
       setErrorMessage(null);
-      await signIn(email.trim(), password);
+      await signIn(email.trim(), password, rememberMe);
     } catch (err: any) {
       setErrorMessage(err.message || 'Erro ao efetuar login.');
     } finally {
@@ -198,17 +207,6 @@ export const LoginScreen: React.FC<{ onRegisterPress?: () => void }> = ({ onRegi
             </TouchableOpacity>
           )}
 
-          {/* Banner de Segurança & Criptografia */}
-          <View style={styles.securityBanner}>
-            <ShieldCheck size={20} color="#165337" style={{ marginRight: 10 }} />
-            <View style={{ flex: 1 }}>
-              <Text style={styles.securityBannerTitle}>Seus dados estão seguros e protegidos.</Text>
-              <Text style={styles.securityBannerDesc}>
-                Utilizamos tecnologias modernas de criptografia.
-              </Text>
-            </View>
-          </View>
-
           {/* Rodapé institucional */}
           <Text style={styles.footerText}>
             Brisoft Portaria • Segurança e Tecnologia © 2026
@@ -279,9 +277,9 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 30,
     paddingHorizontal: 24,
     paddingTop: 30,
-    paddingBottom: 36,
+    paddingBottom: 28,
     marginTop: -20,
-    minHeight: height * 0.62,
+    flexGrow: 1,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: -4 },
     shadowOpacity: 0.08,
@@ -428,31 +426,11 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '700',
   },
-  securityBanner: {
-    backgroundColor: '#EDF7ED',
-    borderWidth: 1,
-    borderColor: '#C8E6C9',
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 24,
-  },
-  securityBannerTitle: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#165337',
-  },
-  securityBannerDesc: {
-    fontSize: 11,
-    color: '#2A7350',
-    marginTop: 1,
-  },
   footerText: {
     textAlign: 'center',
     color: '#94A3B8',
     fontSize: 12,
-    marginTop: 4,
+    marginTop: 'auto',
+    paddingTop: 16,
   },
 });

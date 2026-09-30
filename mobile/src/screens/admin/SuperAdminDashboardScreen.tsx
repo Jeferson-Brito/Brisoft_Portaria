@@ -54,6 +54,13 @@ import { CustomConfirmModal } from '../../components/CustomConfirmModal';
 
 type SuperAdminTab = 'overview' | 'organizations' | 'users' | 'finance' | 'profile';
 
+function isInternalCompany(org?: { slug?: string; name?: string } | null) {
+  if (!org) return false;
+  const slug = org.slug || '';
+  const name = org.name || '';
+  return slug === 'saas-master' || slug.startsWith('system-') || /saas master/i.test(name);
+}
+
 export const SuperAdminDashboardScreen: React.FC = () => {
   const { user, signOut } = useAuth();
   const insets = useSafeAreaInsets();
@@ -138,6 +145,11 @@ export const SuperAdminDashboardScreen: React.FC = () => {
   });
 
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [planPrice, setPlanPrice] = useState(99.9);
+  const [planPriceInput, setPlanPriceInput] = useState('99,90');
+  const [paymentOrg, setPaymentOrg] = useState<any>(null);
+  const [paymentHistory, setPaymentHistory] = useState<any[]>([]);
+  const [loadingHistory, setLoadingHistory] = useState(false);
 
   // Carregar Métricas e Dados
   const loadDashboardData = useCallback(async () => {
@@ -149,13 +161,31 @@ export const SuperAdminDashboardScreen: React.FC = () => {
       ]);
 
       if (metricsRes.status === 'fulfilled' && metricsRes.value.data?.data) {
-        setMetrics(metricsRes.value.data.data);
+        const data = metricsRes.value.data.data;
+        setMetrics({
+          ...data,
+          alerts: {
+            whatsappDisconnected: (data.alerts?.whatsappDisconnected || []).filter((item: any) => !isInternalCompany(item)),
+            pendingPayments: (data.alerts?.pendingPayments || []).filter((item: any) => !isInternalCompany(item)),
+          },
+          recentOrganizations: (data.recentOrganizations || []).filter((item: any) => !isInternalCompany(item)),
+        });
       }
       if (orgsRes.status === 'fulfilled' && orgsRes.value.data?.organizations) {
-        setOrganizations(orgsRes.value.data.organizations);
+        setOrganizations(orgsRes.value.data.organizations.filter((item: any) => !isInternalCompany(item)));
       }
       if (usersRes.status === 'fulfilled' && usersRes.value.data?.users) {
         setUsersList(usersRes.value.data.users);
+      }
+      try {
+        const priceRes = await api.get('/super-admin/plan-price');
+        const price = Number(priceRes.data?.data?.price);
+        if (price > 0) {
+          setPlanPrice(price);
+          setPlanPriceInput(price.toFixed(2).replace('.', ','));
+        }
+      } catch {
+        /* o valor local continua até o servidor publicar o preço */
       }
     } catch (error) {
       console.warn('Erro ao carregar dados do Super Admin:', error);
@@ -304,6 +334,45 @@ export const SuperAdminDashboardScreen: React.FC = () => {
       loadDashboardData();
     } catch (err: any) {
       Alert.alert('Erro', err.response?.data?.message || 'Falha ao alterar status da empresa.');
+    }
+  };
+
+  const readPaymentHistory = (data: any) => {
+    if (Array.isArray(data?.paymentHistory) && data.paymentHistory.length > 0) return data.paymentHistory;
+    let parsed = data?.settingsParsed;
+    if (!parsed && typeof data?.settings === 'string') {
+      try {
+        parsed = JSON.parse(data.settings);
+      } catch {
+        parsed = null;
+      }
+    }
+    if (Array.isArray(parsed?.paymentHistory) && parsed.paymentHistory.length > 0) return parsed.paymentHistory;
+    if (parsed?.paidAt) {
+      return [{
+        id: 'paidAt',
+        paidAt: parsed.paidAt,
+        periodEnd: parsed.currentPeriodEnd || null,
+        source: 'MANUAL',
+        label: 'Último pagamento',
+        amount: typeof parsed.monthlyPrice === 'number' ? parsed.monthlyPrice : 0,
+      }];
+    }
+    return Array.isArray(data?.paymentHistory) ? data.paymentHistory : [];
+  };
+
+  const openPaymentHistory = async (org: any) => {
+    setPaymentOrg(org);
+    setPaymentHistory(readPaymentHistory(org));
+    setLoadingHistory(true);
+    try {
+      const res = await api.get(`/super-admin/organizations/${org.id}`);
+      const data = res.data?.data || res.data || {};
+      setPaymentHistory(readPaymentHistory(data));
+    } catch {
+      setPaymentHistory(readPaymentHistory(org));
+    } finally {
+      setLoadingHistory(false);
     }
   };
 
@@ -493,6 +562,7 @@ export const SuperAdminDashboardScreen: React.FC = () => {
   const bottomInset = Math.max(insets.bottom, Platform.OS === 'android' ? 24 : 12);
 
   // Formatação de Moeda
+  const payingOrgs = organizations.filter((org) => org.paymentStatus === 'ACTIVE' && org.isActive);
   const formatCurrency = (val: number) => {
     return (val || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
   };
@@ -511,7 +581,7 @@ export const SuperAdminDashboardScreen: React.FC = () => {
         <View style={styles.heroHeaderRow}>
           <View>
             <Text style={styles.heroLabel}>FATURAMENTO RECORRENTE (MRR)</Text>
-            <Text style={styles.heroAmount}>{formatCurrency(metrics.subscriptions?.totalMRR || 0)}</Text>
+            <Text style={styles.heroAmount}>{formatCurrency(payingOrgs.length * planPrice)}</Text>
             <Text style={styles.heroPeriod}>/mês em assinaturas pagas ativas</Text>
           </View>
           <View style={styles.heroIconBadge}>
@@ -523,62 +593,28 @@ export const SuperAdminDashboardScreen: React.FC = () => {
 
         <View style={styles.heroGrid}>
           <View style={styles.heroStatItem}>
-            <Text style={styles.heroStatNum}>{metrics.subscriptions?.paidActive || 0}</Text>
+            <Text style={styles.heroStatNum}>{payingOrgs.length}</Text>
             <Text style={styles.heroStatLabel}>Assinantes Pagantes</Text>
           </View>
           <View style={styles.heroStatItem}>
-            <Text style={[styles.heroStatNum, { color: '#F59E0B' }]}>{metrics.subscriptions?.trial || 0}</Text>
+            <Text style={[styles.heroStatNum, { color: '#F59E0B' }]}>{organizations.filter((org) => org.paymentStatus === 'TRIAL').length}</Text>
             <Text style={styles.heroStatLabel}>Em Teste (7 dias)</Text>
           </View>
           <View style={styles.heroStatItem}>
-            <Text style={[styles.heroStatNum, { color: '#EF4444' }]}>{metrics.subscriptions?.pending || 0}</Text>
+            <Text style={[styles.heroStatNum, { color: '#EF4444' }]}>{organizations.filter((org) => org.paymentStatus === 'EXPIRED' || org.paymentStatus === 'PENDING').length}</Text>
             <Text style={styles.heroStatLabel}>Pagamento Pendente</Text>
           </View>
           <View style={styles.heroStatItem}>
-            <Text style={styles.heroStatNum}>{metrics.organizations?.total || 0}</Text>
+            <Text style={styles.heroStatNum}>{organizations.length}</Text>
             <Text style={styles.heroStatLabel}>Total Empresas</Text>
           </View>
         </View>
       </View>
 
       {/* Alertas Urgentes de Operação */}
-      {(metrics.alerts?.whatsappDisconnected?.length > 0 || metrics.alerts?.pendingPayments?.length > 0) && (
+      {(metrics.alerts?.pendingPayments?.length > 0) && (
         <View style={styles.sectionContainer}>
           <Text style={styles.sectionHeaderTitle}>ALERTAS OPERACIONAIS</Text>
-
-          {/* Alerta de WhatsApp Desconectado */}
-          {metrics.alerts?.whatsappDisconnected?.map((item: any) => (
-            <View key={`wa-${item.id}`} style={styles.alertCardRed}>
-              <View style={styles.alertIconCircleRed}>
-                <WifiOff size={20} color="#DC2626" />
-              </View>
-              <View style={{ flex: 1, marginLeft: 12 }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                  <Text style={styles.alertCardTitle}>{item.name}</Text>
-                  <View style={styles.waOffBadge}>
-                    <Text style={styles.waOffBadgeText}>WHATSAPP OFF</Text>
-                  </View>
-                </View>
-                <Text style={styles.alertCardDesc}>
-                  A portaria está com o WhatsApp desconectado. Notificações não estão sendo enviadas.
-                </Text>
-                {item.admin && (
-                  <Text style={styles.alertCardContact}>
-                    Contato Admin: {item.admin.name} ({item.admin.phone || item.admin.email})
-                  </Text>
-                )}
-              </View>
-              <TouchableOpacity
-                style={styles.alertActionBtn}
-                onPress={() => {
-                  setOrgSearch(item.name);
-                  setActiveTab('organizations');
-                }}
-              >
-                <ChevronRight size={18} color="#64748B" />
-              </TouchableOpacity>
-            </View>
-          ))}
 
           {/* Alerta de Pagamento Pendente */}
           {metrics.alerts?.pendingPayments?.map((item: any) => (
@@ -694,7 +730,7 @@ export const SuperAdminDashboardScreen: React.FC = () => {
                           : 'PENDENTE'}
                     </Text>
                   </View>
-                  <Text style={styles.recentOrgPrice}>{formatCurrency(org.monthlyPrice)}/mês</Text>
+                  <Text style={styles.recentOrgPrice}>{org.paymentStatus === 'ACTIVE' ? `${formatCurrency(planPrice)}/mês` : 'Sem cobrança'}</Text>
                 </View>
               </View>
 
@@ -702,16 +738,6 @@ export const SuperAdminDashboardScreen: React.FC = () => {
                 <View style={styles.recentOrgInfoRow}>
                   <Users size={13} color="#64748B" />
                   <Text style={styles.recentOrgInfoText}>{org.usersCount || 0} operadores</Text>
-                  <Text style={styles.recentOrgDot}>•</Text>
-                  <View
-                    style={[
-                      styles.waStatusDot,
-                      { backgroundColor: org.whatsappStatus === 'CONNECTED' ? '#10B981' : '#EF4444' },
-                    ]}
-                  />
-                  <Text style={styles.recentOrgInfoText}>
-                    WhatsApp {org.whatsappStatus === 'CONNECTED' ? 'Online' : 'Desconectado'}
-                  </Text>
                 </View>
                 <TouchableOpacity
                   onPress={() => {
@@ -762,14 +788,13 @@ export const SuperAdminDashboardScreen: React.FC = () => {
 
       {/* Chips de Filtros de Status */}
       <View style={styles.chipsScrollWrapper}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipsContainer}>
+        <View style={styles.chipsContainer}>
           {[
             { key: 'ALL', label: `Todas (${organizations.length})` },
             { key: 'ACTIVE', label: 'Pagas & Ativas' },
             { key: 'TRIAL', label: 'Em Teste (7d)' },
             { key: 'PENDING', label: 'Pendentes' },
             { key: 'SUSPENDED', label: 'Suspensas' },
-            { key: 'WA_OFF', label: 'WhatsApp Off' },
           ].map((chip) => (
             <TouchableOpacity
               key={chip.key}
@@ -781,7 +806,7 @@ export const SuperAdminDashboardScreen: React.FC = () => {
               </Text>
             </TouchableOpacity>
           ))}
-        </ScrollView>
+        </View>
       </View>
 
       {/* Lista de Empresas */}
@@ -798,15 +823,14 @@ export const SuperAdminDashboardScreen: React.FC = () => {
           </View>
         ) : (
           filteredOrganizations.map((org) => {
-            const isWAConnected = org.whatsappStatus === 'CONNECTED';
             const isSuspended = !org.isActive || org.paymentStatus === 'SUSPENDED';
 
             return (
               <View key={org.id} style={[styles.orgCard, isSuspended && styles.orgCardSuspended]}>
                 <View style={styles.orgCardTopRow}>
                   <View style={{ flex: 1 }}>
-                    <Text style={styles.orgCardTitle}>{org.name}</Text>
-                    <Text style={styles.orgCardSub}>Slug: {org.slug} {org.document ? `• Doc: ${org.document}` : ''}</Text>
+                    <Text style={styles.orgCardTitle} numberOfLines={2}>{org.name}</Text>
+                    <Text style={styles.orgCardSub} numberOfLines={2}>Slug: {org.slug} {org.document ? `• Doc: ${org.document}` : ''}</Text>
                   </View>
 
                   <View style={{ alignItems: 'flex-end' }}>
@@ -837,13 +861,17 @@ export const SuperAdminDashboardScreen: React.FC = () => {
                         ]}
                       >
                         {org.paymentStatus === 'ACTIVE'
-                          ? 'PAGO'
+                          ? 'Pago'
                           : org.paymentStatus === 'TRIAL'
-                            ? 'TESTE 7D'
-                            : 'PENDENTE'}
+                            ? 'Teste'
+                            : org.paymentStatus === 'SUSPENDED'
+                              ? 'Suspenso'
+                              : org.paymentStatus === 'EXPIRED'
+                                ? 'Vencido'
+                                : 'Sem pagamento'}
                       </Text>
                     </View>
-                    <Text style={styles.orgPriceTag}>{formatCurrency(org.monthlyPrice)}/mês</Text>
+                    <Text style={styles.orgPriceTag}>{org.paymentStatus === 'ACTIVE' ? `${formatCurrency(planPrice)}/mês` : 'Sem cobrança'}</Text>
                   </View>
                 </View>
 
@@ -860,25 +888,6 @@ export const SuperAdminDashboardScreen: React.FC = () => {
                   <View style={styles.orgStatCol}>
                     <Text style={styles.orgStatNumber}>{org._count?.visitRequests || 0}</Text>
                     <Text style={styles.orgStatLabel}>Visitas</Text>
-                  </View>
-                  <View style={styles.orgStatCol}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                      <View
-                        style={[
-                          styles.waDotSmall,
-                          { backgroundColor: isWAConnected ? '#10B981' : '#EF4444' },
-                        ]}
-                      />
-                      <Text
-                        style={[
-                          styles.waStatusText,
-                          { color: isWAConnected ? '#15803D' : '#DC2626' },
-                        ]}
-                      >
-                        {isWAConnected ? 'Online' : 'Off'}
-                      </Text>
-                    </View>
-                    <Text style={styles.orgStatLabel}>WhatsApp</Text>
                   </View>
                 </View>
 
@@ -967,37 +976,27 @@ export const SuperAdminDashboardScreen: React.FC = () => {
       {/* Filtro de Empresa & Busca */}
       <View style={styles.usersHeaderBox}>
         {/* Seletor Horizontal de Empresas */}
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 10 }}>
+        <View style={styles.orgFilterWrap}>
           <TouchableOpacity
             style={[styles.orgFilterChip, selectedOrgFilter === 'ALL' && styles.orgFilterChipActive]}
             onPress={() => setSelectedOrgFilter('ALL')}
           >
-            <Text
-              style={[
-                styles.orgFilterChipText,
-                selectedOrgFilter === 'ALL' && styles.orgFilterChipTextActive,
-              ]}
-            >
-              Todas as Empresas ({usersList.length})
+            <Text style={[styles.orgFilterChipText, selectedOrgFilter === 'ALL' && styles.orgFilterChipTextActive]}>
+              Todas
             </Text>
           </TouchableOpacity>
-          {organizations.map((o) => (
+          {organizations.map((org) => (
             <TouchableOpacity
-              key={o.id}
-              style={[styles.orgFilterChip, selectedOrgFilter === o.id && styles.orgFilterChipActive]}
-              onPress={() => setSelectedOrgFilter(o.id)}
+              key={org.id}
+              style={[styles.orgFilterChip, selectedOrgFilter === org.id && styles.orgFilterChipActive]}
+              onPress={() => setSelectedOrgFilter(org.id)}
             >
-              <Text
-                style={[
-                  styles.orgFilterChipText,
-                  selectedOrgFilter === o.id && styles.orgFilterChipTextActive,
-                ]}
-              >
-                {o.name}
+              <Text style={[styles.orgFilterChipText, selectedOrgFilter === org.id && styles.orgFilterChipTextActive]} numberOfLines={1}>
+                {org.name}
               </Text>
             </TouchableOpacity>
           ))}
-        </ScrollView>
+        </View>
 
         <View style={styles.searchBarContainerUsers}>
           <View style={styles.searchBox}>
@@ -1085,7 +1084,7 @@ export const SuperAdminDashboardScreen: React.FC = () => {
 
                     <View style={styles.userOrgBadgeRow}>
                       <Building2 size={12} color="#64748B" />
-                      <Text style={styles.userOrgNameText}>{u.organization?.name || 'SaaS'}</Text>
+                      <Text style={styles.userOrgNameText}>{u.role === 'SUPER_ADMIN' ? 'Sem empresa' : (u.organization?.name || 'Sem empresa')}</Text>
                     </View>
                   </View>
 
@@ -1138,105 +1137,97 @@ export const SuperAdminDashboardScreen: React.FC = () => {
 
   // 4. ABA FINANCEIRO & ASSINATURAS
   const renderFinanceTab = () => (
-    <ScrollView
-      style={styles.tabScroll}
-      contentContainerStyle={{ paddingBottom: bottomInset + 80 }}
-      refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} />}
-    >
-      <View style={styles.financeSummaryCard}>
-        <Text style={styles.financeSummaryTitle}>CONTROLE DE ASSINATURAS & COBRANÇA</Text>
-        <Text style={styles.financeSummarySubtitle}>
-          Gerencie o faturamento de cada empresa, libere períodos ou suspenda inadimplentes.
-        </Text>
+    <View style={styles.plansScreen}>
+      <View style={styles.priceCard}>
+        <Text style={styles.priceLabel}>Valor mensal do plano</Text>
+        <View style={styles.priceRow}>
+          <Text style={styles.pricePrefix}>R$</Text>
+          <TextInput
+            style={styles.priceInput}
+            value={planPriceInput}
+            onChangeText={setPlanPriceInput}
+            keyboardType="decimal-pad"
+            placeholder="99,90"
+            placeholderTextColor="#94A3B8"
+          />
+          <TouchableOpacity
+            style={styles.priceSave}
+            onPress={async () => {
+              const parsed = Number(planPriceInput.replace(/\s/g, '').replace(/\.(?=\d{3}(,|$))/, '').replace(',', '.'));
+              if (!parsed || parsed <= 0) {
+                Alert.alert('Valor inválido', 'Informe um preço maior que zero, por exemplo 99,90.');
+                return;
+              }
+              try {
+                setIsSubmitting(true);
+                await api.put('/super-admin/plan-price', { price: parsed });
+                setPlanPrice(parsed);
+                setPlanPriceInput(parsed.toFixed(2).replace('.', ','));
+                Alert.alert('Plano atualizado', `O valor mensal passou a ser ${parsed.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}.`);
+                loadDashboardData();
+              } catch (err: any) {
+                Alert.alert('Não foi possível salvar', err.response?.data?.error?.message || err.response?.data?.message || 'Tente novamente.');
+              } finally {
+                setIsSubmitting(false);
+              }
+            }}
+          >
+            <Text style={styles.priceSaveText}>{isSubmitting ? '...' : 'Salvar'}</Text>
+          </TouchableOpacity>
+        </View>
+        <Text style={styles.priceHint}>Esse valor vale para todas as empresas. Quem está em teste não entra no faturamento.</Text>
+      </View>
 
-        <View style={styles.financeMetricsRow}>
-          <View style={styles.financeBox}>
-            <Text style={styles.financeBoxVal}>{metrics.subscriptions?.paidActive || 0}</Text>
-            <Text style={styles.financeBoxLabel}>Assinantes Ativos</Text>
-            <Text style={styles.financeBoxMoney}>{formatCurrency(metrics.subscriptions?.totalMRR || 0)}/mês</Text>
-          </View>
-          <View style={styles.financeBox}>
-            <Text style={[styles.financeBoxVal, { color: '#F59E0B' }]}>{metrics.subscriptions?.trial || 0}</Text>
-            <Text style={styles.financeBoxLabel}>Em Período de Teste</Text>
-            <Text style={styles.financeBoxMoney}>{formatCurrency(metrics.subscriptions?.trialMRR || 0)} potencial</Text>
-          </View>
+      <View style={styles.financeMetricsRow}>
+        <View style={styles.planStat}>
+          <Text style={styles.planStatValue}>{payingOrgs.length}</Text>
+          <Text style={styles.planStatLabel}>Pagas</Text>
+          <Text style={styles.planStatMoney}>{formatCurrency(payingOrgs.length * planPrice)}/mês</Text>
+        </View>
+        <View style={styles.planStat}>
+          <Text style={[styles.planStatValue, { color: '#B45309' }]}>{organizations.filter((org) => org.paymentStatus === 'TRIAL').length}</Text>
+          <Text style={styles.planStatLabel}>Em teste</Text>
+          <Text style={styles.planStatMoney}>ainda não cobradas</Text>
         </View>
       </View>
 
-      <View style={styles.sectionContainer}>
-        <Text style={styles.sectionHeaderTitle}>EMPRESAS & SITUAÇÃO FINANCEIRA</Text>
+      <Text style={styles.sectionHeaderTitle}>Empresas</Text>
 
+      <ScrollView
+        style={styles.tabScroll}
+        contentContainerStyle={{ paddingBottom: bottomInset + 24 }}
+        showsVerticalScrollIndicator={false}
+      >
         {organizations.map((org) => (
           <View key={org.id} style={styles.financeOrgCard}>
-            <View style={styles.financeOrgTop}>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.financeOrgName}>{org.name}</Text>
-                <Text style={styles.financeOrgPlan}>Plano: {org.plan || 'PRO'} • {formatCurrency(org.monthlyPrice)}/mês</Text>
+            <TouchableOpacity style={styles.financeOrgTop} activeOpacity={0.7} onPress={() => openPaymentHistory(org)}>
+              <View style={{ flex: 1, paddingRight: 8 }}>
+                <Text style={styles.financeOrgName} numberOfLines={2}>{org.name}</Text>
+                <Text style={styles.financeOrgPlan}>{org.paymentStatus === 'ACTIVE' ? `Paga ${formatCurrency(planPrice)} por mês` : 'Sem cobrança agora'}</Text>
+                <Text style={styles.financeHistoryHint}>Histórico de pagamentos</Text>
               </View>
-              <View
-                style={[
-                  styles.statusPill,
-                  {
-                    backgroundColor:
-                      org.paymentStatus === 'ACTIVE'
-                        ? '#DCFCE7'
-                        : org.paymentStatus === 'TRIAL'
-                          ? '#FEF3C7'
-                          : '#FEE2E2',
-                  },
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.statusPillText,
-                    {
-                      color:
-                        org.paymentStatus === 'ACTIVE'
-                          ? '#15803D'
-                          : org.paymentStatus === 'TRIAL'
-                            ? '#B45309'
-                            : '#B91C1C',
-                    },
-                  ]}
-                >
-                  {org.paymentStatus === 'ACTIVE'
-                    ? 'PAGO & ATIVO'
-                    : org.paymentStatus === 'TRIAL'
-                      ? 'TESTE 7 DIAS'
-                      : 'PENDENTE'}
+              <View style={[styles.statusPill, { backgroundColor: org.paymentStatus === 'ACTIVE' ? '#DCFCE7' : org.paymentStatus === 'TRIAL' ? '#FEF3C7' : '#FEE2E2' }]}>
+                <Text style={[styles.statusPillText, { color: org.paymentStatus === 'ACTIVE' ? '#15803D' : org.paymentStatus === 'TRIAL' ? '#B45309' : '#B91C1C' }]}>
+                  {org.paymentStatus === 'ACTIVE' ? 'Pago' : org.paymentStatus === 'TRIAL' ? 'Teste' : org.paymentStatus === 'SUSPENDED' ? 'Suspenso' : 'Vencido'}
                 </Text>
               </View>
-            </View>
-
+              <ChevronRight size={18} color="#94A3B8" style={{ marginTop: 4 }} />
+            </TouchableOpacity>
             <View style={styles.financeActionsBar}>
-              <TouchableOpacity
-                style={[styles.financeBtn, { backgroundColor: '#DCFCE7' }]}
-                onPress={() => handleQuickPaymentStatus(org.id, 'ACTIVE')}
-              >
-                <Check size={14} color="#15803D" />
-                <Text style={[styles.financeBtnText, { color: '#15803D' }]}>Marcar como Pago (+30d)</Text>
+              <TouchableOpacity style={[styles.financeBtn, { backgroundColor: '#DCFCE7' }]} onPress={() => handleQuickPaymentStatus(org.id, 'ACTIVE')}>
+                <Text style={[styles.financeBtnText, { color: '#15803D' }]}>Marcar pago</Text>
               </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[styles.financeBtn, { backgroundColor: '#FEF3C7' }]}
-                onPress={() => handleQuickPaymentStatus(org.id, 'TRIAL')}
-              >
-                <Clock size={14} color="#B45309" />
-                <Text style={[styles.financeBtnText, { color: '#B45309' }]}>Estender Teste</Text>
+              <TouchableOpacity style={[styles.financeBtn, { backgroundColor: '#FEF3C7' }]} onPress={() => handleQuickPaymentStatus(org.id, 'TRIAL')}>
+                <Text style={[styles.financeBtnText, { color: '#B45309' }]}>Estender teste</Text>
               </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[styles.financeBtn, { backgroundColor: '#FEE2E2' }]}
-                onPress={() => handleQuickPaymentStatus(org.id, 'PENDING')}
-              >
-                <AlertTriangle size={14} color="#B91C1C" />
-                <Text style={[styles.financeBtnText, { color: '#B91C1C' }]}>Pendente</Text>
+              <TouchableOpacity style={[styles.financeBtn, { backgroundColor: '#FEE2E2' }]} onPress={() => handleQuickPaymentStatus(org.id, 'PENDING')}>
+                <Text style={[styles.financeBtnText, { color: '#B91C1C' }]}>Vencido</Text>
               </TouchableOpacity>
             </View>
           </View>
         ))}
-      </View>
-    </ScrollView>
+      </ScrollView>
+    </View>
   );
 
   // 5. ABA PERFIL DO SUPER ADMIN
@@ -1307,55 +1298,13 @@ export const SuperAdminDashboardScreen: React.FC = () => {
       {/* Top Header Fixo do Super Admin */}
       <View style={[styles.superHeader, { paddingTop: topInset }]}>
         <View style={styles.superHeaderTop}>
-          <View>
-            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-              <ShieldCheck size={20} color="#60A5FA" style={{ marginRight: 6 }} />
-              <Text style={styles.superHeaderBadge}>PAINEL SAAS MASTER</Text>
-            </View>
-            <Text style={styles.superHeaderTitle}>Brisoft Portaria</Text>
+          <View style={{ flex: 1, marginRight: 12 }}>
+            <Text style={styles.superHeaderBadge}>SUPER ADMINISTRADOR</Text>
+            <Text style={styles.superHeaderTitle} numberOfLines={1}>{user?.name || 'Painel'}</Text>
           </View>
-
           <TouchableOpacity style={styles.refreshIconBtn} onPress={onRefresh}>
-            {isRefreshing ? (
-              <ActivityIndicator size="small" color="#FFFFFF" />
-            ) : (
-              <RefreshCw size={18} color="#FFFFFF" />
-            )}
+            {isRefreshing ? <ActivityIndicator size="small" color="#FFFFFF" /> : <RefreshCw size={18} color="#FFFFFF" />}
           </TouchableOpacity>
-        </View>
-
-        {/* Resumo Rápido no Header */}
-        <View style={styles.headerMiniMetricsRow}>
-          <View style={styles.headerMiniMetric}>
-            <Text style={styles.headerMiniMetricVal}>{metrics.organizations?.total || 0}</Text>
-            <Text style={styles.headerMiniMetricLabel}>Empresas</Text>
-          </View>
-          <View style={styles.headerMiniMetricSep} />
-          <View style={styles.headerMiniMetric}>
-            <Text style={[styles.headerMiniMetricVal, { color: '#34D399' }]}>
-              {metrics.subscriptions?.paidActive || 0}
-            </Text>
-            <Text style={styles.headerMiniMetricLabel}>Assinantes</Text>
-          </View>
-          <View style={styles.headerMiniMetricSep} />
-          <View style={styles.headerMiniMetric}>
-            <Text style={[styles.headerMiniMetricVal, { color: '#FBBF24' }]}>
-              {metrics.subscriptions?.trial || 0}
-            </Text>
-            <Text style={styles.headerMiniMetricLabel}>Trial 7d</Text>
-          </View>
-          <View style={styles.headerMiniMetricSep} />
-          <View style={styles.headerMiniMetric}>
-            <Text
-              style={[
-                styles.headerMiniMetricVal,
-                { color: metrics.whatsapp?.disconnected > 0 ? '#F87171' : '#34D399' },
-              ]}
-            >
-              {metrics.whatsapp?.disconnected || 0}
-            </Text>
-            <Text style={styles.headerMiniMetricLabel}>WA Off</Text>
-          </View>
         </View>
       </View>
 
@@ -1408,7 +1357,7 @@ export const SuperAdminDashboardScreen: React.FC = () => {
         >
           <Users size={20} color={activeTab === 'users' ? '#165337' : '#64748B'} />
           <Text style={[styles.navTabLabel, activeTab === 'users' && styles.navTabLabelActive]}>
-            Equipe
+            Usuários
           </Text>
         </TouchableOpacity>
 
@@ -1436,6 +1385,53 @@ export const SuperAdminDashboardScreen: React.FC = () => {
       </View>
 
       {/* ─── MODAIS ────────────────────────────────────────────── */}
+
+      <Modal
+        visible={!!paymentOrg}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setPaymentOrg(null)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalContainer}>
+            <View style={styles.modalHeaderRow}>
+              <View style={{ flex: 1, marginRight: 12 }}>
+                <Text style={styles.modalHeaderTitle} numberOfLines={2}>{paymentOrg?.name}</Text>
+                <Text style={styles.modalHeaderSubtitle}>Histórico de pagamentos</Text>
+              </View>
+              <TouchableOpacity onPress={() => setPaymentOrg(null)}>
+                <X size={24} color="#64748B" />
+              </TouchableOpacity>
+            </View>
+
+            {loadingHistory ? (
+              <ActivityIndicator size="small" color="#2563EB" style={{ marginVertical: 24 }} />
+            ) : paymentHistory.length === 0 ? (
+              <Text style={styles.historyEmpty}>Nenhum pagamento registrado para esta empresa.</Text>
+            ) : (
+              <ScrollView style={{ maxHeight: 420 }} showsVerticalScrollIndicator={false}>
+                {paymentHistory.map((item, index) => {
+                  const paid = item?.paidAt ? new Date(item.paidAt) : null;
+                  const until = item?.periodEnd ? new Date(item.periodEnd) : null;
+                  const paidLabel = paid && !Number.isNaN(paid.getTime()) ? paid.toLocaleDateString('pt-BR') : 'Data não informada';
+                  const untilLabel = until && !Number.isNaN(until.getTime()) ? until.toLocaleDateString('pt-BR') : null;
+                  return (
+                    <View key={String(item?.id || index)} style={styles.historyRow}>
+                      <View style={{ flex: 1, paddingRight: 12 }}>
+                        <Text style={styles.historyLabel}>{item?.label || 'Pagamento'}</Text>
+                        <Text style={styles.historyDate}>{paidLabel}{untilLabel ? ` · válido até ${untilLabel}` : ''}</Text>
+                      </View>
+                      <Text style={styles.historyAmount}>
+                        {typeof item?.amount === 'number' && item.amount > 0 ? formatCurrency(item.amount) : 'Cortesia'}
+                      </Text>
+                    </View>
+                  );
+                })}
+              </ScrollView>
+            )}
+          </View>
+        </View>
+      </Modal>
 
       {/* MODAL: + NOVA EMPRESA */}
       <Modal
@@ -1988,7 +1984,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 14,
   },
   superHeaderBadge: {
     fontSize: 10,
@@ -1998,9 +1993,9 @@ const styles = StyleSheet.create({
   },
   superHeaderTitle: {
     fontSize: 22,
-    fontWeight: '900',
+    fontWeight: '800',
     color: '#FFFFFF',
-    letterSpacing: -0.5,
+    marginTop: 2,
   },
   refreshIconBtn: {
     width: 38,
@@ -2103,10 +2098,13 @@ const styles = StyleSheet.create({
   },
   heroGrid: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     justifyContent: 'space-between',
+    rowGap: 14,
   },
   heroStatItem: {
-    alignItems: 'center',
+    width: '48%',
+    alignItems: 'flex-start',
   },
   heroStatNum: {
     fontSize: 18,
@@ -2114,8 +2112,8 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
   heroStatLabel: {
-    fontSize: 10,
-    color: '#94A3B8',
+    fontSize: 12,
+    color: '#D1FAE5',
     fontWeight: '600',
     marginTop: 2,
   },
@@ -2385,6 +2383,8 @@ const styles = StyleSheet.create({
   },
   chipsContainer: {
     paddingHorizontal: 16,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 8,
   },
   chipItem: {
@@ -2559,12 +2559,13 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#E2E8F0',
   },
+  orgFilterWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 10 },
   orgFilterChip: {
+    maxWidth: '100%',
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 16,
     backgroundColor: '#F1F5F9',
-    marginRight: 8,
     borderWidth: 1,
     borderColor: '#E2E8F0',
   },
@@ -2707,6 +2708,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 12,
     marginTop: 16,
+    marginBottom: 18,
   },
   financeBox: {
     flex: 1,
@@ -2753,8 +2755,44 @@ const styles = StyleSheet.create({
     color: '#64748B',
     marginTop: 2,
   },
+  financeHistoryHint: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#2563EB',
+    marginTop: 6,
+  },
+  historyEmpty: {
+    fontSize: 14,
+    color: '#64748B',
+    lineHeight: 20,
+    marginTop: 8,
+    marginBottom: 8,
+  },
+  historyRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  historyLabel: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  historyDate: {
+    fontSize: 12,
+    color: '#64748B',
+    marginTop: 3,
+  },
+  historyAmount: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#15803D',
+  },
   financeActionsBar: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 8,
     marginTop: 12,
     paddingTop: 10,
@@ -2762,18 +2800,49 @@ const styles = StyleSheet.create({
     borderTopColor: '#F1F5F9',
   },
   financeBtn: {
-    flex: 1,
-    flexDirection: 'row',
+    flexGrow: 1,
+    flexBasis: '30%',
+    minHeight: 40,
+    borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 7,
-    borderRadius: 8,
-    gap: 4,
+    paddingHorizontal: 8,
   },
   financeBtnText: {
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '700',
+    textAlign: 'center',
   },
+  plansScreen: { flex: 1, paddingHorizontal: 16, paddingTop: 16 },
+  priceCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    padding: 16,
+  },
+  priceLabel: { color: '#64748B', fontSize: 12, fontWeight: '700', textTransform: 'uppercase' },
+  priceRow: { flexDirection: 'row', alignItems: 'center', marginTop: 10, gap: 8 },
+  pricePrefix: { fontSize: 18, fontWeight: '800', color: '#0F172A' },
+  priceInput: {
+    flex: 1,
+    minHeight: 48,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#0F172A',
+    backgroundColor: '#F8FAF9',
+  },
+  priceSave: { backgroundColor: '#165337', borderRadius: 12, minHeight: 48, paddingHorizontal: 16, alignItems: 'center', justifyContent: 'center' },
+  priceSaveText: { color: '#FFFFFF', fontWeight: '700' },
+  priceHint: { color: '#64748B', fontSize: 12, lineHeight: 18, marginTop: 10 },
+  planStat: { flex: 1, backgroundColor: '#FFFFFF', borderRadius: 14, borderWidth: 1, borderColor: '#E2E8F0', padding: 14 },
+  planStatValue: { fontSize: 22, fontWeight: '800', color: '#0F172A' },
+  planStatLabel: { color: '#64748B', marginTop: 2, fontWeight: '600' },
+  planStatMoney: { color: '#165337', marginTop: 6, fontWeight: '700', fontSize: 13 },
 
   // Perfil Super Admin (Aba 5)
   profileMasterCard: {

@@ -348,8 +348,6 @@ export class BaileysProvider implements IWhatsAppProvider {
 
         console.warn(`⚠️ [Baileys] Conexão fechada. Status: ${statusCode}, Erro: ${errorMessage}`);
 
-        this.statusInfo = { status: 'DISCONNECTED' };
-
         // 1. Se outra instância conectou (Status 440 Conflict / Stream Errored), NÃO reconecta para não derrubar a outra instância em loop!
         if (isReplaced) {
           console.warn('⚠️ [Baileys] Conexão substituída por outra instância ativa (Status 440: Conflict). Interrompendo reconexão para evitar loop.');
@@ -386,6 +384,7 @@ export class BaileysProvider implements IWhatsAppProvider {
           } else {
             console.error(`❌ [Baileys] Máximo de tentativas de reconexão atingido (${MAX_ATTEMPTS}). Aguardando intervenção manual.`);
             this.statusInfo = { status: 'DISCONNECTED' };
+            this.persistStatus(organizationId, 'DISCONNECTED');
           }
         }
       } else if (connection === 'open') {
@@ -404,6 +403,7 @@ export class BaileysProvider implements IWhatsAppProvider {
           phoneConnected: phone,
           lastConnectedAt: new Date(),
         };
+        this.persistStatus(organizationId, 'CONNECTED', phone);
 
         console.log(`✅ WhatsApp Baileys conectado com sucesso para o número: ${phone}`);
       }
@@ -520,6 +520,7 @@ export class BaileysProvider implements IWhatsAppProvider {
       this.sock = null;
     }
     this.statusInfo = { status: 'DISCONNECTED' };
+    this.persistStatus(organizationId, 'DISCONNECTED');
 
     // Limpa credenciais locais
     const orgSessionPath = path.join(this.baseSessionDir, `org_${organizationId}`);
@@ -537,6 +538,23 @@ export class BaileysProvider implements IWhatsAppProvider {
 
   async getStatus(_organizationId: string): Promise<WhatsAppStatusInfo> {
     return this.statusInfo;
+  }
+
+  private persistStatus(organizationId: string, status: 'CONNECTED' | 'DISCONNECTED', phone?: string) {
+    prisma.whatsAppConnection.upsert({
+      where: { organizationId },
+      update: {
+        status,
+        phoneConnected: phone || null,
+        ...(status === 'CONNECTED' ? { lastConnectedAt: new Date() } : {}),
+      },
+      create: {
+        organizationId,
+        status,
+        phoneConnected: phone || null,
+        lastConnectedAt: status === 'CONNECTED' ? new Date() : null,
+      },
+    }).catch((err) => console.warn('Status do WhatsApp não gravado:', err?.message || err));
   }
 
   private async resolveJid(phone: string): Promise<string> {

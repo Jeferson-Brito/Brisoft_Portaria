@@ -20,7 +20,7 @@ export interface PaymentHistoryItem {
   id: string;
   paidAt: string;
   periodEnd: string;
-  source: 'STRIPE' | 'COMPLIMENTARY';
+  source: 'STRIPE' | 'COMPLIMENTARY' | 'MANUAL';
   label: string;
   amount: number;
 }
@@ -64,7 +64,9 @@ export class SubscriptionService {
       : new Date(createdTime + trialDays * 24 * 60 * 60 * 1000);
 
     const plan = settings.plan || 'PRO';
-    const monthlyPrice = 99.9;
+    const monthlyPrice = typeof settings.monthlyPrice === 'number' && settings.monthlyPrice > 0
+      ? settings.monthlyPrice
+      : 99.9;
     const paymentHistory = Array.isArray(settings.paymentHistory) ? settings.paymentHistory : [];
 
     let paymentStatus: 'TRIAL' | 'ACTIVE' | 'SUSPENDED' | 'CANCELLED' | 'EXPIRED' = settings.paymentStatus;
@@ -186,7 +188,7 @@ export class SubscriptionService {
   async activateSubscription(
     orgId: string,
     periodDays = 30,
-    options?: { source?: 'STRIPE' | 'COMPLIMENTARY'; externalId?: string }
+    options?: { source?: 'STRIPE' | 'COMPLIMENTARY' | 'MANUAL'; externalId?: string }
   ): Promise<SubscriptionInfo> {
     const org = await prisma.organization.findUnique({ where: { id: orgId } });
     if (!org) throw new AppError('Organização não encontrada.', 404, 'NOT_FOUND');
@@ -204,19 +206,27 @@ export class SubscriptionService {
 
     const now = new Date();
     const currentPeriodEnd = new Date(now.getTime() + periodDays * 24 * 60 * 60 * 1000);
+    const chargedAmount = typeof settings.monthlyPrice === 'number' && settings.monthlyPrice > 0
+      ? settings.monthlyPrice
+      : 99.9;
+    const label = source === 'COMPLIMENTARY'
+      ? 'Cortesia'
+      : source === 'MANUAL'
+        ? 'Pagamento registrado'
+        : 'Pagamento Stripe';
     history.unshift({
       id: options?.externalId || `${source}-${now.getTime()}`,
       paidAt: now.toISOString(),
       periodEnd: currentPeriodEnd.toISOString(),
       source,
-      label: source === 'COMPLIMENTARY' ? 'Cupom Assinatura Gratuita' : 'Pagamento Stripe',
-      amount: source === 'COMPLIMENTARY' ? 0 : 99.9,
+      label,
+      amount: source === 'COMPLIMENTARY' ? 0 : chargedAmount,
     });
 
     settings.paymentStatus = 'ACTIVE';
     settings.paidAt = now.toISOString();
     settings.currentPeriodEnd = currentPeriodEnd.toISOString();
-    settings.monthlyPrice = 99.9;
+    settings.monthlyPrice = typeof settings.monthlyPrice === 'number' ? settings.monthlyPrice : 99.9;
     settings.paymentHistory = history.slice(0, 36);
 
     const updated = await prisma.organization.update({
