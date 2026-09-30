@@ -30,6 +30,7 @@ import { api } from '../../config/api';
 import { useRealtime } from '../../contexts/RealtimeContext';
 import { NewPreAuthorizationModal } from './NewPreAuthorizationModal';
 import { AppHeader } from '../../components/AppHeader';
+import { QrCamera } from './QrCamera';
 import { ScrollToTopButton } from '../../components/ScrollToTopButton';
 
 interface PreAuthorizationsScreenProps {
@@ -335,7 +336,18 @@ export const PreAuthorizationsScreen: React.FC<PreAuthorizationsScreenProps> = (
       />
       <Modal visible={isScanOpen} animationType="slide" onRequestClose={() => setIsScanOpen(false)}>
         <View style={styles.container}>
-          <AppHeader title="Ler convite" subtitle="Digite o código do QR" onBack={() => setIsScanOpen(false)} />
+          <AppHeader title="Ler convite" subtitle="Aponte a câmera ou digite o código" onBack={() => setIsScanOpen(false)} />
+          <QrCamera
+            active={isScanOpen}
+            onCode={(code) => {
+              setInviteCode(code);
+              setIsLookingUp(true);
+              api.get(`/pre-authorizations/token/${encodeURIComponent(code.trim().toUpperCase())}`)
+                .then((res) => setInvitePreview(res.data.data))
+                .catch((err) => Alert.alert('Convite inválido', err.response?.data?.error?.message || 'Não foi possível localizar o convite.'))
+                .finally(() => setIsLookingUp(false));
+            }}
+          />
           <View style={{ padding: 16 }}>
             <TextInput
               value={inviteCode}

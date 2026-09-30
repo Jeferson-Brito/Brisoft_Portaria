@@ -1,6 +1,9 @@
 import { prisma } from '../../lib/prisma.js';
 import { AppError } from '../../core/errors/app-error.js';
 import { preAuthorizationService } from '../pre-authorizations/pre-authorization.service.js';
+import { whatsappService } from '../../services/whatsapp/whatsapp.service.js';
+import QRCode from 'qrcode';
+import { inviteUrl } from '../invites/invite.routes.js';
 
 async function loadResident(userId: string) {
   const user = await prisma.user.findUnique({
@@ -127,6 +130,12 @@ export class ResidentService {
       },
     });
 
+    if (input.phone && visit.qrToken) {
+      sendVisitorInvite(user.organizationId, user.organization.name, visit, input.phone).catch((err) => {
+        console.warn('Convite não enviado no WhatsApp:', err?.message || err);
+      });
+    }
+
     return visit;
   }
 
@@ -167,16 +176,30 @@ export class ResidentService {
       where: { organizationId: user.organizationId, clientId: client.id },
       select: {
         id: true,
+        code: true,
         carrier: true,
+        sender: true,
+        trackingCode: true,
         status: true,
         receivedAt: true,
         pickupCode: true,
         recipientName: true,
+        notes: true,
+        destination: { select: { name: true, block: true } },
       },
       orderBy: { receivedAt: 'desc' },
       take: 50,
     });
   }
+}
+
+async function sendVisitorInvite(organizationId: string, organizationName: string, visit: any, phone: string) {
+  const link = inviteUrl(visit.qrToken);
+  const unit = `${visit.destination?.name || 'Unidade'}${visit.destination?.block ? ` · ${visit.destination.block}` : ''}`;
+  const date = new Date(visit.startDate).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+  const text = `Você foi convidado para visitar:\n\n*${organizationName}*\n${unit}\n\nData: ${date}\nHorário: ${visit.expectedTimeStart || '00:00'} às ${visit.expectedTimeEnd || '23:59'}\nVisitante: ${visit.visitorName}\n\nApresente este QR Code na portaria.\n${link}`;
+  const qr = await QRCode.toDataURL(visit.qrToken, { width: 480, margin: 1 });
+  await whatsappService.sendImageMessage(organizationId, phone, qr, text);
 }
 
 export const residentService = new ResidentService();

@@ -356,6 +356,18 @@ export class PreAuthorizationService {
     if (now < item.startDate || now > item.endDate) {
       throw new AppError('Este convite está fora do período autorizado.', 400, 'QR_EXPIRED');
     }
+    const clock = new Date().toLocaleTimeString('en-GB', {
+      timeZone: 'America/Sao_Paulo',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    });
+    if (item.expectedTimeStart && clock < item.expectedTimeStart) {
+      throw new AppError('Ainda não chegou o horário autorizado deste convite.', 400, 'QR_TOO_EARLY');
+    }
+    if (item.expectedTimeEnd && clock > item.expectedTimeEnd) {
+      throw new AppError('O horário autorizado deste convite já terminou.', 400, 'QR_EXPIRED');
+    }
     return item;
   }
 

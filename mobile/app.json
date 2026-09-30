@@ -44,7 +44,13 @@
         "expo-image-picker",
         {
           "photosPermission": "O aplicativo precisa acessar as fotos para cadastrar visitantes.",
-          "cameraPermission": "O aplicativo precisa da câmera para fotografar visitantes na portaria."
+          "cameraPermission": "O aplicativo precisa da câmera para fotografar visitantes e ler convites."
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "A portaria usa a câmera para ler o QR Code do convite."
         }
       ],
       [

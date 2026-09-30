@@ -322,7 +322,9 @@ export const ResidentArea: React.FC = () => {
                   <Text style={styles.cardMeta}>Válido em {new Date(selected.startDate).toLocaleDateString('pt-BR')} das {selected.expectedTimeStart || '00:00'} às {selected.expectedTimeEnd || '23:59'}</Text>
                   <TouchableOpacity
                     style={styles.primary}
-                    onPress={() => Share.share({ message: `Convite de visita ${selected.qrToken} para ${selected.visitorName}` })}
+                    onPress={() => Share.share({
+                      message: `Você foi convidado para visitar:\n\n${context?.organization?.name || ''}\n${unitLabel}\n\nData: ${new Date(selected.startDate).toLocaleDateString('pt-BR')}\nHorário: ${selected.expectedTimeStart || '00:00'} às ${selected.expectedTimeEnd || '23:59'}\n\nApresente este QR Code na portaria.\nhttps://portaria.brisoft.com.br/convite/${selected.qrToken}`,
+                    })}
                   >
                     <Text style={styles.primaryText}>Compartilhar convite</Text>
                   </TouchableOpacity>
