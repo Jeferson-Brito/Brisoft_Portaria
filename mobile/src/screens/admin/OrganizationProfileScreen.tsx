@@ -120,6 +120,7 @@ export const OrganizationProfileScreen: React.FC<OrganizationProfileScreenProps>
   const [companyName, setCompanyName] = useState('');
   const [unitLabel, setUnitLabel] = useState('Apartamento / Casa');
   const [clientLabel, setClientLabel] = useState('Morador');
+  const [address, setAddress] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
 
@@ -138,6 +139,7 @@ export const OrganizationProfileScreen: React.FC<OrganizationProfileScreenProps>
         setCompanyName(profile.companyName || org.name || '');
         setUnitLabel(profile.unitLabel || 'Apartamento / Casa');
         setClientLabel(profile.clientLabel || 'Morador');
+        setAddress(profile.address || '');
       }
     } catch (err: any) {
       console.warn('Erro ao carregar perfil da organização:', err.message);
@@ -166,6 +168,7 @@ export const OrganizationProfileScreen: React.FC<OrganizationProfileScreenProps>
         type: selectedType,
         unitLabel: unitLabel.trim(),
         clientLabel: clientLabel.trim(),
+        address: address.trim(),
       });
 
       Alert.alert(
@@ -229,9 +232,24 @@ export const OrganizationProfileScreen: React.FC<OrganizationProfileScreenProps>
           />
         </View>
 
+        <View style={styles.cardSection}>
+          <Text style={styles.sectionTitle}>2. Endereço do local</Text>
+          <Text style={styles.sectionSubtitle}>
+            Aparece no convite do WhatsApp e no link do visitante, com atalho para o Google Maps e o Waze.
+          </Text>
+          <TextInput
+            style={[styles.input, { minHeight: 72, textAlignVertical: 'top' }]}
+            placeholder="Ex: Rua das Flores, 120 - Centro, São Paulo - SP"
+            placeholderTextColor="#94A3B8"
+            value={address}
+            onChangeText={setAddress}
+            multiline
+          />
+        </View>
+
         {/* Seleção do Nicho */}
         <View style={styles.cardSection}>
-          <Text style={styles.sectionTitle}>2. Selecione o Tipo de Empresa / Local</Text>
+          <Text style={styles.sectionTitle}>3. Selecione o Tipo de Empresa / Local</Text>
           <Text style={styles.sectionSubtitle}>
             Escolha o modelo de operação deste posto de portaria:
           </Text>
@@ -274,7 +292,7 @@ export const OrganizationProfileScreen: React.FC<OrganizationProfileScreenProps>
 
         {/* Personalização dos Termos */}
         <View style={styles.cardSection}>
-          <Text style={styles.sectionTitle}>3. Nomenclaturas Customizadas</Text>
+          <Text style={styles.sectionTitle}>4. Nomenclaturas Customizadas</Text>
           <Text style={styles.sectionSubtitle}>
             Como o porteiro e os visitantes devem visualizar as unidades e responsáveis:
           </Text>

@@ -19,6 +19,7 @@ import { organizationRoutes } from './modules/organizations/organization.routes.
 import { superAdminRoutes } from './modules/super-admin/super-admin.routes.js';
 import { subscriptionRoutes } from './modules/subscriptions/subscription.routes.js';
 import { residentRoutes } from './modules/resident/resident.routes.js';
+import { restrictionRoutes } from './modules/restrictions/restriction.routes.js';
 import { invitePageRoutes } from './modules/invites/invite.routes.js';
 
 export function buildApp() {
@@ -87,6 +88,7 @@ export function buildApp() {
   app.register(subscriptionRoutes, { prefix: '/api/v1/subscriptions' });
   app.register(subscriptionRoutes, { prefix: '/api/v1/stripe' });
   app.register(residentRoutes, { prefix: '/api/v1/me' });
+  app.register(restrictionRoutes, { prefix: '/api/v1/restrictions' });
   app.register(invitePageRoutes);
 
   return app;

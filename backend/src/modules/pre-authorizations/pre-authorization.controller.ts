@@ -15,6 +15,7 @@ const createPreAuthSchema = z.object({
   expectedTimeStart: z.string().optional(),
   expectedTimeEnd: z.string().optional(),
   notes: z.string().optional(),
+  weekdays: z.array(z.number().int().min(0).max(6)).optional(),
 });
 
 const checkInSchema = z.object({
@@ -23,6 +24,7 @@ const checkInSchema = z.object({
   vehiclePlate: z.string().optional(),
   vehicleColor: z.string().optional(),
   notes: z.string().optional(),
+  acknowledgeRestriction: z.boolean().optional(),
 });
 
 export class PreAuthorizationController {

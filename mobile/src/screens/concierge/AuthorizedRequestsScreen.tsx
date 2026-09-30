@@ -26,6 +26,7 @@ import { api } from '../../config/api';
 import { useRealtime } from '../../contexts/RealtimeContext';
 import { AppHeader } from '../../components/AppHeader';
 import { ScrollToTopButton } from '../../components/ScrollToTopButton';
+import { ReleaseCancelled, releaseWithRestrictionCheck } from '../../utils/release';
 
 interface AuthorizedItem {
   id: string;
@@ -113,12 +114,13 @@ export const AuthorizedRequestsScreen: React.FC = () => {
           onPress: async () => {
             try {
               setProcessingId(item.id);
-              await api.post(`/visit-requests/${item.id}/entry`, {
+              await releaseWithRestrictionCheck(`/visit-requests/${item.id}/entry`, {
                 reason: 'Entrada física liberada na portaria',
               });
               Alert.alert('Sucesso', `Entrada de ${item.visitor.name} registrada com sucesso!`);
               fetchAuthorized();
             } catch (err: any) {
+              if (err instanceof ReleaseCancelled) return;
               Alert.alert('Erro', err.response?.data?.message || 'Falha ao registrar entrada.');
             } finally {
               setProcessingId(null);

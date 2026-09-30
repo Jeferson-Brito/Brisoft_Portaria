@@ -15,12 +15,13 @@ import {
   Switch,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Bell, CalendarCheck, Home, Package, UserRound } from 'lucide-react-native';
+import { Bell, CalendarCheck, ChevronLeft, ChevronRight, Home, Package, UserRound } from 'lucide-react-native';
 import { useAuth } from '../../contexts/AuthContext';
 import { api } from '../../config/api';
 import { colors } from '../../theme/colors';
 import { AppHeader } from '../../components/AppHeader';
 import QRCode from 'react-native-qrcode-svg';
+import { WEEKDAY_SHORT, weekdayText } from '../../utils/release';
 
 type Tab = 'home' | 'visits' | 'packages' | 'profile' | 'alerts' | 'new';
 
@@ -39,6 +40,8 @@ type Visit = {
   vehiclePlate?: string | null;
   notes?: string | null;
   qrToken?: string | null;
+  endDate?: string;
+  weekdays?: string | null;
   destination?: { name: string; block?: string | null };
 };
 
@@ -50,19 +53,36 @@ const PACKAGE_STATUS: Record<string, string> = {
 
 function visitStatus(visit: Visit) {
   if (visit.cancelledAt) return 'Cancelada';
+  const end = saoPauloDay(visit.endDate || visit.startDate);
+  if (visit.weekdays) return end < todayKey() ? 'Encerrada' : 'Recorrente';
   if (visit.isUsed) return 'Utilizada';
   if (saoPauloDay(visit.startDate) < todayKey()) return 'Encerrada';
   return 'Agendada';
 }
 
-function statusTone(status: string) {
-  if (status === 'Agendada' || status === 'Aguardando retirada') return { bg: '#DCFCE7', text: '#166534' };
-  if (status === 'Cancelada' || status === 'Devolvida') return { bg: '#FEE2E2', text: '#991B1B' };
-  return { bg: '#F1F5F9', text: '#475569' };
+function isOpenVisit(visit: Visit) {
+  const status = visitStatus(visit);
+  return status === 'Agendada' || status === 'Recorrente';
 }
 
-function sameDay(value: string) {
-  return saoPauloDay(value) === todayKey();
+function weekdayOfKey(dayKey: string) {
+  const [year, month, day] = dayKey.split('-').map(Number);
+  return new Date(year, month - 1, day).getDay();
+}
+
+function visitCoversDay(visit: Visit, dayKey: string) {
+  if (visit.cancelledAt) return false;
+  const start = saoPauloDay(visit.startDate);
+  const end = saoPauloDay(visit.endDate || visit.startDate);
+  if (dayKey < start || dayKey > end) return false;
+  if (!visit.weekdays) return dayKey === start;
+  return visit.weekdays.split(',').includes(String(weekdayOfKey(dayKey)));
+}
+
+function statusTone(status: string) {
+  if (status === 'Agendada' || status === 'Recorrente' || status === 'Aguardando retirada') return { bg: '#DCFCE7', text: '#166534' };
+  if (status === 'Cancelada' || status === 'Devolvida') return { bg: '#FEE2E2', text: '#991B1B' };
+  return { bg: '#F1F5F9', text: '#475569' };
 }
 
 function saoPauloDay(value: string) {
@@ -126,9 +146,17 @@ export const ResidentArea: React.FC = () => {
   const [packages, setPackages] = useState<any[]>([]);
   const [selected, setSelected] = useState<Visit | null>(null);
   const [selectedPackage, setSelectedPackage] = useState<any>(null);
+  const [monthCursor, setMonthCursor] = useState(() => {
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), 1);
+  });
+  const [pickedDay, setPickedDay] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [hasVehicle, setHasVehicle] = useState(false);
+  const [repeat, setRepeat] = useState(false);
+  const [weekdays, setWeekdays] = useState<number[]>([2, 4]);
+  const [validUntil, setValidUntil] = useState('');
   const [form, setForm] = useState({
     visitorName: '',
     phone: '',
@@ -164,8 +192,8 @@ export const ResidentArea: React.FC = () => {
   }, [load]);
 
   const residentName = context?.resident?.name || user?.name || 'Morador';
-  const upcoming = visits.filter((visit) => visitStatus(visit) === 'Agendada' && !sameDay(visit.startDate)).slice(0, 3);
-  const today = visits.filter((visit) => sameDay(visit.startDate) && visitStatus(visit) === 'Agendada');
+  const upcoming = visits.filter((visit) => isOpenVisit(visit) && !visitCoversDay(visit, todayKey())).slice(0, 3);
+  const today = visits.filter((visit) => isOpenVisit(visit) && visitCoversDay(visit, todayKey()));
   const pendingPackages = packages.filter((item) => item.status === 'RECEIVED');
   const unit = context?.units?.[0];
   const unitLabel = unit ? `${unit.name}${unit.block ? ` · ${unit.block}` : ''}` : 'Unidade';
@@ -210,6 +238,19 @@ export const ResidentArea: React.FC = () => {
       Alert.alert('Telefone inválido', 'Informe o celular com DDD para enviar o convite no WhatsApp.');
       return;
     }
+    const untilIso = repeat ? toIsoDate(validUntil) : '';
+    if (repeat && weekdays.length === 0) {
+      Alert.alert('Escolha os dias', 'Marque pelo menos um dia da semana, por exemplo terça e quinta.');
+      return;
+    }
+    if (repeat && !untilIso) {
+      Alert.alert('Validade', 'Informe até quando a visita recorrente vale, no formato DD-MM-AAAA.');
+      return;
+    }
+    if (repeat && untilIso < isoDate) {
+      Alert.alert('Validade', 'A data final não pode ser anterior ao primeiro dia.');
+      return;
+    }
     try {
       setSaving(true);
       await api.post('/me/visits', {
@@ -220,8 +261,12 @@ export const ResidentArea: React.FC = () => {
         company: undefined,
         vehicleModel: hasVehicle ? form.vehicleModel : '',
         vehiclePlate: hasVehicle ? form.vehiclePlate : '',
+        weekdays: repeat ? weekdays : undefined,
+        validUntil: repeat ? untilIso : undefined,
       });
       setForm({ ...form, visitorName: '', phone: '', document: '', company: '', vehicleModel: '', vehiclePlate: '', notes: '' });
+      setRepeat(false);
+      setValidUntil('');
       setTab('visits');
       await load();
     } catch (err: any) {
@@ -313,6 +358,29 @@ export const ResidentArea: React.FC = () => {
                 <View style={{ flex: 1 }}><Field label="Entrada" value={form.entryTime} onChange={(entryTime) => setForm({ ...form, entryTime })} /></View>
                 <View style={{ flex: 1 }}><Field label="Saída" value={form.exitTime} onChange={(exitTime) => setForm({ ...form, exitTime })} /></View>
               </View>
+              <View style={styles.switchRow}>
+                <Text style={styles.switchLabel}>Repetir toda semana</Text>
+                <Switch value={repeat} onValueChange={setRepeat} />
+              </View>
+              {repeat ? (
+                <>
+                  <View style={styles.dayRow}>
+                    {WEEKDAY_SHORT.map((label, index) => {
+                      const active = weekdays.includes(index);
+                      return (
+                        <TouchableOpacity
+                          key={label}
+                          style={[styles.dayChip, active && styles.dayChipActive]}
+                          onPress={() => setWeekdays(active ? weekdays.filter((day) => day !== index) : [...weekdays, index].sort())}
+                        >
+                          <Text style={[styles.dayChipText, active && styles.dayChipTextActive]}>{label}</Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                  <Field label="Válido até" value={validUntil} onChange={(value) => setValidUntil(maskDate(value))} keyboard="number-pad" />
+                </>
+              ) : null}
               <Field label="Observação" value={form.notes} onChange={(notes) => setForm({ ...form, notes })} />
               <View style={styles.switchRow}>
                 <Text style={styles.switchLabel}>Visitante de veículo</Text>
@@ -337,12 +405,31 @@ export const ResidentArea: React.FC = () => {
 
           {tab === 'visits' && !selected && (
             <>
+              <VisitCalendar
+                month={monthCursor}
+                visits={visits}
+                pickedDay={pickedDay}
+                onPrev={() => setMonthCursor(new Date(monthCursor.getFullYear(), monthCursor.getMonth() - 1, 1))}
+                onNext={() => setMonthCursor(new Date(monthCursor.getFullYear(), monthCursor.getMonth() + 1, 1))}
+                onPick={(day) => setPickedDay(pickedDay === day ? null : day)}
+              />
+              {pickedDay ? (
+                <>
+                  <Text style={styles.section}>Dia {pickedDay.split('-').reverse().join('/')}</Text>
+                  {visits.filter((visit) => visitCoversDay(visit, pickedDay)).length === 0 ? (
+                    <View style={styles.emptyCard}><Text style={styles.empty}>Nenhuma visita neste dia.</Text></View>
+                  ) : visits.filter((visit) => visitCoversDay(visit, pickedDay)).map((visit) => (
+                    <VisitCard key={visit.id} visit={visit} onPress={() => setSelected(visit)} />
+                  ))}
+                </>
+              ) : null}
               {(['Hoje', 'Próximas', 'Histórico'] as const).map((group) => {
                 const list = visits.filter((visit) => {
                   const status = visitStatus(visit);
-                  if (group === 'Hoje') return sameDay(visit.startDate) && status === 'Agendada';
-                  if (group === 'Próximas') return status === 'Agendada' && !sameDay(visit.startDate);
-                  return status !== 'Agendada';
+                  const open = status === 'Agendada' || status === 'Recorrente';
+                  if (group === 'Hoje') return open && visitCoversDay(visit, todayKey());
+                  if (group === 'Próximas') return open && !visitCoversDay(visit, todayKey());
+                  return !open;
                 });
                 return (
                   <View key={group}>
@@ -364,28 +451,32 @@ export const ResidentArea: React.FC = () => {
                 <Text style={styles.cardTitle}>{selected.visitorName}</Text>
                 <StatusPill label={visitStatus(selected)} />
               </View>
-              <Detail label="Data" value={new Date(selected.startDate).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' })} />
+              <Detail label="Data" value={selected.weekdays
+                ? `${weekdayText(selected.weekdays)} até ${new Date(selected.endDate || selected.startDate).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' })}`
+                : new Date(selected.startDate).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' })} />
               <Detail label="Horário" value={`${selected.expectedTimeStart || '--:--'} até ${selected.expectedTimeEnd || '--:--'}`} />
               {selected.destination ? <Detail label="Unidade" value={selected.destination.name} /> : null}
               {selected.phone ? <Detail label="Telefone" value={selected.phone} /> : null}
               {selected.vehicleModel ? <Detail label="Veículo" value={`${selected.vehicleModel} ${selected.vehiclePlate || ''}`.trim()} /> : null}
               {selected.notes ? <Detail label="Observação" value={selected.notes} /> : null}
-              {selected.qrToken && visitStatus(selected) === 'Agendada' ? (
+              {selected.qrToken && isOpenVisit(selected) ? (
                 <View style={styles.qrBox}>
                   <QRCode value={selected.qrToken} size={180} />
                   <Text style={styles.code}>{selected.qrToken}</Text>
-                  <Text style={styles.cardMeta}>Válido em {new Date(selected.startDate).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' })} das {selected.expectedTimeStart || '00:00'} às {selected.expectedTimeEnd || '23:59'}</Text>
+                  <Text style={styles.cardMeta}>{selected.weekdays
+                    ? `Válido ${weekdayText(selected.weekdays)}, até ${new Date(selected.endDate || selected.startDate).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' })}, das ${selected.expectedTimeStart || '00:00'} às ${selected.expectedTimeEnd || '23:59'}`
+                    : `Válido em ${new Date(selected.startDate).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' })} das ${selected.expectedTimeStart || '00:00'} às ${selected.expectedTimeEnd || '23:59'}`}</Text>
                   <TouchableOpacity
                     style={styles.primary}
                     onPress={() => Share.share({
-                      message: `Você foi convidado por ${residentName} para visitar:\n\n${context?.organization?.name || ''}\n${unitLabel}\n\nData: ${new Date(selected.startDate).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' })}\nHorário: ${selected.expectedTimeStart || '00:00'} às ${selected.expectedTimeEnd || '23:59'}\n\nApresente este QR Code na portaria.\nhttps://portaria.brisoft.com.br/convite/${selected.qrToken}`,
+                      message: `Você foi convidado por ${residentName} para visitar:\n\n${context?.organization?.name || ''}\n${unitLabel}${context?.organization?.address ? `\nEndereço: ${context.organization.address}` : ''}\n\n${selected.weekdays ? `Repete: ${weekdayText(selected.weekdays)}\nVálido até: ${new Date(selected.endDate || selected.startDate).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' })}` : `Data: ${new Date(selected.startDate).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' })}`}\nHorário: ${selected.expectedTimeStart || '00:00'} às ${selected.expectedTimeEnd || '23:59'}\n\nApresente este QR Code na portaria.\nhttps://portaria.brisoft.com.br/convite/${selected.qrToken}`,
                     })}
                   >
                     <Text style={styles.primaryText}>Compartilhar convite</Text>
                   </TouchableOpacity>
                 </View>
               ) : null}
-              {visitStatus(selected) === 'Agendada' && (
+              {isOpenVisit(selected) && (
                 <TouchableOpacity style={styles.cancelButton} onPress={() => cancelVisit(selected)} activeOpacity={0.85}>
                   <Text style={styles.cancelText}>Cancelar visita</Text>
                 </TouchableOpacity>
@@ -484,6 +575,72 @@ export const ResidentArea: React.FC = () => {
   );
 };
 
+const WEEKDAYS = ['D', 'S', 'T', 'Q', 'Q', 'S', 'S'];
+
+const VisitCalendar: React.FC<{
+  month: Date;
+  visits: Visit[];
+  pickedDay: string | null;
+  onPrev: () => void;
+  onNext: () => void;
+  onPick: (day: string) => void;
+}> = ({ month, visits, pickedDay, onPrev, onNext, onPick }) => {
+  const year = month.getFullYear();
+  const monthIndex = month.getMonth();
+  const firstWeekday = new Date(year, monthIndex, 1).getDay();
+  const daysInMonth = new Date(year, monthIndex + 1, 0).getDate();
+  const cells: Array<number | null> = [
+    ...Array.from({ length: firstWeekday }, () => null),
+    ...Array.from({ length: daysInMonth }, (_, index) => index + 1),
+  ];
+  while (cells.length % 7 !== 0) cells.push(null);
+  const marked = new Set<string>();
+  for (let day = 1; day <= daysInMonth; day += 1) {
+    const key = `${year}-${String(monthIndex + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    if (visits.some((visit) => visitCoversDay(visit, key))) marked.add(key);
+  }
+  const today = todayKey();
+  const title = month.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+
+  return (
+    <View style={styles.calendar}>
+      <View style={styles.calendarHead}>
+        <TouchableOpacity onPress={onPrev} style={styles.calendarArrow} activeOpacity={0.8}>
+          <ChevronLeft size={18} color={colors.primary} />
+        </TouchableOpacity>
+        <Text style={styles.calendarTitle}>{title}</Text>
+        <TouchableOpacity onPress={onNext} style={styles.calendarArrow} activeOpacity={0.8}>
+          <ChevronRight size={18} color={colors.primary} />
+        </TouchableOpacity>
+      </View>
+      <View style={styles.calendarWeek}>
+        {WEEKDAYS.map((label, index) => (
+          <Text key={`${label}-${index}`} style={styles.calendarWeekDay}>{label}</Text>
+        ))}
+      </View>
+      <View style={styles.calendarGrid}>
+        {cells.map((day, index) => {
+          if (!day) return <View key={`empty-${index}`} style={styles.calendarCell} />;
+          const key = `${year}-${String(monthIndex + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+          const hasVisit = marked.has(key);
+          const selectedCell = pickedDay === key;
+          return (
+            <TouchableOpacity
+              key={key}
+              style={[styles.calendarCell, selectedCell && styles.calendarCellSelected, key === today && styles.calendarCellToday]}
+              onPress={() => onPick(key)}
+              activeOpacity={0.8}
+            >
+              <Text style={[styles.calendarDay, selectedCell && styles.calendarDaySelected]}>{day}</Text>
+              {hasVisit ? <View style={[styles.calendarDot, selectedCell && styles.calendarDotSelected]} /> : <View style={styles.calendarDotSpacer} />}
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+    </View>
+  );
+};
+
 const VisitCard: React.FC<{ visit: Visit; onPress: () => void }> = ({ visit, onPress }) => (
   <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.85}>
     <View style={styles.cardTop}>
@@ -534,6 +691,21 @@ const styles = StyleSheet.create({
   summaryValue: { color: colors.primary, fontSize: 28, fontWeight: '800', marginTop: 8 },
   summaryLabel: { color: colors.textSecondary, marginTop: 2, fontSize: 13 },
   section: { color: colors.textPrimary, fontWeight: '800', fontSize: 16, marginTop: 18, marginBottom: 8 },
+  calendar: { backgroundColor: colors.surface, borderRadius: 16, padding: 12, borderWidth: 1, borderColor: colors.border, marginBottom: 8 },
+  calendarHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 },
+  calendarTitle: { color: colors.textPrimary, fontWeight: '800', fontSize: 16, textTransform: 'capitalize' },
+  calendarArrow: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.primarySoft },
+  calendarWeek: { flexDirection: 'row' },
+  calendarWeekDay: { flex: 1, textAlign: 'center', color: colors.textMuted, fontSize: 12, fontWeight: '700', marginBottom: 4 },
+  calendarGrid: { flexDirection: 'row', flexWrap: 'wrap' },
+  calendarCell: { width: '14.28%', alignItems: 'center', paddingVertical: 6, borderRadius: 10 },
+  calendarCellSelected: { backgroundColor: colors.primary },
+  calendarCellToday: { borderWidth: 1, borderColor: colors.primarySoftBorder },
+  calendarDay: { color: colors.textPrimary, fontWeight: '600' },
+  calendarDaySelected: { color: '#FFFFFF' },
+  calendarDot: { width: 5, height: 5, borderRadius: 3, backgroundColor: '#34D399', marginTop: 3 },
+  calendarDotSelected: { backgroundColor: '#FFFFFF' },
+  calendarDotSpacer: { width: 5, height: 5, marginTop: 3 },
   emptyCard: { backgroundColor: colors.surface, borderRadius: 14, padding: 16, borderWidth: 1, borderColor: colors.border, marginBottom: 10 },
   empty: { color: colors.textSecondary },
   card: { backgroundColor: colors.surface, borderRadius: 16, padding: 14, marginBottom: 10, borderWidth: 1, borderColor: colors.border },
@@ -550,6 +722,11 @@ const styles = StyleSheet.create({
   timeRow: { flexDirection: 'row', gap: 10 },
   switchRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, marginTop: 4 },
   switchLabel: { color: colors.textPrimary, fontWeight: '700', fontSize: 15 },
+  dayRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 12 },
+  dayChip: { paddingHorizontal: 10, paddingVertical: 8, borderRadius: 999, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.background },
+  dayChipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
+  dayChipText: { color: colors.textSecondary, fontWeight: '700', fontSize: 12 },
+  dayChipTextActive: { color: '#FFFFFF' },
   fieldLabel: { color: colors.textSecondary, fontSize: 12, marginBottom: 4, fontWeight: '600' },
   input: { backgroundColor: colors.background, borderWidth: 1, borderColor: colors.border, borderRadius: 10, paddingHorizontal: 12, minHeight: 46, color: colors.textPrimary },
   detailCard: { backgroundColor: colors.surface, borderRadius: 16, padding: 16, borderWidth: 1, borderColor: colors.border },

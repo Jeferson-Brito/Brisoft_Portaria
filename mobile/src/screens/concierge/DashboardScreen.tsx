@@ -11,6 +11,7 @@ import {
   Alert,
   Modal,
   Linking,
+  BackHandler,
 } from 'react-native';
 import {
   Clock,
@@ -56,6 +57,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from '../../theme/colors';
 import { useAuth } from '../../contexts/AuthContext';
 import { api } from '../../config/api';
+import { ReleaseCancelled, releaseWithRestrictionCheck } from '../../utils/release';
 import { NewRequestModal } from './NewRequestModal';
 import { OpenRequestsScreen } from './OpenRequestsScreen';
 import { PreAuthorizationsScreen } from './PreAuthorizationsScreen';
@@ -67,6 +69,7 @@ import { PackagesScreen } from '../packages/PackagesScreen';
 import { WhatsAppConfigScreen } from '../admin/WhatsAppConfigScreen';
 import { UsersManagementScreen } from '../admin/UsersManagementScreen';
 import { ClientsManagementScreen } from '../admin/ClientsManagementScreen';
+import { RestrictionsScreen } from '../admin/RestrictionsScreen';
 import { OrganizationProfileScreen } from '../admin/OrganizationProfileScreen';
 import { ReportsScreen } from '../reports/ReportsScreen';
 import { ProfileScreen } from '../profile/ProfileScreen';
@@ -170,12 +173,26 @@ export const DashboardScreen: React.FC = () => {
     | 'settings'
     | 'users_mgmt'
     | 'clients_mgmt'
+    | 'restrictions'
     | 'preauthorizations'
     | 'org_profile'
     | 'profile'
     | 'subscription'
     | 'super_admin_orgs'
   >('dashboard');
+
+  useEffect(() => {
+    const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (activeTab === 'dashboard') return false;
+      const backToSettings = ['whatsapp', 'users_mgmt', 'clients_mgmt', 'restrictions', 'org_profile', 'subscription', 'super_admin_orgs'];
+      if (backToSettings.includes(activeTab)) setActiveTab('settings');
+      else if (activeTab === 'profile') setActiveTab(user?.role === 'CONCIERGE' ? 'dashboard' : 'settings');
+      else if (activeTab === 'settings') setActiveTab('dashboard');
+      else setActiveTab('dashboard');
+      return true;
+    });
+    return () => subscription.remove();
+  }, [activeTab, user?.role]);
   const [requestFilter, setRequestFilter] = useState<'ALL' | 'PENDING' | 'AUTHORIZED' | 'PACKAGES' | 'ENTERED'>('ALL');
   const [dateFilter, setDateFilter] = useState<DateFilterType>('ALL');
   const [isDateModalOpen, setIsDateModalOpen] = useState(false);
@@ -374,13 +391,15 @@ export const DashboardScreen: React.FC = () => {
     if (!confirmEntryModal.requestId) return;
     try {
       setEntryProcessingId(confirmEntryModal.requestId);
-      await api.post(`/visit-requests/${confirmEntryModal.requestId}/entry`, {
+      await releaseWithRestrictionCheck(`/visit-requests/${confirmEntryModal.requestId}/entry`, {
         reason: 'Entrada física registrada na portaria pelo dashboard',
       });
       setConfirmEntryModal({ visible: false, requestId: '', visitorName: '' });
       fetchSummaryAndRequests();
     } catch (err: any) {
-      Alert.alert('Erro', err.response?.data?.message || 'Falha ao registrar entrada.');
+      if (!(err instanceof ReleaseCancelled)) {
+        Alert.alert('Erro', err.response?.data?.error?.message || err.response?.data?.message || 'Falha ao registrar entrada.');
+      }
     } finally {
       setEntryProcessingId(null);
     }
@@ -406,6 +425,7 @@ export const DashboardScreen: React.FC = () => {
     if (activeTab === 'whatsapp') return <WhatsAppConfigScreen onBack={() => setActiveTab('settings')} />;
     if (activeTab === 'users_mgmt') return <UsersManagementScreen onBack={() => setActiveTab('settings')} />;
     if (activeTab === 'clients_mgmt') return <ClientsManagementScreen onBack={() => setActiveTab('settings')} />;
+    if (activeTab === 'restrictions') return <RestrictionsScreen onBack={() => setActiveTab('settings')} />;
     if (activeTab === 'reports') return <ReportsScreen />;
     if (activeTab === 'org_profile') {
       return (

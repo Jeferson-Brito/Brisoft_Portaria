@@ -57,6 +57,7 @@ export async function organizationRoutes(app: FastifyInstance) {
       companyName?: string;
       unitLabel?: string;
       clientLabel?: string;
+      address?: string;
     };
 
     const organization = await prisma.organization.findUnique({
@@ -114,6 +115,7 @@ export async function organizationRoutes(app: FastifyInstance) {
       companyName: body.companyName || body.name || organization.name,
       unitLabel: defaultUnitLabel,
       clientLabel: defaultClientLabel,
+      address: body.address !== undefined ? body.address.trim() : (currentSettings.address || ''),
     };
 
     const updated = await prisma.organization.update({

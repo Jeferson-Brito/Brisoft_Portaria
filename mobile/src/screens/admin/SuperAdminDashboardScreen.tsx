@@ -12,6 +12,7 @@ import {
   Platform,
   RefreshControl,
   StatusBar,
+  BackHandler,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
@@ -58,6 +59,15 @@ export const SuperAdminDashboardScreen: React.FC = () => {
   const insets = useSafeAreaInsets();
 
   const [activeTab, setActiveTab] = useState<SuperAdminTab>('overview');
+
+  useEffect(() => {
+    const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (activeTab === 'overview') return false;
+      setActiveTab('overview');
+      return true;
+    });
+    return () => subscription.remove();
+  }, [activeTab]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
@@ -111,8 +121,9 @@ export const SuperAdminDashboardScreen: React.FC = () => {
     adminEmail: '',
     adminPassword: '',
     adminPhone: '',
+    address: '',
     plan: 'PRO',
-    monthlyPrice: '149.90',
+    monthlyPrice: '99.90',
     trialDays: '7',
   });
 
@@ -185,8 +196,9 @@ export const SuperAdminDashboardScreen: React.FC = () => {
         adminPassword: orgForm.adminPassword,
         adminPhone: orgForm.adminPhone.trim() || undefined,
         plan: orgForm.plan,
-        monthlyPrice: parseFloat(orgForm.monthlyPrice.replace(',', '.')) || 149.9,
+        monthlyPrice: parseFloat(orgForm.monthlyPrice.replace(',', '.')) || 99.9,
         trialDays: parseInt(orgForm.trialDays, 10) || 7,
+        address: orgForm.address.trim() || undefined,
       });
 
       Alert.alert('Sucesso', `Empresa "${orgForm.organizationName}" cadastrada com sucesso!`);
@@ -198,13 +210,14 @@ export const SuperAdminDashboardScreen: React.FC = () => {
         adminEmail: '',
         adminPassword: '',
         adminPhone: '',
+        address: '',
         plan: 'PRO',
-        monthlyPrice: '149.90',
+        monthlyPrice: '99.90',
         trialDays: '7',
       });
       loadDashboardData();
     } catch (err: any) {
-      Alert.alert('Erro', err.response?.data?.message || 'Falha ao cadastrar empresa.');
+      Alert.alert('Erro', err.response?.data?.error?.message || err.response?.data?.message || 'Falha ao cadastrar empresa.');
     } finally {
       setIsSubmitting(false);
     }
@@ -218,8 +231,9 @@ export const SuperAdminDashboardScreen: React.FC = () => {
         name: editingOrg.name,
         document: editingOrg.document,
         plan: editingOrg.plan,
-        monthlyPrice: parseFloat(String(editingOrg.monthlyPrice).replace(',', '.')) || 149.9,
+        monthlyPrice: parseFloat(String(editingOrg.monthlyPrice).replace(',', '.')) || 99.9,
         paymentStatus: editingOrg.paymentStatus,
+        settings: { address: (editingOrg.address || '').trim() },
       });
 
       Alert.alert('Sucesso', 'Empresa atualizada com sucesso!');
@@ -299,8 +313,11 @@ export const SuperAdminDashboardScreen: React.FC = () => {
         await api.post(`/super-admin/subscriptions/${orgId}/activate`, { periodDays: 30 });
       } else if (paymentStatus === 'SUSPENDED') {
         await api.post(`/super-admin/subscriptions/${orgId}/suspend`);
+      } else if (paymentStatus === 'TRIAL') {
+        const trialEndsAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+        await api.patch(`/super-admin/subscriptions/${orgId}`, { paymentStatus: 'TRIAL', trialEndsAt });
       } else {
-        await api.patch(`/super-admin/subscriptions/${orgId}`, { paymentStatus });
+        await api.patch(`/super-admin/subscriptions/${orgId}`, { paymentStatus: 'PENDING' });
       }
       loadDashboardData();
     } catch (err: any) {
@@ -1363,63 +1380,58 @@ export const SuperAdminDashboardScreen: React.FC = () => {
       {/* Barra de Navegação Inferior Exclusiva do Super Admin */}
       <View style={[styles.bottomBar, { paddingBottom: Math.max(bottomInset, 10) }]}>
         <TouchableOpacity
-          style={styles.navTab}
+          style={[styles.navTab, activeTab === 'overview' && styles.navTabActive]}
           onPress={() => setActiveTab('overview')}
           activeOpacity={0.8}
         >
-          <BarChart3 size={22} color={activeTab === 'overview' ? '#165337' : '#94A3B8'} />
+          <BarChart3 size={20} color={activeTab === 'overview' ? '#165337' : '#64748B'} />
           <Text style={[styles.navTabLabel, activeTab === 'overview' && styles.navTabLabelActive]}>
-            Visão Geral
+            Início
           </Text>
-          {activeTab === 'overview' && <View style={styles.navIndicator} />}
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={styles.navTab}
+          style={[styles.navTab, activeTab === 'organizations' && styles.navTabActive]}
           onPress={() => setActiveTab('organizations')}
           activeOpacity={0.8}
         >
-          <Building2 size={22} color={activeTab === 'organizations' ? '#165337' : '#94A3B8'} />
+          <Building2 size={20} color={activeTab === 'organizations' ? '#165337' : '#64748B'} />
           <Text style={[styles.navTabLabel, activeTab === 'organizations' && styles.navTabLabelActive]}>
             Empresas
           </Text>
-          {activeTab === 'organizations' && <View style={styles.navIndicator} />}
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={styles.navTab}
+          style={[styles.navTab, activeTab === 'users' && styles.navTabActive]}
           onPress={() => setActiveTab('users')}
           activeOpacity={0.8}
         >
-          <Users size={22} color={activeTab === 'users' ? '#165337' : '#94A3B8'} />
+          <Users size={20} color={activeTab === 'users' ? '#165337' : '#64748B'} />
           <Text style={[styles.navTabLabel, activeTab === 'users' && styles.navTabLabelActive]}>
-            Usuários
+            Equipe
           </Text>
-          {activeTab === 'users' && <View style={styles.navIndicator} />}
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={styles.navTab}
+          style={[styles.navTab, activeTab === 'finance' && styles.navTabActive]}
           onPress={() => setActiveTab('finance')}
           activeOpacity={0.8}
         >
-          <CreditCard size={22} color={activeTab === 'finance' ? '#165337' : '#94A3B8'} />
+          <CreditCard size={20} color={activeTab === 'finance' ? '#165337' : '#64748B'} />
           <Text style={[styles.navTabLabel, activeTab === 'finance' && styles.navTabLabelActive]}>
-            Financeiro
+            Planos
           </Text>
-          {activeTab === 'finance' && <View style={styles.navIndicator} />}
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={styles.navTab}
+          style={[styles.navTab, activeTab === 'profile' && styles.navTabActive]}
           onPress={() => setActiveTab('profile')}
           activeOpacity={0.8}
         >
-          <User size={22} color={activeTab === 'profile' ? '#165337' : '#94A3B8'} />
+          <User size={20} color={activeTab === 'profile' ? '#165337' : '#64748B'} />
           <Text style={[styles.navTabLabel, activeTab === 'profile' && styles.navTabLabelActive]}>
             Perfil
           </Text>
-          {activeTab === 'profile' && <View style={styles.navIndicator} />}
         </TouchableOpacity>
       </View>
 
@@ -1464,6 +1476,15 @@ export const SuperAdminDashboardScreen: React.FC = () => {
                 onChangeText={(t) => setOrgForm((prev) => ({ ...prev, organizationDocument: t }))}
               />
 
+              <Text style={styles.inputLabel}>Endereço do local</Text>
+              <TextInput
+                style={styles.modalInput}
+                placeholder="Rua, número, bairro, cidade"
+                placeholderTextColor="#94A3B8"
+                value={orgForm.address}
+                onChangeText={(t) => setOrgForm((prev) => ({ ...prev, address: t }))}
+              />
+
               <View style={{ flexDirection: 'row', gap: 10 }}>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.inputLabel}>Plano</Text>
@@ -1479,7 +1500,7 @@ export const SuperAdminDashboardScreen: React.FC = () => {
                   <Text style={styles.inputLabel}>Valor Mensal (R$)</Text>
                   <TextInput
                     style={styles.modalInput}
-                    placeholder="149.90"
+                    placeholder="99.90"
                     placeholderTextColor="#94A3B8"
                     keyboardType="numeric"
                     value={orgForm.monthlyPrice}
@@ -1588,6 +1609,15 @@ export const SuperAdminDashboardScreen: React.FC = () => {
                   style={styles.modalInput}
                   value={editingOrg.document || ''}
                   onChangeText={(t) => setEditingOrg((prev: any) => ({ ...prev, document: t }))}
+                />
+
+                <Text style={styles.inputLabel}>Endereço do local</Text>
+                <TextInput
+                  style={styles.modalInput}
+                  placeholder="Rua, número, bairro, cidade"
+                  placeholderTextColor="#94A3B8"
+                  value={editingOrg.address || ''}
+                  onChangeText={(t) => setEditingOrg((prev: any) => ({ ...prev, address: t }))}
                 />
 
                 <Text style={styles.inputLabel}>Valor Mensal da Assinatura (R$)</Text>
@@ -2833,33 +2863,30 @@ const styles = StyleSheet.create({
   // Barra de Navegação Inferior
   bottomBar: {
     flexDirection: 'row',
-    backgroundColor: '#165337',
+    backgroundColor: '#FFFFFF',
     borderTopWidth: 1,
-    borderTopColor: 'rgba(255,255,255,0.1)',
-    paddingTop: 10,
+    borderTopColor: '#E2E8F0',
+    paddingTop: 8,
+    paddingHorizontal: 6,
   },
   navTab: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+    minHeight: 54,
+    borderRadius: 16,
+    gap: 2,
+  },
+  navTabActive: {
+    backgroundColor: '#E7F6EE',
   },
   navTabLabel: {
-    fontSize: 10,
-    fontWeight: '600',
-    color: '#94A3B8',
-    marginTop: 4,
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#64748B',
   },
   navTabLabelActive: {
-    color: '#60A5FA',
-    fontWeight: '800',
-  },
-  navIndicator: {
-    position: 'absolute',
-    bottom: -6,
-    width: 20,
-    height: 3,
-    borderRadius: 2,
-    backgroundColor: '#60A5FA',
+    color: '#165337',
   },
 
   // Estados Vazios

@@ -9,6 +9,8 @@ import {
   ActivityIndicator,
   Alert,
   RefreshControl,
+  ScrollView,
+  Share,
 } from 'react-native';
 import {
   Search,
@@ -20,6 +22,7 @@ import {
   Car,
   Briefcase,
   CircleCheck,
+  Share2,
 } from 'lucide-react-native';
 import { colors } from '../../theme/colors';
 import { api } from '../../config/api';
@@ -70,6 +73,7 @@ export const PresentVisitorsScreen: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [exitingId, setExitingId] = useState<string | null>(null);
+  const [place, setPlace] = useState('ALL');
 
   const { addListener } = useRealtime();
 
@@ -110,6 +114,24 @@ export const PresentVisitorsScreen: React.FC = () => {
   const handleSearchSubmit = () => {
     setIsLoading(true);
     fetchPresentVisitors();
+  };
+
+  const places = [...new Set(visitors.map((item) => item.destination?.name).filter(Boolean))] as string[];
+  const visible = visitors.filter((item) => place === 'ALL' || item.destination?.name === place);
+
+  const exportList = async () => {
+    if (visible.length === 0) {
+      Alert.alert('Ninguém para exportar', 'A lista filtrada está vazia.');
+      return;
+    }
+    const stamp = new Date().toLocaleString('pt-BR');
+    const lines = visible.map((item, index) => {
+      const unit = [item.destination?.name, item.destination?.block].filter(Boolean).join(' · ');
+      return `${index + 1}. ${item.visitor.name} — ${unit} — ${item.client?.name || 'Morador'} — entrada ${item.stayDurationFormatted}`;
+    });
+    await Share.share({
+      message: `Pessoas no local (${stamp})\n${visible.length} presente(s)\n\n${lines.join('\n')}`,
+    });
   };
 
   const handleRegisterExit = (item: PresentVisitorItem) => {
@@ -243,10 +265,9 @@ export const PresentVisitorsScreen: React.FC = () => {
       <AppHeader
         title="Visitantes no Local"
         subtitle="Pessoas com entrada registrada atualmente presentes"
-        badge={visitors.length}
+        badge={visible.length}
       />
 
-      {/* Barra de Busca e Contador */}
       <View style={styles.topBar}>
         <View style={styles.searchBar}>
           <Search size={18} color={colors.textSecondary} style={{ marginRight: 8 }} />
@@ -261,10 +282,22 @@ export const PresentVisitorsScreen: React.FC = () => {
           />
         </View>
 
+        <TouchableOpacity style={styles.exportButton} onPress={exportList}>
+          <Share2 size={16} color={colors.primary} />
+        </TouchableOpacity>
+
         <View style={styles.countBadge}>
-          <Text style={styles.countText}>{visitors.length} presentes</Text>
+          <Text style={styles.countText}>{visible.length} presentes</Text>
         </View>
       </View>
+
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filters}>
+        {['ALL', ...places].map((item) => (
+          <TouchableOpacity key={item} style={[styles.filterChip, place === item && styles.filterChipActive]} onPress={() => setPlace(item)}>
+            <Text style={[styles.filterText, place === item && styles.filterTextActive]}>{item === 'ALL' ? 'Todas as unidades' : item}</Text>
+          </TouchableOpacity>
+        ))}
+      </ScrollView>
 
       {/* Lista */}
       {isLoading ? (
@@ -275,7 +308,7 @@ export const PresentVisitorsScreen: React.FC = () => {
       ) : (
         <FlatList
           ref={listRef}
-          data={visitors}
+          data={visible}
           keyExtractor={(item) => item.id}
           renderItem={renderItem}
           contentContainerStyle={styles.listContent}
@@ -356,6 +389,21 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: colors.statusPresent,
   },
+  exportButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.surfaceElevated,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  filters: { paddingHorizontal: 16, paddingBottom: 8, gap: 8 },
+  filterChip: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
+  filterChipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
+  filterText: { color: colors.textSecondary, fontWeight: '700', fontSize: 12 },
+  filterTextActive: { color: '#FFFFFF' },
   listContent: {
     padding: 16,
     paddingBottom: 32,

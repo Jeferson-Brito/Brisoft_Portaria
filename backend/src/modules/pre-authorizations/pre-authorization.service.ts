@@ -2,6 +2,8 @@ import { prisma } from '../../lib/prisma.js';
 import { AppError } from '../../core/errors/app-error.js';
 import { realtimeService } from '../../services/realtime/realtime.service.js';
 import { randomBytes } from 'crypto';
+import { matchesWeekday, normalizeWeekdays } from '../../utils/weekdays.js';
+import { restrictionService } from '../restrictions/restriction.service.js';
 
 export interface CreatePreAuthorizationParams {
   organizationId: string;
@@ -19,6 +21,7 @@ export interface CreatePreAuthorizationParams {
   vehicleModel?: string;
   vehiclePlate?: string;
   notes?: string;
+  weekdays?: number[] | string | null;
 }
 
 export interface CheckInPreAuthorizedParams {
@@ -30,6 +33,7 @@ export interface CheckInPreAuthorizedParams {
   vehiclePlate?: string;
   vehicleColor?: string;
   notes?: string;
+  acknowledgeRestriction?: boolean;
 }
 
 export class PreAuthorizationService {
@@ -94,6 +98,7 @@ export class PreAuthorizationService {
         vehicleModel: data.vehicleModel ? data.vehicleModel.trim() : null,
         vehiclePlate: data.vehiclePlate ? data.vehiclePlate.trim() : null,
         qrToken: `VIS-${randomBytes(4).toString('hex').toUpperCase()}`,
+        weekdays: normalizeWeekdays(data.weekdays),
         isUsed: false,
       },
       include: {
@@ -141,7 +146,7 @@ export class PreAuthorizationService {
       orderBy: { createdAt: 'desc' },
     });
 
-    return items;
+    return items.filter((item) => matchesWeekday(item.weekdays));
   }
 
   // Listar todas as pré-autorizações (com paginação e filtros)
@@ -212,9 +217,23 @@ export class PreAuthorizationService {
       throw new AppError('Pré-autorização não encontrada.', 404, 'PRE_AUTH_NOT_FOUND');
     }
 
-    if (preAuth.isUsed) {
+    const recurring = Boolean(preAuth.weekdays);
+    if (preAuth.isUsed && !recurring) {
       throw new AppError('Esta pré-autorização já foi utilizada para entrada.', 400, 'PRE_AUTH_ALREADY_USED');
     }
+    if (recurring && !matchesWeekday(preAuth.weekdays)) {
+      throw new AppError('Este convite recorrente não vale neste dia da semana.', 400, 'QR_WRONG_WEEKDAY');
+    }
+
+    await restrictionService.assertReleaseAllowed({
+      organizationId: params.organizationId,
+      actorUserId: params.conciergeUserId,
+      name: preAuth.visitorName,
+      documentNumber: preAuth.visitorDocument,
+      acknowledge: params.acknowledgeRestriction,
+      entity: 'PreAuthorization',
+      entityId: preAuth.id,
+    });
 
     // Localiza ou cadastra o visitante no sistema
     let visitor = await prisma.visitor.findFirst({
@@ -306,11 +325,12 @@ export class PreAuthorizationService {
       ],
     });
 
-    // Marca a pré-autorização como utilizada
-    await prisma.preAuthorization.update({
-      where: { id: preAuth.id },
-      data: { isUsed: true },
-    });
+    if (!preAuth.weekdays) {
+      await prisma.preAuthorization.update({
+        where: { id: preAuth.id },
+        data: { isUsed: true },
+      });
+    }
 
     // Notifica em tempo real via WebSocket
     realtimeService.notifyVisitRequestCreated(params.organizationId, visitRequest);
@@ -344,8 +364,11 @@ export class PreAuthorizationService {
     if (item.cancelledAt) {
       throw new AppError('Este convite foi cancelado.', 400, 'QR_CANCELLED');
     }
-    if (item.isUsed) {
+    if (item.isUsed && !item.weekdays) {
       throw new AppError('Este convite já foi utilizado.', 400, 'QR_USED');
+    }
+    if (item.weekdays && !matchesWeekday(item.weekdays)) {
+      throw new AppError('Este convite não vale neste dia da semana.', 400, 'QR_WRONG_WEEKDAY');
     }
     const now = new Date();
     if (now < item.startDate || now > item.endDate) {

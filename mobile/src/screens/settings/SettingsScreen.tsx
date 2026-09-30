@@ -44,6 +44,7 @@ interface SettingsScreenProps {
       | 'org_profile'
       | 'users_mgmt'
       | 'clients_mgmt'
+      | 'restrictions'
       | 'whatsapp'
       | 'subscription'
       | 'super_admin_orgs'
@@ -294,15 +295,15 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
               <View
                 style={[
                   styles.statusIconWrap,
-                  { backgroundColor: isPro ? '#F3E8FF' : '#FEF3C7' },
+                  { backgroundColor: isPro ? '#E8F5E9' : '#FEF3C7' },
                 ]}
               >
-                <Sparkles size={16} color={isPro ? '#9333EA' : '#D97706'} />
+                <Sparkles size={16} color={isPro ? '#165337' : '#D97706'} />
               </View>
               <Text
                 style={[
                   styles.planPillText,
-                  { color: isPro ? '#7E22CE' : '#B45309' },
+                  { color: isPro ? '#165337' : '#B45309' },
                 ]}
               >
                 {isPro ? 'PRO' : 'TRIAL'}
@@ -392,6 +393,23 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
               <Text style={styles.menuTitle}>Equipe de Porteiros</Text>
               <Text style={styles.menuSubtitle}>
                 Cadastrar operadores, redefinir senhas e gerenciar acessos
+              </Text>
+            </View>
+            <ChevronRight size={18} color="#94A3B8" />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.menuItem}
+            onPress={() => onNavigate('restrictions')}
+            activeOpacity={0.7}
+          >
+            <View style={[styles.menuIconBox, { backgroundColor: '#FEE2E2' }]}>
+              <Shield size={22} color="#B91C1C" />
+            </View>
+            <View style={styles.menuContent}>
+              <Text style={styles.menuTitle}>Lista de restrição</Text>
+              <Text style={styles.menuSubtitle}>
+                Nome ou documento que o porteiro precisa ver antes de liberar
               </Text>
             </View>
             <ChevronRight size={18} color="#94A3B8" />

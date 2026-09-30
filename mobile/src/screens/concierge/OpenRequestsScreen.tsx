@@ -24,6 +24,7 @@ import { api } from '../../config/api';
 import { useRealtime } from '../../contexts/RealtimeContext';
 import { AppHeader } from '../../components/AppHeader';
 import { ScrollToTopButton } from '../../components/ScrollToTopButton';
+import { ReleaseCancelled, releaseWithRestrictionCheck } from '../../utils/release';
 
 export interface PendingRequestItem {
   id: string;
@@ -157,7 +158,7 @@ export const OpenRequestsScreen: React.FC<{ hideHeader?: boolean }> = ({ hideHea
           text: 'Confirmar Liberação',
           onPress: async () => {
             try {
-              await api.post(`/visit-requests/${item.id}/authorize-manual`, {
+              await releaseWithRestrictionCheck(`/visit-requests/${item.id}/authorize-manual`, {
                 reason: 'Contato telefônico com o morador',
               });
               Alert.alert(
@@ -173,12 +174,16 @@ export const OpenRequestsScreen: React.FC<{ hideHeader?: boolean }> = ({ hideHea
                     text: 'Registrar Entrada Agora',
                     onPress: async () => {
                       try {
-                        await api.post(`/visit-requests/${item.id}/entry`, {
+                        await releaseWithRestrictionCheck(`/visit-requests/${item.id}/entry`, {
                           reason: 'Entrada física registrada imediatamente após autorização manual',
                         });
                         Alert.alert('Entrada Concluída! 🟢', `Visitante ${item.visitor.name} está presente no local.`);
                         fetchPendingRequests();
                       } catch (entryErr: any) {
+                        if (entryErr instanceof ReleaseCancelled) {
+                          fetchPendingRequests();
+                          return;
+                        }
                         Alert.alert(
                           'Aviso',
                           'Visita autorizada, mas falha ao registrar entrada: ' +
@@ -191,6 +196,7 @@ export const OpenRequestsScreen: React.FC<{ hideHeader?: boolean }> = ({ hideHea
                 ]
               );
             } catch (err: any) {
+              if (err instanceof ReleaseCancelled) return;
               Alert.alert('Erro', err.response?.data?.error?.message || 'Não foi possível autorizar.');
             }
           },
@@ -209,12 +215,13 @@ export const OpenRequestsScreen: React.FC<{ hideHeader?: boolean }> = ({ hideHea
           text: 'Confirmar Entrada',
           onPress: async () => {
             try {
-              await api.post(`/visit-requests/${item.id}/entry`, {
+              await releaseWithRestrictionCheck(`/visit-requests/${item.id}/entry`, {
                 reason: 'Entrada física registrada na portaria',
               });
               Alert.alert('Entrada Registrada! 🟢', `Visitante ${item.visitor.name} está presente no local.`);
               fetchPendingRequests();
             } catch (err: any) {
+              if (err instanceof ReleaseCancelled) return;
               Alert.alert('Erro', err.response?.data?.error?.message || 'Falha ao registrar entrada.');
             }
           },

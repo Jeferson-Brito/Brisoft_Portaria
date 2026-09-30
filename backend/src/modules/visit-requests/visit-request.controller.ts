@@ -26,6 +26,7 @@ const historyQuerySchema = z.object({
 
 const actionReasonSchema = z.object({
   reason: z.string().optional(),
+  acknowledgeRestriction: z.boolean().optional(),
 });
 
 const visitRequestService = new VisitRequestService();
@@ -175,7 +176,13 @@ export class VisitRequestController {
 
     try {
       const { id } = request.params;
-      const updated = await visitRequestService.manualAuthorize(id, request.user.organizationId, request.user.sub, reason);
+      const updated = await visitRequestService.manualAuthorize(
+        id,
+        request.user.organizationId,
+        request.user.sub,
+        reason,
+        parseBody.success ? parseBody.data.acknowledgeRestriction : false,
+      );
 
       return reply.status(200).send({
         success: true,
@@ -204,7 +211,8 @@ export class VisitRequestController {
         id,
         request.user.organizationId,
         request.user.sub,
-        notes
+        notes,
+        parseBody.success ? parseBody.data.acknowledgeRestriction : false,
       );
 
       return reply.status(200).send({
@@ -249,13 +257,33 @@ export class VisitRequestController {
 
   // Listar Visitantes Presentes no Local (Seção 30)
   async listPresent(request: FastifyRequest, reply: FastifyReply) {
-    const query = request.query as { q?: string };
+    const query = request.query as { q?: string; format?: string };
 
     try {
       const visitors = await visitRequestService.listPresent(
         request.user.organizationId,
         query.q
       );
+
+      if (query.format === 'csv') {
+        const header = 'Nome;Documento;Unidade;Morador;Tipo;Entrada;Permanencia;Placa;Porteiro';
+        const rows = visitors.map((item) => [
+          item.visitor?.name,
+          item.visitor?.documentNumber,
+          [item.destination?.name, item.destination?.block].filter(Boolean).join(' '),
+          item.client?.name,
+          item.visitorType,
+          item.entryAt ? new Date(item.entryAt).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' }) : '',
+          item.stayDurationFormatted,
+          item.vehicle?.licensePlate,
+          item.conciergeUser?.name,
+        ].map(csvCell).join(';'));
+        const stamp = new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+        return reply
+          .header('Content-Type', 'text/csv; charset=utf-8')
+          .header('Content-Disposition', 'attachment; filename="presentes.csv"')
+          .send(`\uFEFFPessoas no local em ${stamp}\n${header}\n${rows.join('\n')}\n`);
+      }
 
       return reply.status(200).send({
         success: true,
@@ -300,4 +328,9 @@ export class VisitRequestController {
       });
     }
   }
+}
+
+function csvCell(value: unknown) {
+  const text = String(value ?? '').replace(/\r?\n/g, ' ');
+  return `"${text.replace(/"/g, '""')}"`;
 }

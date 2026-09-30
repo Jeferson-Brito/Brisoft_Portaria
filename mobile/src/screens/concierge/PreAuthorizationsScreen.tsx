@@ -27,11 +27,12 @@ import {
 } from 'lucide-react-native';
 import { colors } from '../../theme/colors';
 import { api } from '../../config/api';
+import { AppHeader } from '../../components/AppHeader';
+import { ScrollToTopButton } from '../../components/ScrollToTopButton';
+import { ReleaseCancelled, releaseWithRestrictionCheck, weekdayText } from '../../utils/release';
 import { useRealtime } from '../../contexts/RealtimeContext';
 import { NewPreAuthorizationModal } from './NewPreAuthorizationModal';
-import { AppHeader } from '../../components/AppHeader';
 import { QrCamera } from './QrCamera';
-import { ScrollToTopButton } from '../../components/ScrollToTopButton';
 
 interface PreAuthorizationsScreenProps {
   onBack?: () => void;
@@ -50,6 +51,7 @@ interface PreAuthItem {
   expectedTimeEnd?: string;
   notes?: string;
   isUsed: boolean;
+  weekdays?: string | null;
   client: {
     name: string;
     whatsappNumber: string;
@@ -138,7 +140,7 @@ export const PreAuthorizationsScreen: React.FC<PreAuthorizationsScreenProps> = (
           onPress: async () => {
             try {
               setCheckingInId(item.id);
-              const res = await api.post(`/pre-authorizations/${item.id}/checkin`, {
+              const res = await releaseWithRestrictionCheck(`/pre-authorizations/${item.id}/checkin`, {
                 notes: 'Entrada liberada na portaria com base em pré-autorização',
               });
 
@@ -150,6 +152,7 @@ export const PreAuthorizationsScreen: React.FC<PreAuthorizationsScreenProps> = (
                 fetchPreAuthorizations();
               }
             } catch (err: any) {
+              if (err instanceof ReleaseCancelled) return;
               Alert.alert('Erro', err.response?.data?.error?.message || 'Falha ao liberar entrada.');
             } finally {
               setCheckingInId(null);
@@ -177,6 +180,7 @@ export const PreAuthorizationsScreen: React.FC<PreAuthorizationsScreenProps> = (
 
         {/* Nome do Visitante */}
         <Text style={styles.visitorName}>{item.visitorName}</Text>
+        {item.weekdays ? <Text style={styles.metaText}>Repete {weekdayText(item.weekdays)}</Text> : null}
 
         {/* Empresa ou Documento */}
         {(item.company || item.visitorDocument) && (

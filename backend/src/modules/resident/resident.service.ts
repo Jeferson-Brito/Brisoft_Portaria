@@ -5,12 +5,14 @@ import { whatsappService } from '../../services/whatsapp/whatsapp.service.js';
 import QRCode from 'qrcode';
 import { inviteUrl } from '../invites/invite.routes.js';
 import { formatWhatsAppNumber } from '../../utils/phone.util.js';
+import { normalizeWeekdays, weekdayLabels } from '../../utils/weekdays.js';
+import { readOrganizationAddress } from '../../utils/address.js';
 
 async function loadResident(userId: string) {
   const user = await prisma.user.findUnique({
     where: { id: userId },
     include: {
-      organization: { select: { id: true, name: true } },
+      organization: { select: { id: true, name: true, settings: true } },
       client: {
         include: {
           destinations: {
@@ -54,7 +56,11 @@ export class ResidentService {
 
     return {
       resident: { id: client.id, name: client.name },
-      organization: { id: user.organization.id, name: user.organization.name },
+      organization: {
+        id: user.organization.id,
+        name: user.organization.name,
+        address: readOrganizationAddress(user.organization.settings),
+      },
       units,
       pendingPackages,
     };
@@ -95,6 +101,8 @@ export class ResidentService {
     vehiclePlate?: string;
     notes?: string;
     destinationId?: string;
+    weekdays?: number[];
+    validUntil?: string;
   }) {
     const { user, client, units } = await loadResident(userId);
     const destinationId = input.destinationId || units.find((unit) => unit.isPrimary)?.id || units[0]?.id;
@@ -105,6 +113,24 @@ export class ResidentService {
     const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
     if (input.date < today) {
       throw new AppError('Não é possível agendar uma visita para uma data que já passou.', 400, 'PAST_DATE');
+    }
+
+    const weekdays = normalizeWeekdays(input.weekdays);
+    let endDate = input.date;
+    if (weekdays) {
+      if (!input.validUntil) {
+        throw new AppError('Informe até quando a visita recorrente vale.', 400, 'VALID_UNTIL_REQUIRED');
+      }
+      if (input.validUntil < input.date) {
+        throw new AppError('A validade não pode ser anterior ao primeiro dia.', 400, 'END_DATE_BEFORE_START');
+      }
+      const start = new Date(`${input.date}T12:00:00-03:00`);
+      const end = new Date(`${input.validUntil}T12:00:00-03:00`);
+      const days = Math.round((end.getTime() - start.getTime()) / 86400000);
+      if (days > 366) {
+        throw new AppError('A visita recorrente pode valer por no máximo um ano.', 400, 'RECURRENCE_TOO_LONG');
+      }
+      endDate = input.validUntil;
     }
 
     let phone = input.phone?.replace(/\D/g, '') || '';
@@ -126,7 +152,8 @@ export class ResidentService {
       phone,
       visitorType: input.reason || 'Visita',
       startDate: input.date,
-      endDate: input.date,
+      endDate,
+      weekdays,
       expectedTimeStart: input.entryTime,
       expectedTimeEnd: input.exitTime,
       notes: input.notes,
@@ -209,10 +236,19 @@ export class ResidentService {
 }
 
 async function sendVisitorInvite(organizationId: string, organizationName: string, visit: any, phone: string) {
+  const organization = await prisma.organization.findUnique({
+    where: { id: organizationId },
+    select: { settings: true },
+  });
+  const address = readOrganizationAddress(organization?.settings);
   const link = inviteUrl(visit.qrToken);
   const unit = `${visit.destination?.name || 'Unidade'}${visit.destination?.block ? ` · ${visit.destination.block}` : ''}`;
   const date = new Date(visit.startDate).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' });
-  const text = `Você foi convidado por *${visit.client?.name || 'um morador'}* para visitar:\n\n*${organizationName}*\n${unit}\n\nData: ${date}\nHorário: ${visit.expectedTimeStart || '00:00'} às ${visit.expectedTimeEnd || '23:59'}\nVisitante: ${visit.visitorName}\n\nApresente este QR Code na portaria.\n${link}`;
+  const until = new Date(visit.endDate).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+  const when = visit.weekdays
+    ? `Repete: ${weekdayLabels(visit.weekdays)}\nVálido até: ${until}`
+    : `Data: ${date}`;
+  const text = `Você foi convidado por *${visit.client?.name || 'um morador'}* para visitar:\n\n*${organizationName}*\n${unit}${address ? `\nEndereço: ${address}` : ''}\n\n${when}\nHorário: ${visit.expectedTimeStart || '00:00'} às ${visit.expectedTimeEnd || '23:59'}\nVisitante: ${visit.visitorName}\n\nApresente este QR Code na portaria.\n${link}`;
   const qr = await QRCode.toDataURL(visit.qrToken, { width: 480, margin: 1 });
   await whatsappService.sendImageMessage(organizationId, phone, qr, text);
 }

@@ -83,6 +83,10 @@ export class SubscriptionService {
       }
     }
 
+    if ((settings.paymentStatus as string) === 'PENDING') {
+      paymentStatus = 'EXPIRED';
+    }
+
     // Se estiver em TRIAL mas a data de término já passou
     if (paymentStatus === 'TRIAL' && now >= trialEndsAt.getTime()) {
       paymentStatus = 'EXPIRED';

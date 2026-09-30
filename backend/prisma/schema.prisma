@@ -32,6 +32,10 @@ model Organization {
   auditLogs          AuditLog[]
   systemSettings     SystemSetting[]
   packages           Package[]
+  recurringVisitors  RecurringVisitor[]
+  accessRestrictions AccessRestriction[]
+  amenities          Amenity[]
+  amenityBookings    AmenityBooking[]
 
   @@map("organizations")
 }
@@ -86,6 +90,8 @@ model Client {
   preAuthorizations  PreAuthorization[]
   packages           Package[]
   users              User[]
+  recurringVisitors  RecurringVisitor[]
+  amenityBookings    AmenityBooking[]
 
   @@index([organizationId])
   @@index([whatsappNumber])
@@ -112,6 +118,7 @@ model Destination {
   visitRequests     VisitRequest[]
   preAuthorizations PreAuthorization[]
   packages          Package[]
+  recurringVisitors RecurringVisitor[]
 
   @@index([organizationId])
   @@index([code])
@@ -256,6 +263,7 @@ model PreAuthorization {
   vehicleModel      String?
   vehiclePlate      String?
   qrToken           String?
+  weekdays          String?   // "2,4" = terça e quinta, no fuso de São Paulo. Vazio = convite de um dia.
   isUsed            Boolean   @default(false)
   cancelledAt       DateTime?
   createdAt         DateTime  @default(now())
@@ -390,4 +398,77 @@ model PhotoStorage {
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 
   @@map("photo_storage")
+}
+
+model RecurringVisitor {
+  id             String    @id @default(uuid())
+  organizationId String
+  clientId       String
+  destinationId  String
+  visitorName    String
+  phone          String?
+  weekdays       String
+  timeStart      String
+  timeEnd        String
+  validUntil     DateTime
+  qrToken        String?
+  cancelledAt    DateTime?
+  createdAt      DateTime  @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  client       Client       @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  destination  Destination  @relation(fields: [destinationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@map("recurring_visitors")
+}
+
+model AccessRestriction {
+  id             String   @id @default(uuid())
+  organizationId String
+  name           String
+  documentNumber String?
+  reason         String
+  active         Boolean  @default(true)
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@map("access_restrictions")
+}
+
+model Amenity {
+  id             String   @id @default(uuid())
+  organizationId String
+  name           String
+  kind           String   @default("LAZER")
+  active         Boolean  @default(true)
+  createdAt      DateTime @default(now())
+
+  organization Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  bookings     AmenityBooking[]
+
+  @@index([organizationId])
+  @@map("amenities")
+}
+
+model AmenityBooking {
+  id             String   @id @default(uuid())
+  organizationId String
+  amenityId      String
+  clientId       String
+  date           DateTime
+  startTime      String
+  endTime        String
+  status         String   @default("SCHEDULED")
+  notes          String?
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  amenity      Amenity      @relation(fields: [amenityId], references: [id], onDelete: Cascade)
+  client       Client       @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, date])
+  @@map("amenity_bookings")
 }

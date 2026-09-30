@@ -2,6 +2,7 @@ import { prisma } from '../../lib/prisma.js';
 import { AppError } from '../../core/errors/app-error.js';
 import { whatsappService } from '../../services/whatsapp/whatsapp.service.js';
 import { realtimeService } from '../../services/realtime/realtime.service.js';
+import { restrictionService } from '../restrictions/restriction.service.js';
 
 export interface CreateVisitRequestParams {
   organizationId: string;
@@ -278,9 +279,10 @@ export class VisitRequestService {
   }
 
   // Autorização manual de contingência (pelo porteiro, supervisor ou contato telefônico)
-  async manualAuthorize(id: string, organizationId: string, actorUserId: string, reason?: string) {
+  async manualAuthorize(id: string, organizationId: string, actorUserId: string, reason?: string, acknowledgeRestriction?: boolean) {
     const req = await prisma.visitRequest.findFirst({
       where: { id, organizationId },
+      include: { visitor: true },
     });
 
     if (!req) {
@@ -290,6 +292,16 @@ export class VisitRequestService {
     if (req.status !== 'PENDING') {
       throw new AppError('Apenas solicitações pendentes podem ser autorizadas.', 400, 'INVALID_STATUS');
     }
+
+    await restrictionService.assertReleaseAllowed({
+      organizationId,
+      actorUserId,
+      name: req.visitor?.name,
+      documentNumber: req.visitor?.documentNumber,
+      acknowledge: acknowledgeRestriction,
+      entity: 'VisitRequest',
+      entityId: id,
+    });
 
     const updated = await prisma.visitRequest.update({
       where: { id },
@@ -322,7 +334,7 @@ export class VisitRequestService {
   }
 
   // Registrar Entrada do Visitante no local (Seção 30 da especificação)
-  async registerEntry(id: string, organizationId: string, actorUserId: string, notes?: string) {
+  async registerEntry(id: string, organizationId: string, actorUserId: string, notes?: string, acknowledgeRestriction?: boolean) {
     const req = await prisma.visitRequest.findFirst({
       where: { id, organizationId },
       include: { visitor: true, destination: true, client: true },
@@ -339,6 +351,16 @@ export class VisitRequestService {
         'INVALID_STATUS'
       );
     }
+
+    await restrictionService.assertReleaseAllowed({
+      organizationId,
+      actorUserId,
+      name: req.visitor?.name,
+      documentNumber: req.visitor?.documentNumber,
+      acknowledge: acknowledgeRestriction,
+      entity: 'VisitRequest',
+      entityId: id,
+    });
 
     const updated = await prisma.visitRequest.update({
       where: { id },

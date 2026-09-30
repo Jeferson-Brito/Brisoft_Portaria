@@ -54,7 +54,7 @@ export class SuperAdminService {
       const isTrial = settings.paymentStatus === 'TRIAL' || (!settings.paymentStatus && now < trialEndsAt.getTime());
       
       const paymentStatus = settings.paymentStatus || (isTrial ? 'TRIAL' : (org.isActive ? 'ACTIVE' : 'SUSPENDED'));
-      const monthlyPrice = typeof settings.monthlyPrice === 'number' ? settings.monthlyPrice : 149.90;
+      const monthlyPrice = typeof settings.monthlyPrice === 'number' ? settings.monthlyPrice : 99.9;
       const plan = settings.plan || 'PRO';
 
       return {
@@ -62,6 +62,7 @@ export class SuperAdminService {
         plan,
         monthlyPrice,
         paymentStatus,
+        address: typeof settings.address === 'string' ? settings.address : '',
         trialEndsAt: trialEndsAt.toISOString(),
         isTrial,
         whatsappStatus: org.whatsappConnection?.status || 'DISCONNECTED',
@@ -107,7 +108,7 @@ export class SuperAdminService {
     return {
       ...org,
       plan: settings.plan || 'PRO',
-      monthlyPrice: typeof settings.monthlyPrice === 'number' ? settings.monthlyPrice : 149.90,
+      monthlyPrice: typeof settings.monthlyPrice === 'number' ? settings.monthlyPrice : 99.9,
       paymentStatus,
       trialEndsAt: trialEndsAt.toISOString(),
       isTrial,
@@ -127,6 +128,7 @@ export class SuperAdminService {
     monthlyPrice?: number;
     trialDays?: number;
     paymentStatus?: string;
+    address?: string;
   }) {
     const { AuthService } = await import('../auth/auth.service.js');
     const authService = new AuthService();
@@ -144,10 +146,11 @@ export class SuperAdminService {
     const trialEndsAt = new Date(Date.now() + trialDays * 24 * 60 * 60 * 1000);
     const initialSettings = {
       plan: data.plan || 'PRO',
-      monthlyPrice: data.monthlyPrice ?? 149.90,
+      monthlyPrice: data.monthlyPrice ?? 99.9,
       trialDays,
       trialEndsAt: trialEndsAt.toISOString(),
       paymentStatus: data.paymentStatus || 'TRIAL',
+      ...(data.address ? { address: data.address.trim() } : {}),
     };
 
     await prisma.organization.update({
@@ -191,6 +194,14 @@ export class SuperAdminService {
       ...(data.trialEndsAt ? { trialEndsAt: data.trialEndsAt } : {}),
     };
 
+    if (updatedSettings.paymentStatus === 'TRIAL') {
+      const end = new Date(updatedSettings.trialEndsAt || 0).getTime();
+      if (!updatedSettings.trialEndsAt || end <= Date.now()) {
+        const days = updatedSettings.trialDays || 7;
+        updatedSettings.trialEndsAt = new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString();
+      }
+    }
+
     const updated = await prisma.organization.update({
       where: { id: orgId },
       data: {
@@ -198,6 +209,7 @@ export class SuperAdminService {
         ...(data.document !== undefined ? { document: data.document } : {}),
         ...(data.slug ? { slug: data.slug } : {}),
         ...(typeof data.isActive === 'boolean' ? { isActive: data.isActive } : {}),
+        ...(data.paymentStatus === 'TRIAL' || data.paymentStatus === 'ACTIVE' ? { isActive: true } : {}),
         settings: JSON.stringify(updatedSettings),
       },
     });
@@ -506,7 +518,7 @@ export class SuperAdminService {
       const trialEndsAt = settings.trialEndsAt ? new Date(settings.trialEndsAt) : new Date(createdTime + trialDurationMs);
       const isTrial = settings.paymentStatus === 'TRIAL' || (!settings.paymentStatus && now < trialEndsAt.getTime());
       const paymentStatus = settings.paymentStatus || (isTrial ? 'TRIAL' : (org.isActive ? 'ACTIVE' : 'SUSPENDED'));
-      const monthlyPrice = typeof settings.monthlyPrice === 'number' ? settings.monthlyPrice : 149.90;
+      const monthlyPrice = typeof settings.monthlyPrice === 'number' ? settings.monthlyPrice : 99.9;
 
       if (!org.isActive || paymentStatus === 'SUSPENDED') {
         suspendedCount++;
@@ -554,7 +566,7 @@ export class SuperAdminService {
         createdAt: org.createdAt,
         isActive: org.isActive,
         plan: settings.plan || 'PRO',
-        monthlyPrice: settings.monthlyPrice ?? 149.90,
+        monthlyPrice: settings.monthlyPrice ?? 99.9,
         paymentStatus: settings.paymentStatus || 'TRIAL',
         admin: org.users[0] || null,
         usersCount: org._count.users,
