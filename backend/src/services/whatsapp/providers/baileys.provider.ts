@@ -655,19 +655,15 @@ export class BaileysProvider implements IWhatsAppProvider {
       operador: data.conciergeName,
     });
 
+    const textResult = await this.sendMessage(jid, text);
+
     if (data.photoUrl) {
-      console.log(`🚀 [Baileys] Enviando mensagem de autorização COM FOTO para ${data.clientName} (JID: ${jid})...`);
-      try {
-        const imgResult = await this.sendImageMessage(jid, data.photoUrl, text);
-        console.log(`✅ [Baileys] Mensagem com foto enviada com sucesso! ID: ${imgResult.messageId}`);
-        return imgResult;
-      } catch (imgErr: any) {
-        console.warn(`⚠️ [Baileys] Falha ao enviar foto da visita (${imgErr?.message || imgErr}). Enviando como texto...`);
-      }
+      this.sendImageMessage(jid, data.photoUrl, 'Foto do visitante').catch((imgErr: any) => {
+        console.warn(`⚠️ [Baileys] Falha ao enviar foto da visita (${imgErr?.message || imgErr}).`);
+      });
     }
 
-    console.log(`🚀 [Baileys] Enviando mensagem de autorização para ${data.clientName} (JID: ${jid})...`);
-    return await this.sendMessage(jid, text);
+    return textResult;
   }
 
   async sendReminder(data: ReminderMessageData): Promise<{ messageId: string }> {

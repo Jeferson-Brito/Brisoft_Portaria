@@ -268,8 +268,29 @@ export class WhatsAppService {
       },
     });
 
-    // Registra evento imutável na timeline (Seção 21)
-    await prisma.visitEvent.create({
+    realtimeService.notifyVisitRequestUpdated(organizationId, {
+      id: pendingRequest.id,
+      code: pendingRequest.code,
+      status: newStatus,
+      visitorName: pendingRequest.visitor.name,
+      clientName: client.name,
+      destinationName: pendingRequest.destination.name,
+      answeredAt: updated.answeredAt,
+    });
+
+    realtimeService.notifyAlert(organizationId, {
+      title: isAuthorize ? 'Entrada Autorizada!' : 'Entrada Recusada!',
+      message: isAuthorize
+        ? `O morador ${client.name} autorizou a entrada de ${pendingRequest.visitor.name} (${pendingRequest.destination.name}).`
+        : `O morador ${client.name} RECUSOU a entrada de ${pendingRequest.visitor.name} (${pendingRequest.destination.name}).`,
+      type: isAuthorize ? 'AUTHORIZED' : 'DENIED',
+      visitRequestId: pendingRequest.id,
+      visitorName: pendingRequest.visitor.name,
+      clientName: client.name,
+      destinationName: pendingRequest.destination.name,
+    });
+
+    prisma.visitEvent.create({
       data: {
         visitRequestId: pendingRequest.id,
         eventType: newStatus,
@@ -284,30 +305,8 @@ export class WhatsAppService {
           timestamp: event.timestamp,
         }),
       },
-    });
-
-    // Emite atualização instantânea via RealtimeService para a portaria
-    realtimeService.notifyVisitRequestUpdated(organizationId, {
-      id: pendingRequest.id,
-      code: pendingRequest.code,
-      status: newStatus,
-      visitorName: pendingRequest.visitor.name,
-      clientName: client.name,
-      destinationName: pendingRequest.destination.name,
-      answeredAt: updated.answeredAt,
-    });
-
-    // Emite alerta sonoro/visual de alta prioridade para os porteiros
-    realtimeService.notifyAlert(organizationId, {
-      title: isAuthorize ? 'Entrada Autorizada!' : 'Entrada Recusada!',
-      message: isAuthorize
-        ? `O morador ${client.name} autorizou a entrada de ${pendingRequest.visitor.name} (${pendingRequest.destination.name}).`
-        : `O morador ${client.name} RECUSOU a entrada de ${pendingRequest.visitor.name} (${pendingRequest.destination.name}).`,
-      type: isAuthorize ? 'AUTHORIZED' : 'DENIED',
-      visitRequestId: pendingRequest.id,
-      visitorName: pendingRequest.visitor.name,
-      clientName: client.name,
-      destinationName: pendingRequest.destination.name,
+    }).catch((err) => {
+      console.warn('Erro ao gravar evento da resposta do WhatsApp:', err);
     });
 
     console.log(

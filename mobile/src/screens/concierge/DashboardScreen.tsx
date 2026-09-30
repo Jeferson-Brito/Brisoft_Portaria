@@ -251,11 +251,11 @@ export const DashboardScreen: React.FC = () => {
 
   const isFetchingRef = useRef(false);
 
-  const fetchSummaryAndRequests = useCallback(async () => {
+  const fetchSummaryAndRequests = useCallback(async (silent = false) => {
     if (isFetchingRef.current) return;
     try {
       isFetchingRef.current = true;
-      setIsLoadingRequests(true);
+      if (!silent) setIsLoadingRequests(true);
       const [summaryRes, pkgsPendingRes, pkgsHistoryRes, historyRes] = await Promise.allSettled([
         api.get('/visit-requests/summary'),
         api.get('/packages/pending'),
@@ -316,13 +316,16 @@ export const DashboardScreen: React.FC = () => {
     fetchSummaryAndRequests();
     fetchOrgProfile();
 
-    const unsubCreated = addListener('visit_request:created', fetchSummaryAndRequests);
-    const unsubUpdated = addListener('visit_request:updated', fetchSummaryAndRequests);
-    const unsubPkgCreated = addListener('package:created', fetchSummaryAndRequests);
-    const unsubPkgPicked = addListener('package:picked_up', fetchSummaryAndRequests);
+    const refreshLive = () => {
+      fetchSummaryAndRequests(true);
+    };
+    const unsubCreated = addListener('visit_request:created', refreshLive);
+    const unsubUpdated = addListener('visit_request:updated', refreshLive);
+    const unsubPkgCreated = addListener('package:created', refreshLive);
+    const unsubPkgPicked = addListener('package:picked_up', refreshLive);
     const unsubAlert = addListener('notification:alert', (alert: RealtimeAlert) => {
       setNotifications((prev) => [alert, ...prev]);
-      fetchSummaryAndRequests();
+      refreshLive();
     });
 
     // Desbloqueio e sincronização em tempo real quando o webhook do Stripe ou SuperAdmin atualizar
@@ -337,7 +340,7 @@ export const DashboardScreen: React.FC = () => {
       );
     });
 
-    const interval = setInterval(fetchSummaryAndRequests, 15000);
+    const interval = setInterval(() => fetchSummaryAndRequests(true), 15000);
 
     return () => {
       unsubCreated();

@@ -56,7 +56,7 @@ export class VisitRequestService {
     }
 
     // Validações em paralelo com Promise.all para máxima performance de resposta
-    const [client, destination, visitor, reqCount] = await Promise.all([
+    const [client, destination, visitor] = await Promise.all([
       prisma.client.findFirst({
         where: { id: data.clientId, organizationId: data.organizationId, deletedAt: null },
       }),
@@ -65,9 +65,6 @@ export class VisitRequestService {
       }),
       prisma.visitor.findFirst({
         where: { id: data.visitorId, organizationId: data.organizationId },
-      }),
-      prisma.visitRequest.count({
-        where: { organizationId: data.organizationId },
       }),
     ]);
 
@@ -82,8 +79,7 @@ export class VisitRequestService {
     }
 
     const year = new Date().getFullYear();
-    const seq = String(reqCount + 1).padStart(6, '0');
-    const code = `REQ-${year}-${seq}`;
+    const code = `REQ-${year}-${Date.now().toString(36).toUpperCase()}`;
 
     const visitRequest = await prisma.visitRequest.create({
       data: {
@@ -108,8 +104,9 @@ export class VisitRequestService {
       },
     });
 
-    // Registra evento 1: Criação da solicitação na Timeline
-    await prisma.visitEvent.create({
+    realtimeService.notifyVisitRequestCreated(data.organizationId, visitRequest);
+
+    prisma.visitEvent.create({
       data: {
         visitRequestId: visitRequest.id,
         eventType: 'CREATED',
@@ -123,15 +120,13 @@ export class VisitRequestService {
           reason: data.visitReason,
         }),
       },
+    }).catch((err) => {
+      console.warn('Erro ao gravar evento da solicitação:', err);
     });
 
-    // Dispara mensagem de WhatsApp para o morador de forma desacoplada (Seção 20)
     whatsappService.dispatchApprovalNotification(visitRequest.id, data.organizationId).catch((err) => {
       console.warn('Erro ao despachar notificação WhatsApp:', err);
     });
-
-    // Notifica instantaneamente a portaria via WebSocket em tempo real
-    realtimeService.notifyVisitRequestCreated(data.organizationId, visitRequest);
 
     return visitRequest;
   }

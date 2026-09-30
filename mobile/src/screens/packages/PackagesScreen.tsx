@@ -131,7 +131,7 @@ export const PackagesScreen: React.FC<PackagesScreenProps> = ({ onBack }) => {
         mediaTypes: ['images'],
         allowsEditing: true,
         aspect: [4, 3],
-        quality: 0.6,
+        quality: 0.4,
         base64: true,
       });
 

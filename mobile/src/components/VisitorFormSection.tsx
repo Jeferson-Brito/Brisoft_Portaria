@@ -73,7 +73,7 @@ export const VisitorFormSection: React.FC<VisitorFormSectionProps> = ({ data, on
         mediaTypes: ['images'],
         allowsEditing: true,
         aspect: [1, 1],
-        quality: 0.7,
+        quality: 0.35,
         base64: true,
       });
 
@@ -105,7 +105,7 @@ export const VisitorFormSection: React.FC<VisitorFormSectionProps> = ({ data, on
         mediaTypes: ['images'],
         allowsEditing: true,
         aspect: [1, 1],
-        quality: 0.7,
+        quality: 0.35,
         base64: true,
       });
 
