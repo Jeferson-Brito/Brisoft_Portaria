@@ -47,7 +47,7 @@ model User {
   passwordHash   String
   role           String    @default("CONCIERGE") // "ADMIN" | "SUPERVISOR" | "CONCIERGE"
   phone          String?
-  clientId       String?   @unique
+  clientId       String?
   isActive       Boolean   @default(true)
   lastLoginAt    DateTime?
   createdAt      DateTime  @default(now())
@@ -85,7 +85,7 @@ model Client {
   visitRequests      VisitRequest[]
   preAuthorizations  PreAuthorization[]
   packages           Package[]
-  user               User?
+  users              User[]
 
   @@index([organizationId])
   @@index([whatsappNumber])
