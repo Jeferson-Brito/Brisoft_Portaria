@@ -371,3 +371,15 @@ model Package {
   @@index([pickupCode])
   @@map("packages")
 }
+
+// Fotos gravadas fora do Prisma (SQL cru). Sem este model o db push
+// tenta apagar a tabela no deploy, mesmo com fotos dentro.
+model PhotoStorage {
+  id        String   @id
+  fileName  String   @map("file_name")
+  mimeType  String   @map("mime_type")
+  data      Bytes
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@map("photo_storage")
+}
