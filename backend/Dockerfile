@@ -3,7 +3,8 @@
 # entao o install usa npm install em vez de npm ci.
 FROM node:20-alpine AS builder
 
-RUN apk add --no-cache openssl libc6-compat
+# git e necessario: @whiskeysockets/baileys baixa o libsignal via git+https
+RUN apk add --no-cache openssl libc6-compat git
 
 WORKDIR /app
 
