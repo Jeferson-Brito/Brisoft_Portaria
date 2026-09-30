@@ -65,16 +65,11 @@ export class PreAuthorizationService {
       throw new AppError('Destino/unidade não encontrado.', 404, 'DESTINATION_NOT_FOUND');
     }
 
-    const start = new Date(data.startDate);
-    const end = new Date(data.endDate);
+    const start = parseCalendarDate(data.startDate, false);
+    const end = parseCalendarDate(data.endDate, true);
 
     if (isNaN(start.getTime()) || isNaN(end.getTime())) {
       throw new AppError('Datas de início e término inválidas.', 400, 'INVALID_DATES');
-    }
-
-    // Se vier YYYY-MM-DD sem hora, expande endDate para o final do dia
-    if (data.endDate.length <= 10) {
-      end.setUTCHours(23, 59, 59, 999);
     }
 
     if (end < start) {
@@ -395,3 +390,16 @@ export class PreAuthorizationService {
 }
 
 export const preAuthorizationService = new PreAuthorizationService();
+
+function parseCalendarDate(value: string, endOfDay: boolean) {
+  const match = value.trim().match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!match) return new Date(value);
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const iso = `${match[1]}-${match[2]}-${match[3]}T${endOfDay ? '23:59:59.999' : '00:00:00.000'}-03:00`;
+  const date = new Date(iso);
+  if (date.getUTCFullYear() < year - 1) return date;
+  if (month < 1 || month > 12 || day < 1 || day > 31) return new Date(NaN);
+  return date;
+}

@@ -25,6 +25,7 @@ export async function invitePageRoutes(app: FastifyInstance) {
     const item = await prisma.preAuthorization.findFirst({
       where: { qrToken: token.trim().toUpperCase() },
       include: {
+        client: { select: { name: true } },
         organization: { select: { name: true } },
         destination: { select: { name: true, block: true } },
       },
@@ -45,6 +46,7 @@ export async function invitePageRoutes(app: FastifyInstance) {
     const body = `
       <p class="place">${escapeHtml(item.organization.name)}</p>
       <p class="unit">${escapeHtml(unit)}</p>
+      <p>Convidado por <strong>${escapeHtml(item.client.name)}</strong></p>
       <p class="who">${escapeHtml(item.visitorName)}</p>
       <p>Data: ${formatDate(item.startDate)}</p>
       <p>Horário: ${escapeHtml(item.expectedTimeStart || '00:00')} às ${escapeHtml(item.expectedTimeEnd || '23:59')}</p>

@@ -12,6 +12,7 @@ import {
   StatusBar,
   BackHandler,
   Share,
+  Switch,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Bell, CalendarCheck, Home, Package, UserRound } from 'lucide-react-native';
@@ -50,9 +51,7 @@ const PACKAGE_STATUS: Record<string, string> = {
 function visitStatus(visit: Visit) {
   if (visit.cancelledAt) return 'Cancelada';
   if (visit.isUsed) return 'Utilizada';
-  const end = new Date(visit.startDate);
-  end.setHours(23, 59, 59, 999);
-  if (end.getTime() < Date.now()) return 'Encerrada';
+  if (saoPauloDay(visit.startDate) < todayKey()) return 'Encerrada';
   return 'Agendada';
 }
 
@@ -63,9 +62,36 @@ function statusTone(status: string) {
 }
 
 function sameDay(value: string) {
-  const date = new Date(value);
-  const now = new Date();
-  return date.getFullYear() === now.getFullYear() && date.getMonth() === now.getMonth() && date.getDate() === now.getDate();
+  return saoPauloDay(value) === todayKey();
+}
+
+function saoPauloDay(value: string) {
+  return new Date(value).toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
+}
+
+function todayKey() {
+  return new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
+}
+
+function maskDate(value: string) {
+  const digits = value.replace(/\D/g, '').slice(0, 8);
+  if (digits.length <= 2) return digits;
+  if (digits.length <= 4) return `${digits.slice(0, 2)}-${digits.slice(2)}`;
+  return `${digits.slice(0, 2)}-${digits.slice(2, 4)}-${digits.slice(4)}`;
+}
+
+function maskPhone(value: string) {
+  const digits = value.replace(/\D/g, '').replace(/^55/, '').slice(0, 11);
+  if (digits.length <= 2) return digits.length ? `(${digits}` : '';
+  if (digits.length <= 6) return `(${digits.slice(0, 2)}) ${digits.slice(2)}`;
+  if (digits.length <= 10) return `(${digits.slice(0, 2)}) ${digits.slice(2, 6)}-${digits.slice(6)}`;
+  return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
+}
+
+function toWhatsappPhone(value: string) {
+  const digits = value.replace(/\D/g, '');
+  if (!digits) return '';
+  return digits.startsWith('55') ? digits : `55${digits}`;
 }
 
 function todayBR() {
@@ -87,7 +113,7 @@ function toIsoDate(value: string) {
 }
 
 function formatDay(value: string) {
-  return new Date(value).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' });
+  return new Date(value).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: 'short' });
 }
 
 export const ResidentArea: React.FC = () => {
@@ -102,6 +128,7 @@ export const ResidentArea: React.FC = () => {
   const [selectedPackage, setSelectedPackage] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [hasVehicle, setHasVehicle] = useState(false);
   const [form, setForm] = useState({
     visitorName: '',
     phone: '',
@@ -174,9 +201,26 @@ export const ResidentArea: React.FC = () => {
       Alert.alert('Data inválida', 'Use o formato DD-MM-AAAA, por exemplo 10-10-2026.');
       return;
     }
+    if (isoDate < todayKey()) {
+      Alert.alert('Data inválida', 'Não é possível convidar alguém para uma data que já passou.');
+      return;
+    }
+    const phoneDigits = form.phone.replace(/\D/g, '');
+    if (phoneDigits.length < 10) {
+      Alert.alert('Telefone inválido', 'Informe o celular com DDD para enviar o convite no WhatsApp.');
+      return;
+    }
     try {
       setSaving(true);
-      await api.post('/me/visits', { ...form, date: isoDate });
+      await api.post('/me/visits', {
+        ...form,
+        date: isoDate,
+        phone: toWhatsappPhone(form.phone),
+        document: undefined,
+        company: undefined,
+        vehicleModel: hasVehicle ? form.vehicleModel : '',
+        vehiclePlate: hasVehicle ? form.vehiclePlate : '',
+      });
       setForm({ ...form, visitorName: '', phone: '', document: '', company: '', vehicleModel: '', vehiclePlate: '', notes: '' });
       setTab('visits');
       await load();
@@ -263,17 +307,28 @@ export const ResidentArea: React.FC = () => {
           {tab === 'new' && (
             <View style={styles.formCard}>
               <Field label="Nome do visitante" value={form.visitorName} onChange={(visitorName) => setForm({ ...form, visitorName })} />
-              <Field label="Telefone" value={form.phone} onChange={(phone) => setForm({ ...form, phone })} />
-              <Field label="Documento" value={form.document} onChange={(document) => setForm({ ...form, document })} />
-              <Field label="Empresa" value={form.company} onChange={(company) => setForm({ ...form, company })} />
-              <Field label="Data (DD-MM-AAAA)" value={form.date} onChange={(date) => setForm({ ...form, date })} />
+              <Field label="WhatsApp" value={form.phone} onChange={(phone) => setForm({ ...form, phone: maskPhone(phone) })} keyboard="phone-pad" />
+              <Field label="Data" value={form.date} onChange={(date) => setForm({ ...form, date: maskDate(date) })} keyboard="number-pad" />
               <View style={styles.timeRow}>
                 <View style={{ flex: 1 }}><Field label="Entrada" value={form.entryTime} onChange={(entryTime) => setForm({ ...form, entryTime })} /></View>
                 <View style={{ flex: 1 }}><Field label="Saída" value={form.exitTime} onChange={(exitTime) => setForm({ ...form, exitTime })} /></View>
               </View>
-              <Field label="Veículo" value={form.vehicleModel} onChange={(vehicleModel) => setForm({ ...form, vehicleModel })} />
-              <Field label="Placa" value={form.vehiclePlate} onChange={(vehiclePlate) => setForm({ ...form, vehiclePlate })} />
               <Field label="Observação" value={form.notes} onChange={(notes) => setForm({ ...form, notes })} />
+              <View style={styles.switchRow}>
+                <Text style={styles.switchLabel}>Visitante de veículo</Text>
+                <Switch
+                  value={hasVehicle}
+                  onValueChange={setHasVehicle}
+                  trackColor={{ false: '#E2E8F0', true: '#23734C' }}
+                  thumbColor="#FFFFFF"
+                />
+              </View>
+              {hasVehicle ? (
+                <>
+                  <Field label="Veículo" value={form.vehicleModel} onChange={(vehicleModel) => setForm({ ...form, vehicleModel })} />
+                  <Field label="Placa" value={form.vehiclePlate} onChange={(vehiclePlate) => setForm({ ...form, vehiclePlate: vehiclePlate.toUpperCase() })} autoCapitalize="characters" />
+                </>
+              ) : null}
               <TouchableOpacity style={styles.primary} onPress={createVisit} disabled={saving} activeOpacity={0.85}>
                 {saving ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.primaryText}>Confirmar visita</Text>}
               </TouchableOpacity>
@@ -309,7 +364,7 @@ export const ResidentArea: React.FC = () => {
                 <Text style={styles.cardTitle}>{selected.visitorName}</Text>
                 <StatusPill label={visitStatus(selected)} />
               </View>
-              <Detail label="Data" value={new Date(selected.startDate).toLocaleDateString('pt-BR')} />
+              <Detail label="Data" value={new Date(selected.startDate).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' })} />
               <Detail label="Horário" value={`${selected.expectedTimeStart || '--:--'} até ${selected.expectedTimeEnd || '--:--'}`} />
               {selected.destination ? <Detail label="Unidade" value={selected.destination.name} /> : null}
               {selected.phone ? <Detail label="Telefone" value={selected.phone} /> : null}
@@ -319,11 +374,11 @@ export const ResidentArea: React.FC = () => {
                 <View style={styles.qrBox}>
                   <QRCode value={selected.qrToken} size={180} />
                   <Text style={styles.code}>{selected.qrToken}</Text>
-                  <Text style={styles.cardMeta}>Válido em {new Date(selected.startDate).toLocaleDateString('pt-BR')} das {selected.expectedTimeStart || '00:00'} às {selected.expectedTimeEnd || '23:59'}</Text>
+                  <Text style={styles.cardMeta}>Válido em {new Date(selected.startDate).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' })} das {selected.expectedTimeStart || '00:00'} às {selected.expectedTimeEnd || '23:59'}</Text>
                   <TouchableOpacity
                     style={styles.primary}
                     onPress={() => Share.share({
-                      message: `Você foi convidado para visitar:\n\n${context?.organization?.name || ''}\n${unitLabel}\n\nData: ${new Date(selected.startDate).toLocaleDateString('pt-BR')}\nHorário: ${selected.expectedTimeStart || '00:00'} às ${selected.expectedTimeEnd || '23:59'}\n\nApresente este QR Code na portaria.\nhttps://portaria.brisoft.com.br/convite/${selected.qrToken}`,
+                      message: `Você foi convidado por ${residentName} para visitar:\n\n${context?.organization?.name || ''}\n${unitLabel}\n\nData: ${new Date(selected.startDate).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' })}\nHorário: ${selected.expectedTimeStart || '00:00'} às ${selected.expectedTimeEnd || '23:59'}\n\nApresente este QR Code na portaria.\nhttps://portaria.brisoft.com.br/convite/${selected.qrToken}`,
                     })}
                   >
                     <Text style={styles.primaryText}>Compartilhar convite</Text>
@@ -455,10 +510,17 @@ const Detail: React.FC<{ label: string; value: string }> = ({ label, value }) =>
   </View>
 );
 
-const Field: React.FC<{ label: string; value: string; onChange: (value: string) => void }> = ({ label, value, onChange }) => (
+const Field: React.FC<{ label: string; value: string; onChange: (value: string) => void; keyboard?: 'default' | 'phone-pad' | 'number-pad'; autoCapitalize?: 'none' | 'characters' }> = ({ label, value, onChange, keyboard = 'default', autoCapitalize = 'none' }) => (
   <View style={{ marginBottom: 12 }}>
     <Text style={styles.fieldLabel}>{label}</Text>
-    <TextInput value={value} onChangeText={onChange} style={styles.input} placeholderTextColor={colors.textMuted} />
+    <TextInput
+      value={value}
+      onChangeText={onChange}
+      style={styles.input}
+      placeholderTextColor={colors.textMuted}
+      keyboardType={keyboard}
+      autoCapitalize={autoCapitalize}
+    />
   </View>
 );
 
@@ -486,6 +548,8 @@ const styles = StyleSheet.create({
   primaryText: { color: '#FFFFFF', fontWeight: '700', fontSize: 15 },
   formCard: { backgroundColor: colors.surface, borderRadius: 16, padding: 16, borderWidth: 1, borderColor: colors.border },
   timeRow: { flexDirection: 'row', gap: 10 },
+  switchRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, marginTop: 4 },
+  switchLabel: { color: colors.textPrimary, fontWeight: '700', fontSize: 15 },
   fieldLabel: { color: colors.textSecondary, fontSize: 12, marginBottom: 4, fontWeight: '600' },
   input: { backgroundColor: colors.background, borderWidth: 1, borderColor: colors.border, borderRadius: 10, paddingHorizontal: 12, minHeight: 46, color: colors.textPrimary },
   detailCard: { backgroundColor: colors.surface, borderRadius: 16, padding: 16, borderWidth: 1, borderColor: colors.border },
