@@ -171,6 +171,11 @@ const MainNavigator: React.FC = () => {
     return <SuperAdminDashboardScreen />;
   }
 
+  if (user.role === 'CLIENT') {
+    const { ResidentArea } = require('./src/screens/resident/ResidentArea');
+    return <ResidentArea />;
+  }
+
   const { DashboardScreen } = require('./src/screens/concierge/DashboardScreen');
   return <DashboardScreen />;
 };

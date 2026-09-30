@@ -11,6 +11,7 @@ export interface CreateUserParams {
   role: Role;
   phone?: string;
   creatorRole: Role;
+  clientId?: string;
 }
 
 export interface ListUsersParams {
@@ -20,7 +21,7 @@ export interface ListUsersParams {
 }
 
 export class UserService {
-  async create({ organizationId, name, email, password, role, phone, creatorRole }: CreateUserParams) {
+  async create({ organizationId, name, email, password, role, phone, creatorRole, clientId }: CreateUserParams) {
     // Validação de hierarquia RBAC
     if (creatorRole === 'CONCIERGE') {
       throw new AppError('Porteiros não têm permissão para criar usuários.', 403, 'FORBIDDEN');
@@ -66,6 +67,25 @@ export class UserService {
       }
     }
 
+    if (role === 'CLIENT') {
+      if (creatorRole !== 'ADMIN' && creatorRole !== 'SUPER_ADMIN') {
+        throw new AppError('Apenas o administrador pode criar o acesso do morador.', 403, 'FORBIDDEN');
+      }
+      if (!clientId) {
+        throw new AppError('Selecione o morador que vai usar este acesso.', 400, 'CLIENT_REQUIRED');
+      }
+      const client = await prisma.client.findFirst({
+        where: { id: clientId, organizationId, deletedAt: null },
+      });
+      if (!client) {
+        throw new AppError('Morador não encontrado nesta empresa.', 404, 'CLIENT_NOT_FOUND');
+      }
+      const existingLink = await prisma.user.findFirst({ where: { clientId, deletedAt: null } });
+      if (existingLink) {
+        throw new AppError('Este morador já possui um acesso ao aplicativo.', 409, 'CLIENT_ALREADY_LINKED');
+      }
+    }
+
     const passwordHash = await bcrypt.hash(password, 12);
 
     const user = await prisma.user.create({
@@ -76,6 +96,7 @@ export class UserService {
         passwordHash,
         role,
         phone,
+        clientId: role === 'CLIENT' ? clientId : null,
       },
       select: {
         id: true,

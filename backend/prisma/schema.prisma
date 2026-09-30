@@ -47,6 +47,7 @@ model User {
   passwordHash   String
   role           String    @default("CONCIERGE") // "ADMIN" | "SUPERVISOR" | "CONCIERGE"
   phone          String?
+  clientId       String?   @unique
   isActive       Boolean   @default(true)
   lastLoginAt    DateTime?
   createdAt      DateTime  @default(now())
@@ -54,6 +55,7 @@ model User {
   deletedAt      DateTime?
 
   organization   Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  client         Client?        @relation(fields: [clientId], references: [id], onDelete: SetNull)
   visitRequests  VisitRequest[] @relation("ConciergeVisitRequests")
   auditLogs      AuditLog[]
 
@@ -83,6 +85,7 @@ model Client {
   visitRequests      VisitRequest[]
   preAuthorizations  PreAuthorization[]
   packages           Package[]
+  user               User?
 
   @@index([organizationId])
   @@index([whatsappNumber])
@@ -250,7 +253,10 @@ model PreAuthorization {
   expectedTimeStart String?   // "14:00"
   expectedTimeEnd   String?   // "18:00"
   notes             String?
+  vehicleModel      String?
+  vehiclePlate      String?
   isUsed            Boolean   @default(false)
+  cancelledAt       DateTime?
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
 

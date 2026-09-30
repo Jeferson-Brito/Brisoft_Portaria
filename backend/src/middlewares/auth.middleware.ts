@@ -8,6 +8,7 @@ export interface TokenPayload {
   role: string;
   email: string;
   name: string;
+  clientId?: string | null;
 }
 
 declare module '@fastify/jwt' {
@@ -47,6 +48,7 @@ export async function authMiddleware(request: FastifyRequest, reply: FastifyRepl
         deletedAt: true,
         role: true,
         organizationId: true,
+        clientId: true,
         email: true,
         name: true,
         organization: { select: { isActive: true } },
@@ -68,9 +70,27 @@ export async function authMiddleware(request: FastifyRequest, reply: FastifyRepl
       role: user.role,
       email: user.email,
       name: user.name,
+      clientId: user.clientId,
     };
     userCache.set(user.id, { payload, expiresAt: Date.now() + 20000 });
     request.user = payload;
+
+    if (user.role === 'CLIENT') {
+      const path = request.url.split('?')[0];
+      const allowed =
+        path === '/api/v1/auth/me' ||
+        path === '/api/v1/users/me' ||
+        path.startsWith('/api/v1/me');
+      if (!allowed) {
+        return reply.status(403).send({
+          success: false,
+          error: {
+            code: 'FORBIDDEN',
+            message: 'Seu acesso é apenas à área do morador.',
+          },
+        });
+      }
+    }
   } catch (err: any) {
     if (err instanceof AppError) {
       return reply.status(err.statusCode).send({

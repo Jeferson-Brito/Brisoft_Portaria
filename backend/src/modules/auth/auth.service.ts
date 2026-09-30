@@ -140,6 +140,11 @@ export class AuthService {
       },
       include: {
         organization: true,
+        client: {
+          include: {
+            destinations: { include: { destination: true } },
+          },
+        },
       },
     });
 
@@ -192,6 +197,19 @@ export class AuthService {
         organizationId: user.organizationId,
         organizationName: user.organization.name,
         subscription: subscriptionInfo,
+        clientId: user.clientId,
+        resident: user.client
+          ? {
+              id: user.client.id,
+              name: user.client.name,
+              units: user.client.destinations.map((item) => ({
+                id: item.destination.id,
+                name: item.destination.name,
+                block: item.destination.block,
+                isPrimary: item.isPrimary,
+              })),
+            }
+          : null,
       },
     };
   }
@@ -210,6 +228,9 @@ export class AuthService {
             settings: true,
           },
         },
+        client: {
+          include: { destinations: { include: { destination: true } } },
+        },
       },
     });
 
@@ -225,6 +246,19 @@ export class AuthService {
       email: user.email,
       role: user.role,
       phone: user.phone,
+      clientId: user.clientId,
+      resident: user.client
+        ? {
+            id: user.client.id,
+            name: user.client.name,
+            units: user.client.destinations.map((item) => ({
+              id: item.destination.id,
+              name: item.destination.name,
+              block: item.destination.block,
+              isPrimary: item.isPrimary,
+            })),
+          }
+        : null,
       organization: {
         id: user.organization.id,
         name: user.organization.name,

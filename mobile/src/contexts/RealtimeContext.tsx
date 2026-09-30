@@ -81,7 +81,7 @@ export const RealtimeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   }, []);
 
   useEffect(() => {
-    if (!user?.organizationId || !token) {
+    if (!user?.organizationId || !token || user.role === 'CLIENT') {
       if (socketRef.current) {
         socketRef.current.disconnect();
         socketRef.current = null;

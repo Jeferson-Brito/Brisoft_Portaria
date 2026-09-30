@@ -16,9 +16,11 @@ export interface User {
   id: string;
   name: string;
   email: string;
-  role: 'SUPER_ADMIN' | 'ADMIN' | 'SUPERVISOR' | 'CONCIERGE';
+  role: 'SUPER_ADMIN' | 'ADMIN' | 'SUPERVISOR' | 'CONCIERGE' | 'CLIENT';
   organizationId: string;
   organizationName: string;
+  clientId?: string | null;
+  resident?: { id: string; name: string; units: Array<{ id: string; name: string; block?: string | null; isPrimary?: boolean }> } | null;
   subscription?: Subscription | null;
 }
 
@@ -140,14 +142,32 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Atualiza os dados de subscription do usuário logado
   const refreshSubscription = async () => {
-    try {
-      const response = await api.get('/auth/me');
-      const freshUser = response.data.data.user;
-      setUser(freshUser);
-      await AsyncStorage.setItem('@combate_portaria:user', JSON.stringify(freshUser));
-    } catch (err) {
-      console.warn('Não foi possível atualizar dados da assinatura.');
+    const response = await api.get('/auth/me');
+    const freshUser = response.data.data.user;
+    let nextUser: User | null = null;
+
+    setUser((current) => {
+      nextUser = {
+        ...(current || freshUser),
+        name: freshUser.name || current?.name,
+        email: freshUser.email || current?.email,
+        role: freshUser.role || current?.role,
+        organizationId: freshUser.organization?.id || current?.organizationId,
+        organizationName: freshUser.organization?.name || current?.organizationName,
+        clientId: freshUser.clientId ?? current?.clientId ?? null,
+        resident: freshUser.resident ?? current?.resident ?? null,
+        subscription: freshUser.subscription ?? current?.subscription ?? null,
+      };
+      return nextUser;
+    });
+
+    if (nextUser) {
+      const stored = JSON.stringify(nextUser);
+      await AsyncStorage.setItem('@brisoft_portaria:user', stored);
+      await AsyncStorage.setItem('@combate_portaria:user', stored);
     }
+
+    return nextUser?.subscription ?? null;
   };
 
   const signOut = async () => {

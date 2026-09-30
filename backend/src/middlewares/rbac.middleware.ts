@@ -1,7 +1,7 @@
 import { FastifyReply, FastifyRequest } from 'fastify';
 import { AppError } from '../core/errors/app-error.js';
 
-export type Role = 'SUPER_ADMIN' | 'ADMIN' | 'SUPERVISOR' | 'CONCIERGE';
+export type Role = 'SUPER_ADMIN' | 'ADMIN' | 'SUPERVISOR' | 'CONCIERGE' | 'CLIENT';
 
 export function requireRole(allowedRoles: Role[]) {
   return async (request: FastifyRequest, reply: FastifyReply) => {

@@ -15,6 +15,8 @@ export interface CreatePreAuthorizationParams {
   endDate: string;
   expectedTimeStart?: string; // "14:00"
   expectedTimeEnd?: string;   // "18:00"
+  vehicleModel?: string;
+  vehiclePlate?: string;
   notes?: string;
 }
 
@@ -93,6 +95,8 @@ export class PreAuthorizationService {
         expectedTimeStart: data.expectedTimeStart || null,
         expectedTimeEnd: data.expectedTimeEnd || null,
         notes: data.notes ? data.notes.trim() : null,
+        vehicleModel: data.vehicleModel ? data.vehicleModel.trim() : null,
+        vehiclePlate: data.vehiclePlate ? data.vehiclePlate.trim() : null,
         isUsed: false,
       },
       include: {
@@ -115,6 +119,7 @@ export class PreAuthorizationService {
     const whereClause: any = {
       organizationId,
       isUsed: false,
+      cancelledAt: null,
       startDate: { lte: endOfToday },
       endDate: { gte: startOfToday },
     };
@@ -344,8 +349,9 @@ export class PreAuthorizationService {
       throw new AppError('Não é possível cancelar uma pré-autorização já utilizada.', 400, 'ALREADY_USED');
     }
 
-    await prisma.preAuthorization.delete({
+    await prisma.preAuthorization.update({
       where: { id },
+      data: { cancelledAt: new Date() },
     });
 
     return { success: true, message: 'Pré-autorização cancelada com sucesso.' };

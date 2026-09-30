@@ -59,7 +59,9 @@ export const UsersManagementScreen: React.FC<UsersManagementScreenProps> = ({ on
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [phone, setPhone] = useState('');
-  const [role, setRole] = useState<'CONCIERGE' | 'SUPERVISOR' | 'ADMIN'>('CONCIERGE');
+  const [role, setRole] = useState<'CONCIERGE' | 'SUPERVISOR' | 'ADMIN' | 'CLIENT'>('CONCIERGE');
+  const [clientId, setClientId] = useState('');
+  const [clients, setClients] = useState<any[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Modal Editar Usuário
@@ -122,6 +124,7 @@ export const UsersManagementScreen: React.FC<UsersManagementScreenProps> = ({ on
         password: password.trim(),
         role: isSupervisor ? 'CONCIERGE' : role,
         phone: phone.trim() || undefined,
+        clientId: role === 'CLIENT' ? clientId : undefined,
       });
 
       if (res.data.success) {
@@ -537,7 +540,33 @@ export const UsersManagementScreen: React.FC<UsersManagementScreenProps> = ({ on
                         Admin
                       </Text>
                     </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.roleOption, role === 'CLIENT' && styles.roleOptionSelected]}
+                      onPress={async () => {
+                        setRole('CLIENT');
+                        if (clients.length === 0) {
+                          const res = await api.get('/clients');
+                          setClients(res.data.data?.clients || res.data.data || []);
+                        }
+                      }}
+                    >
+                      <Text style={[styles.roleOptionText, role === 'CLIENT' && styles.roleOptionTextSelected]}>
+                        Morador
+                      </Text>
+                    </TouchableOpacity>
                   </View>
+                </View>
+              )}
+
+              {role === 'CLIENT' && !isSupervisor && (
+                <View style={{ marginBottom: 12 }}>
+                  {clients.map((client) => (
+                    <TouchableOpacity key={client.id} onPress={() => setClientId(client.id)} style={{ paddingVertical: 8 }}>
+                      <Text style={{ color: clientId === client.id ? '#165337' : '#0F172A', fontWeight: clientId === client.id ? '700' : '400' }}>
+                        {client.name}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
                 </View>
               )}
 
