@@ -69,7 +69,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (storedToken && storedUser) {
           setToken(storedToken);
           setUser(JSON.parse(storedUser));
-          registerForPushNotificationsAsync();
+          setTimeout(() => {
+            registerForPushNotificationsAsync();
+          }, 2500);
         }
       } catch (err) {
         console.error('Erro ao restaurar sessão local:', err);
@@ -99,8 +101,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       await AsyncStorage.setItem('@brisoft_portaria:refreshToken', refreshToken);
       await AsyncStorage.setItem('@brisoft_portaria:user', JSON.stringify(loggedUser));
 
-      // Registra o aparelho imediatamente para push notifications
-      registerForPushNotificationsAsync();
+      setTimeout(() => {
+        registerForPushNotificationsAsync();
+      }, 2500);
     } catch (err: any) {
       const errorMsg =
         err.response?.data?.error?.message ||

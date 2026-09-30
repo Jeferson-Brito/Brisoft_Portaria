@@ -2,7 +2,7 @@
   "expo": {
     "name": "Brisoft Portaria",
     "slug": "combate-portaria",
-    "version": "1.0.3",
+    "version": "1.0.4",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
@@ -19,7 +19,7 @@
       }
     },
     "android": {
-      "versionCode": 5,
+      "versionCode": 6,
       "softwareKeyboardLayoutMode": "pan",
       "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
@@ -41,16 +41,18 @@
     },
     "plugins": [
       [
-        "expo-camera",
+        "expo-image-picker",
         {
-          "cameraPermission": "Permitir que o Brisoft Portaria tire fotos de visitantes."
+          "photosPermission": "O aplicativo precisa acessar as fotos para cadastrar visitantes.",
+          "cameraPermission": "O aplicativo precisa da câmera para fotografar visitantes na portaria."
         }
       ],
       [
         "expo-notifications",
         {
-          "icon": "./assets/icon.png",
-          "color": "#165337"
+          "icon": "./assets/notification-icon.png",
+          "color": "#165337",
+          "defaultChannel": "portaria-alerts"
         }
       ]
     ],

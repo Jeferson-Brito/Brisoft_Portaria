@@ -135,8 +135,9 @@ export const RealtimeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       notifyListeners('visit_request:updated', data);
     });
 
-    // Registra token para notificações push no aparelho
-    registerForPushNotificationsAsync();
+    const pushTimer = setTimeout(() => {
+      registerForPushNotificationsAsync();
+    }, 2500);
 
     // Evento: Alerta sonoro/visual para os porteiros
     socket.on('notification:alert', (alert: RealtimeAlert) => {
@@ -173,6 +174,7 @@ export const RealtimeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     });
 
     return () => {
+      clearTimeout(pushTimer);
       socket.disconnect();
       socketRef.current = null;
     };

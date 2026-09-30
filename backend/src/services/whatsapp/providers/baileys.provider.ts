@@ -127,7 +127,7 @@ export class BaileysProvider implements IWhatsAppProvider {
     if (this.saveTimeout) clearTimeout(this.saveTimeout);
     this.saveTimeout = setTimeout(() => {
       this.saveSessionToDb(organizationId, orgSessionPath);
-    }, 2000);
+    }, 8000);
   }
 
   public async saveSessionToDb(organizationId: string, orgSessionPath: string) {
@@ -297,6 +297,13 @@ export class BaileysProvider implements IWhatsAppProvider {
       printQRInTerminal: false,
       browser: Browsers.ubuntu('Chrome'),
       syncFullHistory: false,
+      markOnlineOnConnect: false,
+      shouldIgnoreJid: (jid) =>
+        !!jid &&
+        (jid.includes('@newsletter') ||
+          jid.includes('status@broadcast') ||
+          jid.endsWith('@g.us') ||
+          jid.endsWith('@broadcast')),
       msgRetryCounterCache: this.msgRetryCounterCache,
       getMessage: async (key: proto.IMessageKey) => {
         if (key.id && this.messageStore.has(key.id)) {
@@ -409,7 +416,14 @@ export class BaileysProvider implements IWhatsAppProvider {
         if (!msg.message || msg.key.fromMe) continue;
 
         const remoteJid = msg.key.remoteJid || '';
-        if (remoteJid.endsWith('@g.us')) continue; // Ignora grupos de WhatsApp
+        if (
+          remoteJid.endsWith('@g.us') ||
+          remoteJid.includes('@newsletter') ||
+          remoteJid.includes('status@broadcast') ||
+          remoteJid.endsWith('@broadcast')
+        ) {
+          continue;
+        }
 
         const fromPhone = remoteJid.replace(/[^0-9]/g, '');
         if (fromPhone) {

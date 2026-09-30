@@ -1,50 +1,59 @@
-import { Platform } from 'react-native';
+import { Platform, InteractionManager } from 'react-native';
 import Constants, { ExecutionEnvironment } from 'expo-constants';
 import { api } from '../config/api';
 
-// Detecta se está executando no Expo Go
 export const isExpoGo =
   Constants.executionEnvironment === ExecutionEnvironment.StoreClient ||
-  (Constants as any).appOwnership === 'expo' ||
-  typeof (Constants as any).expoGoConfig !== 'undefined';
+  (Constants as any).appOwnership === 'expo';
 
-// Carregamento dinâmico: NUNCA faz import estático de 'expo-notifications' no Expo Go
-// porque o módulo executa addPushTokenListener na inicialização e gera erro no SDK 53
 function getNotifications() {
   if (isExpoGo || Platform.OS === 'web') {
     return null;
   }
   try {
     return require('expo-notifications');
-  } catch (e) {
+  } catch {
     return null;
   }
 }
 
-// Configura o handler no APK compilado
-const NotificationsModule = getNotifications();
-if (NotificationsModule?.setNotificationHandler) {
+function configureNotificationHandler() {
+  const NotificationsModule = getNotifications();
+  if (!NotificationsModule?.setNotificationHandler) {
+    return;
+  }
+
   try {
     NotificationsModule.setNotificationHandler({
       handleNotification: async () => ({
         shouldShowAlert: true,
+        shouldShowBanner: true,
+        shouldShowList: true,
         shouldPlaySound: true,
         shouldSetBadge: true,
       }),
     });
-  } catch (e) {
-    // Ignora em caso de indisponibilidade
+  } catch {
+    // Ignora em caso de indisponibilidade nativa no boot
   }
 }
 
 export async function registerForPushNotificationsAsync(): Promise<string | null> {
+  if (isExpoGo || Platform.OS === 'web') {
+    return null;
+  }
+
+  await new Promise<void>((resolve) => {
+    InteractionManager.runAfterInteractions(() => resolve());
+  });
+
+  configureNotificationHandler();
   const Notifications = getNotifications();
-  if (!Notifications || Platform.OS === 'web') {
+  if (!Notifications) {
     return null;
   }
 
   try {
-    // Canal de notificação do Android com som e prioridade máxima
     if (Platform.OS === 'android') {
       await Notifications.setNotificationChannelAsync('portaria-alerts', {
         name: 'Alertas de Acesso da Portaria',
@@ -66,16 +75,9 @@ export async function registerForPushNotificationsAsync(): Promise<string | null
 
     if (finalStatus !== 'granted') {
       console.warn('⚠️ Permissão de notificações negada pelo usuário.');
-      try {
-        await api.post('/users/push-token', {
-          error: 'PERMISSION_NOT_GRANTED',
-          debugInfo: { existingStatus, finalStatus, platform: Platform.OS },
-        });
-      } catch {}
       return null;
     }
 
-    // Obtém o token do Expo Push (apenas em APK standalone / development build)
     const projectId =
       Constants.expoConfig?.extra?.eas?.projectId ??
       Constants.easConfig?.projectId ??
@@ -88,35 +90,20 @@ export async function registerForPushNotificationsAsync(): Promise<string | null
       });
       token = tokenData?.data || null;
     } catch (err: any) {
-      const errMsg = err?.message || String(err);
-      console.warn('⚠️ [Notifications] Falha ao obter getExpoPushTokenAsync:', errMsg);
-      try {
-        await api.post('/users/push-token', {
-          error: errMsg,
-          debugInfo: { projectId, platform: Platform.OS },
-        });
-      } catch {}
+      console.warn('⚠️ [Notifications] Falha ao obter getExpoPushTokenAsync:', err?.message || err);
     }
 
     if (token) {
-      console.log('📱 [Notifications] Expo Push Token obtido com sucesso:', token);
       try {
         await api.post('/users/push-token', { pushToken: token });
-        console.log('✅ [Notifications] Token registrado no servidor com sucesso.');
       } catch (err: any) {
         console.warn('⚠️ [Notifications] Falha ao enviar token para o servidor:', err?.message || err);
       }
-    } else {
-      console.warn('⚠️ [Notifications] getExpoPushTokenAsync retornou token vazio.');
     }
 
     return token;
   } catch (error: any) {
-    const mainErr = error?.message || String(error);
-    console.warn('Erro ao registrar notificações:', mainErr);
-    try {
-      await api.post('/users/push-token', { error: mainErr });
-    } catch {}
+    console.warn('Erro ao registrar notificações:', error?.message || error);
     return null;
   }
 }
@@ -135,7 +122,7 @@ export async function triggerLocalAlertNotification(title: string, body: string,
         channelId: 'portaria-alerts',
         color: isAuthorized ? '#10B981' : '#EF4444',
       },
-      trigger: null, // Disparo imediato
+      trigger: null,
     });
   } catch (err: any) {
     console.warn('Erro ao disparar notificação local:', err?.message || err);

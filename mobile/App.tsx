@@ -8,14 +8,12 @@ LogBox.ignoreLogs([
   'Socket.io',
 ]);
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { ErrorBoundary } from './src/components/ErrorBoundary';
 import { AuthProvider, useAuth } from './src/contexts/AuthContext';
 import { RealtimeProvider } from './src/contexts/RealtimeContext';
 import { RealtimeAlertBanner } from './src/components/RealtimeAlertBanner';
 import { LoginScreen } from './src/screens/auth/LoginScreen';
 import { RegisterScreen } from './src/screens/auth/RegisterScreen';
-import { SubscriptionScreen } from './src/screens/auth/SubscriptionScreen';
-import { DashboardScreen } from './src/screens/concierge/DashboardScreen';
-import { SuperAdminDashboardScreen } from './src/screens/admin/SuperAdminDashboardScreen';
 
 const AnimatedLoadingScreen: React.FC = () => {
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -168,26 +166,28 @@ const MainNavigator: React.FC = () => {
     return <LoginScreen onRegisterPress={() => setShowRegister(true)} />;
   }
 
-  // Super Administrador: Painel exclusivo de Gestão SaaS Master
   if (user.role === 'SUPER_ADMIN') {
+    const { SuperAdminDashboardScreen } = require('./src/screens/admin/SuperAdminDashboardScreen');
     return <SuperAdminDashboardScreen />;
   }
 
-  // Usuários de empresas (acessam normalmente a portaria, com ações bloqueadas se a assinatura estiver expirada)
+  const { DashboardScreen } = require('./src/screens/concierge/DashboardScreen');
   return <DashboardScreen />;
 };
 
 export default function App() {
   return (
-    <SafeAreaProvider>
-      <AuthProvider>
-        <RealtimeProvider>
-          <StatusBar style="light" />
-          <MainNavigator />
-          <RealtimeAlertBanner />
-        </RealtimeProvider>
-      </AuthProvider>
-    </SafeAreaProvider>
+    <ErrorBoundary>
+      <SafeAreaProvider>
+        <AuthProvider>
+          <RealtimeProvider>
+            <StatusBar style="light" />
+            <MainNavigator />
+            <RealtimeAlertBanner />
+          </RealtimeProvider>
+        </AuthProvider>
+      </SafeAreaProvider>
+    </ErrorBoundary>
   );
 }
 
