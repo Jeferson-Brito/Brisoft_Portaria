@@ -14,7 +14,8 @@ console.error = (...args: any[]) => {
   const msg = typeof args[0] === 'string' ? args[0] : (args[0]?.message || String(args[0] || ''));
   if (
     msg.includes('Failed to decrypt message with any known session') ||
-    msg.includes('Bad MAC')
+    msg.includes('Bad MAC') ||
+    msg.includes('Over 2000 messages')
   ) {
     return;
   }
@@ -26,6 +27,7 @@ process.on('unhandledRejection', (reason: any) => {
   const msg = reason?.message || String(reason);
   if (
     msg.includes('Bad MAC') ||
+    msg.includes('Over 2000 messages') ||
     msg.includes('Connection Closed') ||
     msg.includes('Session error') ||
     reason?.output?.statusCode === 428
@@ -40,6 +42,7 @@ process.on('uncaughtException', (err: any) => {
   const msg = err?.message || String(err);
   if (
     msg.includes('Bad MAC') ||
+    msg.includes('Over 2000 messages') ||
     msg.includes('Connection Closed') ||
     msg.includes('Session error') ||
     err?.output?.statusCode === 428

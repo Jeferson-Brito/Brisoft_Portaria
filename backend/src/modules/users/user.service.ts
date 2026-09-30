@@ -41,6 +41,31 @@ export class UserService {
       throw new AppError('Este e-mail já está sendo utilizado por outro usuário.', 409, 'EMAIL_IN_USE');
     }
 
+    if (creatorRole !== 'SUPER_ADMIN') {
+      const org = await prisma.organization.findUnique({
+        where: { id: organizationId },
+        select: { settings: true },
+      });
+      let maxUsers = 15;
+      try {
+        const settings = org?.settings ? JSON.parse(org.settings) : {};
+        if (typeof settings.maxUsers === 'number' && settings.maxUsers > 0) {
+          maxUsers = settings.maxUsers;
+        }
+      } catch {}
+
+      const activeUsers = await prisma.user.count({
+        where: { organizationId, deletedAt: null, isActive: true },
+      });
+      if (activeUsers >= maxUsers) {
+        throw new AppError(
+          `O plano desta empresa permite até ${maxUsers} usuários ativos.`,
+          403,
+          'PLAN_LIMIT'
+        );
+      }
+    }
+
     const passwordHash = await bcrypt.hash(password, 12);
 
     const user = await prisma.user.create({
@@ -224,14 +249,15 @@ export class UserService {
     }
 
     if (data.newPassword) {
+      if (!data.currentPassword) {
+        throw new AppError('Informe a senha atual para definir uma nova senha.', 400, 'INVALID_CREDENTIALS');
+      }
       if (data.newPassword.length < 6) {
         throw new AppError('A nova senha deve ter no mínimo 6 caracteres.', 400, 'INVALID_PASSWORD');
       }
-      if (data.currentPassword) {
-        const isMatch = await bcrypt.compare(data.currentPassword, user.passwordHash);
-        if (!isMatch) {
-          throw new AppError('Senha atual incorreta.', 400, 'INVALID_CREDENTIALS');
-        }
+      const isMatch = await bcrypt.compare(data.currentPassword, user.passwordHash);
+      if (!isMatch) {
+        throw new AppError('Senha atual incorreta.', 400, 'INVALID_CREDENTIALS');
       }
       updateData.passwordHash = await bcrypt.hash(data.newPassword, 12);
     }

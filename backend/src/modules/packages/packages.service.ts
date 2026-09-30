@@ -1,7 +1,7 @@
 import { prisma } from '../../lib/prisma.js';
 import { realtimeService } from '../../services/realtime/realtime.service.js';
 import { whatsappService } from '../../services/whatsapp/whatsapp.service.js';
-import { getStorageService } from '../../services/storage/storage.service.js';
+import { getStorageService, compressPhoto } from '../../services/storage/storage.service.js';
 
 export interface CreatePackageDTO {
   destinationId: string;
@@ -74,7 +74,8 @@ export class PackagesService {
       try {
         const storageService = getStorageService();
         const cleanBase64 = data.photoUrl.replace(/^data:image\/\w+;base64,/, '');
-        const buffer = Buffer.from(cleanBase64, 'base64');
+        const raw = Buffer.from(cleanBase64, 'base64');
+        const buffer = await compressPhoto(raw);
         finalPhotoUrl = await storageService.upload('package_photo.jpg', buffer, 'image/jpeg');
       } catch (e) {
         console.warn('Erro ao salvar foto da encomenda no Supabase Storage:', e);

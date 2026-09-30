@@ -9,6 +9,7 @@ import {
 import { BaileysProvider } from './providers/baileys.provider.js';
 import { MockWhatsAppProvider } from './providers/mock-whatsapp.provider.js';
 import { env } from '../../config/env.js';
+import { formatWhatsAppNumber } from '../../utils/phone.util.js';
 import { realtimeService } from '../realtime/realtime.service.js';
 
 export class WhatsAppService {
@@ -59,19 +60,34 @@ export class WhatsAppService {
       const baseDir = env.WHATSAPP_SESSION_PATH;
       if (!fs.existsSync(baseDir)) return;
 
-      const dirs = fs.readdirSync(baseDir, { withFileTypes: true });
+      const dirs = fs.readdirSync(baseDir, { withFileTypes: true }).filter((d) => d.isDirectory() && d.name.startsWith('org_'));
       for (const d of dirs) {
-        if (d.isDirectory() && d.name.startsWith('org_')) {
-          const orgId = d.name.replace('org_', '');
-          const credsPath = path.join(baseDir, d.name, 'creds.json');
-          if (fs.existsSync(credsPath)) {
-            console.log(`🔄 [WhatsApp] Conectando sessão salva da organização: ${orgId}...`);
-            const provider = this.getProvider(orgId);
-            provider.connect(orgId).catch((err: any) => {
-              console.warn(`Aviso: falha ao auto-restaurar WhatsApp para org ${orgId}:`, err?.message || err);
-            });
-          }
+        const orgId = d.name.replace('org_', '');
+        const credsPath = path.join(baseDir, d.name, 'creds.json');
+        if (!fs.existsSync(credsPath)) continue;
+
+        const org = await prisma.organization.findUnique({
+          where: { id: orgId },
+          select: { id: true, isActive: true, slug: true, createdAt: true, settings: true },
+        });
+        if (!org?.isActive) {
+          console.log(`⏸️ [WhatsApp] Organização ${orgId} inativa. Sessão não será reconectada.`);
+          continue;
         }
+
+        const { subscriptionService } = await import('../../modules/subscriptions/subscription.service.js');
+        const subscription = subscriptionService.calculateSubscription(org);
+        if (subscription.isBlocked) {
+          console.log(`⏸️ [WhatsApp] Assinatura bloqueada da organização ${orgId}. Sessão não será reconectada.`);
+          continue;
+        }
+
+        console.log(`🔄 [WhatsApp] Conectando sessão salva da organização: ${orgId}...`);
+        const provider = this.getProvider(orgId);
+        provider.connect(orgId).catch((err: any) => {
+          console.warn(`Aviso: falha ao auto-restaurar WhatsApp para org ${orgId}:`, err?.message || err);
+        });
+        await new Promise((resolve) => setTimeout(resolve, 4000));
       }
     } catch (e: any) {
       console.warn('Erro ao verificar sessões para auto-restore:', e?.message || e);
@@ -142,16 +158,31 @@ export class WhatsAppService {
     }
 
     // 1. Tenta localizar o cliente pelo telefone OU pelo WhatsApp LID persistido
-    let client = await prisma.client.findFirst({
-      where: {
-        organizationId,
-        OR: [
-          { whatsappNumber: { contains: cleanPhone.slice(-8) } },
-          { notes: { contains: cleanPhone } },
-        ],
-        deletedAt: null,
-      },
-    });
+    let client = null;
+    const phoneLike = cleanPhone.length >= 10 && cleanPhone.length <= 13;
+    if (phoneLike) {
+      const variants = new Set<string>([cleanPhone]);
+      try {
+        variants.add(formatWhatsAppNumber(cleanPhone));
+      } catch {}
+      const tails = [...variants].map((value) => value.slice(-11)).filter((value) => value.length >= 10);
+      client = await prisma.client.findFirst({
+        where: {
+          organizationId,
+          deletedAt: null,
+          OR: tails.map((tail) => ({ whatsappNumber: { contains: tail } })),
+        },
+      });
+    }
+    if (!client && cleanPhone) {
+      client = await prisma.client.findFirst({
+        where: {
+          organizationId,
+          deletedAt: null,
+          notes: { contains: `[LID:${cleanPhone}]` },
+        },
+      });
+    }
 
     if (!client) {
       console.warn(`⚠️ [WhatsAppService] Telefone/LID ${cleanPhone} não pertence a um cliente desta organização. Resposta ignorada.`);

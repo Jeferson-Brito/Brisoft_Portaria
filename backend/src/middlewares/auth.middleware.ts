@@ -1,5 +1,6 @@
 import { FastifyReply, FastifyRequest } from 'fastify';
 import { AppError } from '../core/errors/app-error.js';
+import { prisma } from '../lib/prisma.js';
 
 export interface TokenPayload {
   sub: string;
@@ -14,6 +15,8 @@ declare module '@fastify/jwt' {
     user: TokenPayload;
   }
 }
+
+const userCache = new Map<string, { payload: TokenPayload; expiresAt: number }>();
 
 export async function authMiddleware(request: FastifyRequest, reply: FastifyReply) {
   try {
@@ -30,7 +33,44 @@ export async function authMiddleware(request: FastifyRequest, reply: FastifyRepl
     }
 
     const decoded = await request.jwtVerify<TokenPayload>();
-    request.user = decoded;
+    const cached = userCache.get(decoded.sub);
+    if (cached && cached.expiresAt > Date.now()) {
+      request.user = cached.payload;
+      return;
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { id: decoded.sub },
+      select: {
+        id: true,
+        isActive: true,
+        deletedAt: true,
+        role: true,
+        organizationId: true,
+        email: true,
+        name: true,
+        organization: { select: { isActive: true } },
+      },
+    });
+
+    if (!user || user.deletedAt || !user.isActive) {
+      userCache.delete(decoded.sub);
+      throw new AppError('Sessão encerrada. Faça login novamente.', 401, 'USER_INACTIVE');
+    }
+
+    if (user.role !== 'SUPER_ADMIN' && !user.organization.isActive) {
+      throw new AppError('A organização está inativa no sistema.', 403, 'ORGANIZATION_INACTIVE');
+    }
+
+    const payload: TokenPayload = {
+      sub: user.id,
+      organizationId: user.organizationId,
+      role: user.role,
+      email: user.email,
+      name: user.name,
+    };
+    userCache.set(user.id, { payload, expiresAt: Date.now() + 20000 });
+    request.user = payload;
   } catch (err: any) {
     if (err instanceof AppError) {
       return reply.status(err.statusCode).send({
@@ -51,3 +91,4 @@ export async function authMiddleware(request: FastifyRequest, reply: FastifyRepl
     });
   }
 }
+

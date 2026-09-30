@@ -134,8 +134,11 @@ export class BaileysProvider implements IWhatsAppProvider {
     if (!fs.existsSync(orgSessionPath)) return;
     try {
       const files = fs.readdirSync(orgSessionPath);
+      const selected = files.length > 120
+        ? files.filter((file) => file === 'creds.json' || file.startsWith('session-') || file.startsWith('pre-key-'))
+        : files;
       const sessionMap: Record<string, string> = {};
-      for (const f of files) {
+      for (const f of selected) {
         const fullPath = path.join(orgSessionPath, f);
         if (fs.statSync(fullPath).isFile()) {
           sessionMap[f] = fs.readFileSync(fullPath, 'utf8');

@@ -1,6 +1,6 @@
 import { prisma } from '../../lib/prisma.js';
 import { AppError } from '../../core/errors/app-error.js';
-import { getStorageService } from '../../services/storage/storage.service.js';
+import { getStorageService, compressPhoto } from '../../services/storage/storage.service.js';
 
 export interface VehicleData {
   model: string;
@@ -61,7 +61,8 @@ export class VisitorService {
     if (photoUrl && (photoUrl.startsWith('data:image') || photoUrl.length > 500)) {
       try {
         const cleanBase64 = photoUrl.replace(/^data:image\/\w+;base64,/, '');
-        const buffer = Buffer.from(cleanBase64, 'base64');
+        const raw = Buffer.from(cleanBase64, 'base64');
+        const buffer = await compressPhoto(raw);
         finalPhotoUrl = await this.storageService.upload('visitor_photo.jpg', buffer, 'image/jpeg');
       } catch (e) {
         console.warn('Erro ao salvar foto do visitante no Supabase Storage:', e);

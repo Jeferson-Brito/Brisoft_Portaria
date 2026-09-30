@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import sharp from 'sharp';
 import { env } from '../../config/env.js';
 import { prisma } from '../../lib/prisma.js';
 
@@ -177,6 +178,18 @@ export class LocalStorageService implements IStorageService {
 }
 
 // Factory para alternar automaticamente entre Supabase REST e Supabase PostgreSQL
+export async function compressPhoto(buffer: Buffer): Promise<Buffer> {
+  try {
+    return await sharp(buffer)
+      .rotate()
+      .resize({ width: 1024, height: 1024, fit: 'inside', withoutEnlargement: true })
+      .jpeg({ quality: 72 })
+      .toBuffer();
+  } catch {
+    return buffer;
+  }
+}
+
 export function getStorageService(): IStorageService {
   if (env.SUPABASE_URL && env.SUPABASE_SERVICE_ROLE_KEY) {
     try {
