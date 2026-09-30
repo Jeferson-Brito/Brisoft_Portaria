@@ -1,4 +1,5 @@
 import { prisma } from '../../lib/prisma.js';
+import { subscriptionService } from '../subscriptions/subscription.service.js';
 import { AppError } from '../../core/errors/app-error.js';
 import { invalidateSubscriptionCache } from '../../middlewares/subscription.middleware.js';
 import bcrypt from 'bcryptjs';
@@ -446,15 +447,7 @@ export class SuperAdminService {
   }
 
   async activateSubscription(orgId: string, periodDays = 30) {
-    const nextDueDate = new Date(Date.now() + periodDays * 24 * 60 * 60 * 1000);
-    return this.updateOrganization(orgId, {
-      isActive: true,
-      paymentStatus: 'ACTIVE',
-      settings: {
-        paidAt: new Date().toISOString(),
-        currentPeriodEnd: nextDueDate.toISOString(),
-      },
-    });
+    return subscriptionService.activateSubscription(orgId, periodDays, { source: 'COMPLIMENTARY' });
   }
 
   async suspendSubscription(orgId: string) {

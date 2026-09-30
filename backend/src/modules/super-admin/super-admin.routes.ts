@@ -73,7 +73,9 @@ export async function superAdminRoutes(app: FastifyInstance) {
   app.post('/organizations/:id/activate-subscription', async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
     const { periodDays } = (req.body as any) || {};
-    const result = await subscriptionService.activateSubscription(id, periodDays || 30);
+    const result = await subscriptionService.activateSubscription(id, periodDays || 30, {
+      source: 'COMPLIMENTARY',
+    });
     return reply.send({
       success: true,
       message: 'Assinatura ativada com sucesso!',

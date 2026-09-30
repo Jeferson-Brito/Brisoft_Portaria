@@ -13,6 +13,16 @@ export interface SubscriptionInfo {
   isBlocked: boolean;
   priceMonthly: number;
   paymentLink: string;
+  paymentHistory: PaymentHistoryItem[];
+}
+
+export interface PaymentHistoryItem {
+  id: string;
+  paidAt: string;
+  periodEnd: string;
+  source: 'STRIPE' | 'COMPLIMENTARY';
+  label: string;
+  amount: number;
 }
 
 export class SubscriptionService {
@@ -37,6 +47,7 @@ export class SubscriptionService {
         isBlocked: false,
         priceMonthly: 0,
         paymentLink: STRIPE_PAYMENT_LINK,
+        paymentHistory: [],
       };
     }
 
@@ -53,7 +64,8 @@ export class SubscriptionService {
       : new Date(createdTime + trialDays * 24 * 60 * 60 * 1000);
 
     const plan = settings.plan || 'PRO';
-    const monthlyPrice = typeof settings.monthlyPrice === 'number' ? settings.monthlyPrice : 149.90;
+    const monthlyPrice = 99.9;
+    const paymentHistory = Array.isArray(settings.paymentHistory) ? settings.paymentHistory : [];
 
     let paymentStatus: 'TRIAL' | 'ACTIVE' | 'SUSPENDED' | 'CANCELLED' | 'EXPIRED' = settings.paymentStatus;
 
@@ -111,6 +123,7 @@ export class SubscriptionService {
       isBlocked,
       priceMonthly: monthlyPrice,
       paymentLink: STRIPE_PAYMENT_LINK,
+      paymentHistory,
     };
   }
 
@@ -166,7 +179,11 @@ export class SubscriptionService {
   /**
    * Ativa / renova assinatura por X dias (padrão 30 dias)
    */
-  async activateSubscription(orgId: string, periodDays = 30): Promise<SubscriptionInfo> {
+  async activateSubscription(
+    orgId: string,
+    periodDays = 30,
+    options?: { source?: 'STRIPE' | 'COMPLIMENTARY'; externalId?: string }
+  ): Promise<SubscriptionInfo> {
     const org = await prisma.organization.findUnique({ where: { id: orgId } });
     if (!org) throw new AppError('Organização não encontrada.', 404, 'NOT_FOUND');
 
@@ -175,12 +192,28 @@ export class SubscriptionService {
       settings = org.settings ? JSON.parse(org.settings) : {};
     } catch (e) {}
 
+    const source = options?.source || 'STRIPE';
+    const history: PaymentHistoryItem[] = Array.isArray(settings.paymentHistory) ? settings.paymentHistory : [];
+    if (options?.externalId && history.some((item) => item.id === options.externalId)) {
+      return this.calculateSubscription(org);
+    }
+
     const now = new Date();
     const currentPeriodEnd = new Date(now.getTime() + periodDays * 24 * 60 * 60 * 1000);
+    history.unshift({
+      id: options?.externalId || `${source}-${now.getTime()}`,
+      paidAt: now.toISOString(),
+      periodEnd: currentPeriodEnd.toISOString(),
+      source,
+      label: source === 'COMPLIMENTARY' ? 'Cupom Assinatura Gratuita' : 'Pagamento Stripe',
+      amount: source === 'COMPLIMENTARY' ? 0 : 99.9,
+    });
 
     settings.paymentStatus = 'ACTIVE';
     settings.paidAt = now.toISOString();
     settings.currentPeriodEnd = currentPeriodEnd.toISOString();
+    settings.monthlyPrice = 99.9;
+    settings.paymentHistory = history.slice(0, 36);
 
     const updated = await prisma.organization.update({
       where: { id: orgId },
@@ -188,7 +221,7 @@ export class SubscriptionService {
         isActive: true,
         settings: JSON.stringify(settings),
       },
-      select: { id: true, createdAt: true, settings: true, isActive: true, slug: true },
+      select: { id: true, createdAt: true, settings: true, isActive: true, slug: true, name: true },
     });
 
     const info = this.calculateSubscription(updated);
@@ -261,6 +294,14 @@ export class SubscriptionService {
       }
     }
 
+    if (event.type !== 'checkout.session.completed' && event.type !== 'invoice.paid' && event.type !== 'invoice.payment_succeeded') {
+      return { success: true, ignored: true, message: 'Evento ignorado. Nenhum plano foi ativado.' };
+    }
+
+    if (event.type === 'checkout.session.completed' && session.payment_status && session.payment_status !== 'paid') {
+      return { success: false, message: 'Pagamento ainda não confirmado pela Stripe.' };
+    }
+
     if (!targetOrgId) {
       console.warn('⚠️ [Stripe-Webhook] Não foi possível vincular o pagamento a nenhuma organização:', {
         customerEmail,
@@ -271,7 +312,10 @@ export class SubscriptionService {
 
     // Ativa a assinatura por 30 dias
     console.log(`✅ [Stripe-Webhook] Pagamento confirmado! Ativando assinatura para org ${targetOrgId}...`);
-    const info = await this.activateSubscription(targetOrgId, 30);
+    const info = await this.activateSubscription(targetOrgId, 30, {
+      source: 'STRIPE',
+      externalId: event.id || session.id,
+    });
 
     return {
       success: true,

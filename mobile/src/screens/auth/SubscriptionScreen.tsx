@@ -9,335 +9,393 @@ import {
   Linking,
   Alert,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import {
+  Check,
+  CreditCard,
+  MessageCircle,
+  RefreshCw,
+  Building2,
+  Smartphone,
+  Users,
+  Package,
+  BarChart3,
+  Bell,
+} from 'lucide-react-native';
 import { useAuth } from '../../contexts/AuthContext';
+import { api } from '../../config/api';
+import { colors } from '../../theme/colors';
+import { AppHeader } from '../../components/AppHeader';
 
-// URL oficial do link de pagamento da Stripe
-const PAYMENT_LINK = 'https://buy.stripe.com/4gM3coh0P3IWdi6dGfg7e00';
+const FALLBACK_PAYMENT_LINK = 'https://buy.stripe.com/4gM3coh0P3IWdi6dGfg7e00';
 const SUPPORT_WHATSAPP = 'https://wa.me/5583993858515?text=Quero+assinar+o+Brisoft+Portaria';
 
 const FEATURES = [
-  { icon: '🏢', title: 'Multi-unidades', desc: 'Gerencie todos os destinos do estabelecimento' },
-  { icon: '📱', title: 'Autorização por WhatsApp', desc: 'Morador aprova ou recusa pelo celular' },
-  { icon: '👥', title: 'Equipe ilimitada', desc: 'Porteiros, supervisores e admin no mesmo plano' },
-  { icon: '📦', title: 'Controle de encomendas', desc: 'Código de retirada seguro para cada pacote' },
-  { icon: '📊', title: 'Relatórios completos', desc: 'Histórico e auditoria de todos os acessos' },
-  { icon: '🔔', title: 'Notificações em tempo real', desc: 'Push e som quando o morador autoriza' },
+  { icon: Building2, title: 'Unidades do local', desc: 'Blocos, apartamentos e destinos da portaria' },
+  { icon: Smartphone, title: 'Autorização por WhatsApp', desc: 'O morador aprova ou recusa pelo celular' },
+  { icon: Users, title: 'Até 15 usuários', desc: 'Porteiros, supervisores e administrador' },
+  { icon: Package, title: 'Encomendas', desc: 'Código de retirada para cada pacote' },
+  { icon: BarChart3, title: 'Relatórios', desc: 'Histórico dos acessos da empresa' },
+  { icon: Bell, title: 'Avisos na portaria', desc: 'Alerta quando o morador responde' },
 ];
 
+function formatDate(value?: string | null) {
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return date.toLocaleDateString('pt-BR');
+}
+
 export const SubscriptionScreen: React.FC<{ onBack?: () => void }> = ({ onBack }) => {
-  const { user, signOut, refreshSubscription } = useAuth();
+  const { user, refreshSubscription } = useAuth();
   const sub = user?.subscription;
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isOpeningPayment, setIsOpeningPayment] = useState(false);
+  const [history, setHistory] = useState<Array<{ id: string; paidAt: string; periodEnd: string; source: string; label: string; amount: number }>>([]);
 
   const isActive = sub?.status === 'ACTIVE';
   const isTrialActive = sub?.status === 'TRIAL' && (sub?.daysRemaining ?? 0) > 0;
-  const isExpiredTrial = sub?.status === 'TRIAL' && (sub?.daysRemaining ?? 0) <= 0;
+  const paymentDue = !isActive && !isTrialActive;
+
   const isSuspended = sub?.status === 'SUSPENDED';
   const isCancelled = sub?.status === 'CANCELLED';
 
-  const title = isActive
-    ? 'Plano Ativo'
+  const statusLabel = isActive
+    ? 'Plano ativo'
     : isTrialActive
-    ? 'Período de Testes'
+    ? 'Teste grátis'
     : isSuspended
-    ? 'Assinatura Suspensa'
+    ? 'Suspensa'
     : isCancelled
-    ? 'Assinatura Cancelada'
-    : 'Período de Teste Expirado';
+    ? 'Cancelada'
+    : 'Teste encerrado';
 
-  const subtitle = isActive
-    ? 'Seu plano profissional está ativo e liberado.'
+  const statusHint = isActive
+    ? sub?.currentPeriodEnd
+      ? `Válido até ${formatDate(sub.currentPeriodEnd)}`
+      : 'Pagamento confirmado'
     : isTrialActive
-    ? `Você tem ${sub?.daysRemaining ?? 7} dias de teste gratuito.`
-    : isSuspended
-    ? 'Sua assinatura foi suspensa por falta de pagamento.'
-    : isCancelled
-    ? 'Sua assinatura foi cancelada. Renove para continuar usando.'
-    : 'Seus 7 dias de teste gratuito chegaram ao fim.';
+    ? `Restam ${sub?.daysRemaining ?? 0} dias`
+    : 'A portaria fica bloqueada para novas ações até o pagamento';
 
-  const handleSubscribe = () => {
-    let url = PAYMENT_LINK;
-    const params: string[] = [];
-    if (user?.organizationId) {
-      params.push(`client_reference_id=${user.organizationId}`);
-    }
-    if (user?.email) {
-      params.push(`prefilled_email=${encodeURIComponent(user.email)}`);
-    }
-    if (params.length > 0) {
-      url += `?${params.join('&')}`;
-    }
-    Linking.openURL(url).catch(() => {
-      Alert.alert('Erro', 'Não foi possível abrir o link de pagamento.');
-    });
+  const companyName = user?.organizationName || 'Sua empresa';
+
+  useEffect(() => {
+    api.get('/subscriptions/current')
+      .then((response) => {
+        const list = response.data?.data?.paymentHistory;
+        setHistory(Array.isArray(list) ? list : []);
+      })
+      .catch(() => setHistory([]));
+  }, [sub?.status, sub?.currentPeriodEnd]);
+
+  const openExternal = async (url: string) => {
+    await Linking.openURL(url);
   };
 
-  const handleWhatsApp = () => {
-    Linking.openURL(SUPPORT_WHATSAPP).catch(() => {
-      Alert.alert('Erro', 'Não foi possível abrir o WhatsApp.');
-    });
+  const handleSubscribe = async () => {
+    try {
+      setIsOpeningPayment(true);
+      const response = await api.get('/subscriptions/payment-link');
+      const url = response.data?.paymentUrl || FALLBACK_PAYMENT_LINK;
+      await openExternal(url);
+    } catch {
+      const params = [];
+      if (user?.organizationId) params.push(`client_reference_id=${user.organizationId}`);
+      if (user?.email) params.push(`prefilled_email=${encodeURIComponent(user.email)}`);
+      const url = params.length ? `${FALLBACK_PAYMENT_LINK}?${params.join('&')}` : FALLBACK_PAYMENT_LINK;
+      try {
+        await openExternal(url);
+      } catch {
+        Alert.alert('Erro', 'Não foi possível abrir o pagamento.');
+      }
+    } finally {
+      setIsOpeningPayment(false);
+    }
   };
 
   const handleRefresh = async () => {
-    setIsRefreshing(true);
-    await refreshSubscription();
-    setIsRefreshing(false);
+    try {
+      setIsRefreshing(true);
+      const response = await api.get('/subscriptions/current');
+      const info = response.data?.data;
+      setHistory(Array.isArray(info?.paymentHistory) ? info.paymentHistory : []);
+      await refreshSubscription();
+      if (info?.status === 'ACTIVE' && info?.isBlocked !== true) {
+        Alert.alert('Pagamento encontrado', `O plano de ${companyName} está ativo.`);
+        return;
+      }
+      Alert.alert(
+        'Pagamento não encontrado',
+        'Nenhum pagamento confirmado chegou da Stripe. O plano não foi ativado.'
+      );
+    } catch {
+      Alert.alert('Não foi possível verificar', 'Confira a internet e tente novamente.');
+    } finally {
+      setIsRefreshing(false);
+    }
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      {/* Botão Voltar se acessado pelas configurações */}
-      {onBack && (
-        <View style={styles.topBackBar}>
-          <TouchableOpacity onPress={onBack} style={styles.backBtn} activeOpacity={0.7}>
-            <Text style={styles.backBtnText}>‹ Voltar para Configurações</Text>
-          </TouchableOpacity>
-        </View>
-      )}
-      <ScrollView
-        contentContainerStyle={styles.scroll}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* Header */}
-        <View style={styles.lockedHeader}>
-          <View style={[styles.lockIcon, (isActive || isTrialActive) && { backgroundColor: '#1E3A8A' }]}>
-            <Text style={styles.lockEmoji}>{isActive ? '💎' : isTrialActive ? '⏱️' : '🔒'}</Text>
+    <View style={styles.container}>
+      <AppHeader title="Assinatura" subtitle={companyName} onBack={onBack} />
+      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+        <View style={styles.statusCard}>
+          <View style={[styles.statusPill, isActive ? styles.pillActive : isTrialActive ? styles.pillTrial : styles.pillBlocked]}>
+            <Text style={[styles.statusPillText, isActive ? styles.pillTextActive : isTrialActive ? styles.pillTextTrial : styles.pillTextBlocked]}>
+              {statusLabel}
+            </Text>
           </View>
-          <Text style={styles.lockTitle}>{title}</Text>
-          <Text style={styles.lockSubtitle}>{subtitle}</Text>
+          <Text style={styles.companyName}>{companyName}</Text>
+          <Text style={styles.price}>R$ 99,90</Text>
+          <Text style={styles.period}>por mês, para esta empresa</Text>
+          <Text style={styles.hint}>{statusHint}</Text>
         </View>
 
-        {/* Card de plano */}
         <View style={styles.planCard}>
-          <View style={styles.planBadge}>
-            <Text style={styles.planBadgeText}>PLANO ÚNICO</Text>
-          </View>
-          <Text style={styles.planPrice}>R$ 149</Text>
-          <Text style={styles.planPeriod}>/mês · Cancele quando quiser</Text>
-          <Text style={styles.planName}>Brisoft Portaria Basic</Text>
-
-          <View style={styles.divider} />
-
-          {FEATURES.map((f, i) => (
-            <View key={i} style={styles.featureRow}>
-              <Text style={styles.featureIcon}>{f.icon}</Text>
-              <View>
-                <Text style={styles.featureTitle}>{f.title}</Text>
-                <Text style={styles.featureDesc}>{f.desc}</Text>
+          <Text style={styles.sectionTitle}>O que está incluso</Text>
+          {FEATURES.map((feature) => {
+            const Icon = feature.icon;
+            return (
+              <View key={feature.title} style={styles.featureRow}>
+                <View style={styles.featureIcon}>
+                  <Icon size={18} color={colors.primary} />
+                </View>
+                <View style={styles.featureText}>
+                  <Text style={styles.featureTitle}>{feature.title}</Text>
+                  <Text style={styles.featureDesc}>{feature.desc}</Text>
+                </View>
+                <Check size={16} color={colors.statusAuthorized} />
               </View>
-            </View>
-          ))}
+            );
+          })}
         </View>
 
-        {/* Botão de assinar */}
-        <TouchableOpacity style={styles.ctaButton} onPress={handleSubscribe}>
-          <Text style={styles.ctaButtonText}>Assinar Agora — R$149/mês</Text>
-        </TouchableOpacity>
-
-        {/* Botão suporte */}
-        <TouchableOpacity style={styles.whatsappButton} onPress={handleWhatsApp}>
-          <Text style={styles.whatsappButtonText}>💬 Falar com Suporte no WhatsApp</Text>
-        </TouchableOpacity>
-
-        {/* Verificar pagamento */}
-        <TouchableOpacity style={styles.refreshButton} onPress={handleRefresh} disabled={isRefreshing}>
-          {isRefreshing ? (
-            <ActivityIndicator color="#3B82F6" size="small" />
+        <TouchableOpacity
+          style={[styles.primaryButton, !paymentDue && styles.buttonDisabled]}
+          onPress={handleSubscribe}
+          disabled={!paymentDue || isOpeningPayment}
+          activeOpacity={0.85}
+        >
+          {isOpeningPayment ? (
+            <ActivityIndicator color="#FFFFFF" />
           ) : (
-            <Text style={styles.refreshText}>Já paguei — verificar acesso</Text>
+            <>
+              <CreditCard size={18} color="#FFFFFF" />
+              <Text style={styles.primaryButtonText}>
+                {paymentDue ? 'Renovar plano — R$ 99,90' : 'Plano em dia'}
+              </Text>
+            </>
           )}
         </TouchableOpacity>
 
-        {/* Logout */}
-        <TouchableOpacity style={styles.logoutButton} onPress={signOut}>
-          <Text style={styles.logoutText}>Sair da conta</Text>
+        <TouchableOpacity
+          style={[styles.secondaryButton, !paymentDue && styles.buttonDisabled]}
+          onPress={handleRefresh}
+          disabled={!paymentDue || isRefreshing}
+          activeOpacity={0.85}
+        >
+          {isRefreshing ? (
+            <ActivityIndicator color={colors.primary} />
+          ) : (
+            <>
+              <RefreshCw size={16} color={colors.primary} />
+              <Text style={styles.secondaryButtonText}>Já paguei, atualizar status</Text>
+            </>
+          )}
+        </TouchableOpacity>
+
+        <View style={styles.planCard}>
+          <Text style={styles.sectionTitle}>Histórico de pagamentos</Text>
+          {history.length === 0 ? (
+            <Text style={styles.emptyHistory}>Nenhum pagamento registrado para {companyName}.</Text>
+          ) : (
+            history.map((item) => (
+              <View key={item.id} style={styles.historyRow}>
+                <View style={styles.featureText}>
+                  <Text style={styles.featureTitle}>{item.label}</Text>
+                  <Text style={styles.featureDesc}>
+                    {formatDate(item.paidAt)}
+                    {item.periodEnd ? ` · válido até ${formatDate(item.periodEnd)}` : ''}
+                  </Text>
+                </View>
+                <Text style={styles.historyAmount}>
+                  {item.source === 'COMPLIMENTARY' ? 'R$ 0,00' : 'R$ 99,90'}
+                </Text>
+              </View>
+            ))
+          )}
+        </View>
+
+        <TouchableOpacity
+          style={styles.supportButton}
+          onPress={() => {
+            Linking.openURL(SUPPORT_WHATSAPP).catch(() => {
+              Alert.alert('Erro', 'Não foi possível abrir o WhatsApp.');
+            });
+          }}
+          activeOpacity={0.85}
+        >
+          <MessageCircle size={16} color={colors.primary} />
+          <Text style={styles.supportButtonText}>Falar com o suporte</Text>
         </TouchableOpacity>
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0B1A30',
+    backgroundColor: colors.background,
   },
   scroll: {
-    flexGrow: 1,
-    paddingHorizontal: 24,
-    paddingBottom: 48,
-    alignItems: 'center',
+    padding: 16,
+    paddingBottom: 40,
   },
-  lockedHeader: {
-    alignItems: 'center',
-    paddingTop: 40,
-    paddingBottom: 32,
-  },
-  lockIcon: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: 'rgba(239,68,68,0.15)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 20,
-    borderWidth: 2,
-    borderColor: 'rgba(239,68,68,0.3)',
-  },
-  lockEmoji: {
-    fontSize: 36,
-  },
-  lockTitle: {
-    color: '#FFFFFF',
-    fontSize: 24,
-    fontWeight: '800',
-    textAlign: 'center',
-    marginBottom: 10,
-  },
-  lockSubtitle: {
-    color: '#94A3B8',
-    fontSize: 15,
-    textAlign: 'center',
-    lineHeight: 22,
-    paddingHorizontal: 8,
-  },
-  planCard: {
-    width: '100%',
-    backgroundColor: '#132035',
-    borderRadius: 20,
-    padding: 24,
-    borderWidth: 1,
-    borderColor: 'rgba(59,130,246,0.3)',
-    marginBottom: 20,
-  },
-  planBadge: {
-    backgroundColor: 'rgba(59,130,246,0.15)',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    alignSelf: 'flex-start',
+  statusCard: {
+    backgroundColor: colors.primary,
+    borderRadius: 16,
+    padding: 20,
     marginBottom: 16,
   },
-  planBadgeText: {
-    color: '#3B82F6',
-    fontSize: 10,
-    fontWeight: '800',
-    letterSpacing: 1.2,
+  statusPill: {
+    alignSelf: 'flex-start',
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    marginBottom: 14,
   },
-  planPrice: {
+  pillActive: { backgroundColor: '#DCFCE7' },
+  pillTrial: { backgroundColor: '#FEF3C7' },
+  pillBlocked: { backgroundColor: '#FEE2E2' },
+  statusPillText: { fontSize: 12, fontWeight: '700' },
+  pillTextActive: { color: '#166534' },
+  pillTextTrial: { color: '#92400E' },
+  pillTextBlocked: { color: '#991B1B' },
+  price: {
     color: '#FFFFFF',
-    fontSize: 42,
-    fontWeight: '900',
-    lineHeight: 48,
+    fontSize: 36,
+    fontWeight: '800',
   },
-  planPeriod: {
-    color: '#64748B',
-    fontSize: 13,
-    marginBottom: 4,
-  },
-  planName: {
-    color: '#CBD5E1',
+  companyName: {
+    color: '#D1FAE5',
     fontSize: 15,
-    fontWeight: '600',
-    marginBottom: 20,
+    fontWeight: '700',
+    marginBottom: 8,
   },
-  divider: {
-    height: 1,
-    backgroundColor: '#1E3A5F',
-    marginBottom: 20,
+  period: {
+    color: '#D1FAE5',
+    fontSize: 14,
+    marginBottom: 10,
+  },
+  hint: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  planCard: {
+    backgroundColor: colors.surface,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: 16,
+    marginBottom: 16,
+  },
+  sectionTitle: {
+    color: colors.textPrimary,
+    fontSize: 16,
+    fontWeight: '700',
+    marginBottom: 12,
   },
   featureRow: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    marginBottom: 14,
-    gap: 12,
+    alignItems: 'center',
+    paddingVertical: 10,
+    borderTopWidth: 1,
+    borderTopColor: colors.borderLight,
   },
   featureIcon: {
-    fontSize: 20,
-    width: 28,
-    textAlign: 'center',
-    marginTop: 2,
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: colors.primarySoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
   },
+  featureText: { flex: 1, marginRight: 8 },
   featureTitle: {
-    color: '#FFFFFF',
+    color: colors.textPrimary,
     fontSize: 14,
-    fontWeight: '600',
-    marginBottom: 2,
+    fontWeight: '700',
   },
   featureDesc: {
-    color: '#64748B',
+    color: colors.textSecondary,
     fontSize: 12,
+    marginTop: 2,
   },
-  ctaButton: {
-    width: '100%',
-    backgroundColor: '#3B82F6',
-    borderRadius: 16,
-    paddingVertical: 18,
+  primaryButton: {
+    backgroundColor: colors.primary,
+    borderRadius: 12,
+    minHeight: 50,
+    flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 12,
-    shadowColor: '#3B82F6',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.4,
-    shadowRadius: 12,
-    elevation: 6,
+    justifyContent: 'center',
+    gap: 8,
+    marginBottom: 10,
   },
-  ctaButtonText: {
+  primaryButtonText: {
     color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '800',
+    fontSize: 15,
+    fontWeight: '700',
   },
-  whatsappButton: {
-    width: '100%',
-    backgroundColor: 'rgba(34,197,94,0.12)',
-    borderRadius: 16,
-    paddingVertical: 16,
-    alignItems: 'center',
-    marginBottom: 16,
+  secondaryButton: {
+    backgroundColor: colors.surface,
+    borderRadius: 12,
+    minHeight: 48,
     borderWidth: 1,
-    borderColor: 'rgba(34,197,94,0.3)',
+    borderColor: colors.primarySoftBorder,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginBottom: 10,
   },
-  whatsappButtonText: {
-    color: '#22C55E',
+  secondaryButtonText: {
+    color: colors.primary,
     fontSize: 14,
     fontWeight: '700',
   },
-  refreshButton: {
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    marginBottom: 8,
+  supportButton: {
+    minHeight: 44,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
   },
-  refreshText: {
-    color: '#3B82F6',
+  supportButtonText: {
+    color: colors.primary,
     fontSize: 14,
     fontWeight: '600',
-    textDecorationLine: 'underline',
   },
-  logoutButton: {
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    marginTop: 8,
+  buttonDisabled: {
+    opacity: 0.45,
   },
-  logoutText: {
-    color: '#475569',
-    fontSize: 13,
+  historyRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    borderTopWidth: 1,
+    borderTopColor: colors.borderLight,
   },
-  topBackBar: {
-    width: '100%',
-    paddingHorizontal: 20,
-    paddingTop: 10,
-    paddingBottom: 4,
-  },
-  backBtn: {
-    alignSelf: 'flex-start',
-    backgroundColor: 'rgba(255,255,255,0.08)',
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 8,
-  },
-  backBtnText: {
-    color: '#93C5FD',
+  historyAmount: {
+    color: colors.textPrimary,
     fontSize: 13,
     fontWeight: '700',
+  },
+  emptyHistory: {
+    color: colors.textSecondary,
+    fontSize: 13,
+    lineHeight: 18,
   },
 });
