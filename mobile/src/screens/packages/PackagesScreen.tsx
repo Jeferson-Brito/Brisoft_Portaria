@@ -41,7 +41,7 @@ import { api } from '../../config/api';
 import { AppHeader } from '../../components/AppHeader';
 import { ScrollToTopButton } from '../../components/ScrollToTopButton';
 import { ClientAutocomplete, ClientDestinationItem } from '../../components/ClientAutocomplete';
-import { getPhotoUri } from '../../utils/photo';
+import { getPhotoSource } from '../../utils/photo';
 
 interface PackagesScreenProps {
   onBack?: () => void;
@@ -444,10 +444,10 @@ export const PackagesScreen: React.FC<PackagesScreenProps> = ({ onBack }) => {
                 {item.photoUrl && (
                   <TouchableOpacity
                     style={styles.photoPreviewRow}
-                    onPress={() => setPreviewPhotoUrl(getPhotoUri(item.photoUrl))}
+                    onPress={() => setPreviewPhotoUrl(item.photoUrl || null)}
                     activeOpacity={0.8}
                   >
-                    <Image source={{ uri: getPhotoUri(item.photoUrl) || '' }} style={styles.thumbImage} />
+                    <Image source={getPhotoSource(item.photoUrl) || { uri: '' }} style={styles.thumbImage} />
                     <View style={{ marginLeft: 10, flex: 1 }}>
                       <Text style={styles.photoLabel}>📸 Foto da Encomenda Salva</Text>
                       <Text style={styles.photoHint}>Toque para ampliar comprovante</Text>
@@ -783,7 +783,7 @@ export const PackagesScreen: React.FC<PackagesScreenProps> = ({ onBack }) => {
           </TouchableOpacity>
           {previewPhotoUrl && (
             <Image
-              source={{ uri: previewPhotoUrl }}
+              source={getPhotoSource(previewPhotoUrl) || { uri: '' }}
               style={styles.fullPhoto}
               resizeMode="contain"
             />
@@ -862,10 +862,10 @@ export const PackagesScreen: React.FC<PackagesScreenProps> = ({ onBack }) => {
                   {pkg.photoUrl && (
                     <TouchableOpacity
                       style={[styles.photoPreviewRow, { marginTop: 14 }]}
-                      onPress={() => setPreviewPhotoUrl(getPhotoUri(pkg.photoUrl))}
+                      onPress={() => setPreviewPhotoUrl(pkg.photoUrl || null)}
                       activeOpacity={0.8}
                     >
-                      <Image source={{ uri: getPhotoUri(pkg.photoUrl) || '' }} style={styles.thumbImage} />
+                      <Image source={getPhotoSource(pkg.photoUrl) || { uri: '' }} style={styles.thumbImage} />
                       <View style={{ marginLeft: 10, flex: 1 }}>
                         <Text style={styles.photoLabel}>📸 Foto da Encomenda Salva</Text>
                         <Text style={styles.photoHint}>Toque para ampliar comprovante</Text>

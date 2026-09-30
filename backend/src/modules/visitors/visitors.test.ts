@@ -152,6 +152,7 @@ describe('Módulo de Visitantes, Veículos & Fotos - FASE 3', () => {
     const response = await app.inject({
       method: 'GET',
       url: `/api/v1/visitors/photo/${uploadedPhotoPath}`,
+      headers: { Authorization: `Bearer ${conciergeToken}` },
     });
 
     expect(response.statusCode).toBe(200);

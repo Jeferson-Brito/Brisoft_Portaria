@@ -18,6 +18,7 @@ const envSchema = z.object({
   SUPABASE_URL: z.string().optional(),
   SUPABASE_SERVICE_ROLE_KEY: z.string().optional(),
   SUPABASE_BUCKET_VISITORS: z.string().default('visitor-photos'),
+  STRIPE_WEBHOOK_SECRET: z.string().min(8).optional(),
 });
 
 const _env = envSchema.safeParse(process.env);

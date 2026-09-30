@@ -6,7 +6,7 @@ services:
     plan: starter
     region: oregon
     buildCommand: npm install && npx prisma generate --schema=prisma/schema.postgresql.prisma && npm run build
-    startCommand: npx prisma db push --schema=prisma/schema.postgresql.prisma --accept-data-loss && npm run prisma:init && npm run start
+    startCommand: npx prisma db push --schema=prisma/schema.postgresql.prisma && npm run start
     healthCheckPath: /health
     disk:
       name: whatsapp-sessions
@@ -29,3 +29,5 @@ services:
         value: /var/data/whatsapp_sessions
       - key: WHATSAPP_AUTO_RECONNECT
         value: "true"
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false

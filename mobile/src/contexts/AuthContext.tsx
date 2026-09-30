@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { api, setOnUnauthorizedCallback } from '../config/api';
 import { registerForPushNotificationsAsync } from '../services/notifications.service';
+import { setPhotoAccessToken } from '../utils/photo';
 
 export interface Subscription {
   plan: 'TRIAL' | 'BASIC' | 'ENTERPRISE';
@@ -162,6 +163,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setToken(null);
     }
   };
+
+  setPhotoAccessToken(token);
 
   return (
     <AuthContext.Provider value={{ user, token, isLoading, isSubscriptionBlocked, signIn, signOut, register, refreshSubscription }}>

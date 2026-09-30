@@ -153,46 +153,8 @@ export class WhatsAppService {
       },
     });
 
-    // 2. Se não encontrou pelo telefone/LID (ex: primeira mensagem vinda de um @lid novo)
     if (!client) {
-      console.log(`🔍 [WhatsAppService] Telefone/LID ${cleanPhone} não encontrado diretamente. Buscando solicitações pendentes...`);
-
-      // Se a resposta citou uma mensagem anterior com código
-      if (event.quotedCode) {
-        const reqByCode = await prisma.visitRequest.findFirst({
-          where: {
-            organizationId,
-            code: { contains: event.quotedCode },
-            status: 'PENDING',
-          },
-          include: { client: true },
-        });
-        if (reqByCode?.client) {
-          client = reqByCode.client;
-          console.log(`🎯 [WhatsAppService] Cliente ${client.name} identificado pelo código citado: ${event.quotedCode}`);
-        }
-      }
-
-      // Se ainda não encontrou, busca a solicitação PENDING mais recente desta organização
-      if (!client) {
-        const recentPending = await prisma.visitRequest.findFirst({
-          where: {
-            organizationId,
-            status: 'PENDING',
-          },
-          include: { client: true },
-          orderBy: { createdAt: 'desc' },
-        });
-
-        if (recentPending?.client) {
-          client = recentPending.client;
-          console.log(`🎯 [WhatsAppService] Cliente ${client.name} identificado pela solicitação pendente mais recente (${recentPending.code})`);
-        }
-      }
-    }
-
-    if (!client) {
-      console.warn(`⚠️ [WhatsAppService] Nenhum cliente com solicitação pendente encontrado para a mensagem.`);
+      console.warn(`⚠️ [WhatsAppService] Telefone/LID ${cleanPhone} não pertence a um cliente desta organização. Resposta ignorada.`);
       return;
     }
 

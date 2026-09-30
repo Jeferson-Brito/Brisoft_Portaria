@@ -41,7 +41,7 @@ interface RealtimeContextData {
 const RealtimeContext = createContext<RealtimeContextData>({} as RealtimeContextData);
 
 export const RealtimeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { user } = useAuth();
+  const { user, token } = useAuth();
   const [isConnected, setIsConnected] = useState(false);
   const [activeAlert, setActiveAlert] = useState<RealtimeAlert | null>(null);
   const [lastEvent, setLastEvent] = useState<{ type: string; data: any } | null>(null);
@@ -81,7 +81,7 @@ export const RealtimeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   }, []);
 
   useEffect(() => {
-    if (!user?.organizationId) {
+    if (!user?.organizationId || !token) {
       if (socketRef.current) {
         socketRef.current.disconnect();
         socketRef.current = null;
@@ -94,10 +94,7 @@ export const RealtimeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     console.log(`🔌 Conectando ao WebSocket em: ${socketUrl} (Org: ${user.organizationId})`);
 
     const socket = io(socketUrl, {
-      query: {
-        organizationId: user.organizationId,
-        userId: user.id,
-      },
+      auth: { token },
       transports: ['polling', 'websocket'],
       timeout: 20000,
       reconnection: true,
@@ -178,7 +175,7 @@ export const RealtimeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       socket.disconnect();
       socketRef.current = null;
     };
-  }, [user?.organizationId, user?.id, notifyListeners]);
+  }, [user?.organizationId, user?.id, token, notifyListeners]);
 
   return (
     <RealtimeContext.Provider

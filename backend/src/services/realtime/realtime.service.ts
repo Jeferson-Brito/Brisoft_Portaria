@@ -1,5 +1,7 @@
 import { Server as HTTPServer } from 'http';
 import { Server as SocketIOServer, Socket } from 'socket.io';
+import { createVerifier } from 'fast-jwt';
+import { env } from '../../config/env.js';
 
 export interface RealtimeAlertPayload {
   title: string;
@@ -37,24 +39,37 @@ export class RealtimeService {
       pingInterval: 25000,
     });
 
-    this.io.on('connection', (socket: Socket) => {
-      const orgId = socket.handshake.query.organizationId as string;
-      const userId = socket.handshake.query.userId as string;
+    const verifyToken = createVerifier({ key: env.JWT_SECRET });
 
-      if (orgId) {
-        socket.join(`org_${orgId}`);
-        console.log(`🔌 [Realtime] Socket ${socket.id} entrou na sala da organização: org_${orgId}`);
+    this.io.use((socket, next) => {
+      try {
+        const rawToken = socket.handshake.auth?.token;
+        const token = typeof rawToken === 'string' ? rawToken.replace(/^Bearer\s+/i, '') : '';
+        if (!token) {
+          next(new Error('Token ausente'));
+          return;
+        }
+        const payload = verifyToken(token) as { sub?: string; organizationId?: string };
+        if (!payload?.organizationId) {
+          next(new Error('Token sem organizacao'));
+          return;
+        }
+        socket.data.user = payload;
+        next();
+      } catch {
+        next(new Error('Token invalido'));
       }
+    });
 
+    this.io.on('connection', (socket: Socket) => {
+      const orgId = socket.data.user?.organizationId as string;
+      const userId = socket.data.user?.sub as string;
+
+      socket.join(`org_${orgId}`);
       if (userId) {
         socket.join(`user_${userId}`);
       }
-
-      socket.on('join_org', (newOrgId: string) => {
-        if (newOrgId) {
-          socket.join(`org_${newOrgId}`);
-        }
-      });
+      console.log(`🔌 [Realtime] Socket ${socket.id} entrou na sala da organização: org_${orgId}`);
 
       socket.on('disconnect', (reason) => {
         console.log(`🔌 [Realtime] Socket ${socket.id} desconectado (${reason})`);

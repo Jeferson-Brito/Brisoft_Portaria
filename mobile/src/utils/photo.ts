@@ -1,9 +1,11 @@
 import { getBaseUrl } from '../config/api';
 
-/**
- * Normaliza qualquer referência de foto (ID do photo_storage, URL relativa, Base64 ou URL absoluta)
- * para uma URL/URI válida que o componente <Image source={{ uri }} /> do React Native consiga carregar.
- */
+let accessToken: string | null = null;
+
+export function setPhotoAccessToken(token: string | null) {
+  accessToken = token;
+}
+
 export const getPhotoUri = (photoUrl?: string | null): string | null => {
   if (!photoUrl) return null;
   const trimmed = photoUrl.trim();
@@ -18,7 +20,18 @@ export const getPhotoUri = (photoUrl?: string | null): string | null => {
     return trimmed;
   }
 
-  // Se for ID do storage (ex: supa_photo_... ou filename relativo), monta a URL da API
   const baseUrl = getBaseUrl();
   return `${baseUrl}/visitors/photo/${encodeURIComponent(trimmed)}`;
+};
+
+export function getPhotoSource(photoUrl?: string | null): { uri: string; headers?: Record<string, string> } | null {
+  const uri = getPhotoUri(photoUrl);
+  if (!uri) return null;
+  if (!uri.includes('/visitors/photo/') || !accessToken) {
+    return { uri };
+  }
+  return {
+    uri,
+    headers: { Authorization: `Bearer ${accessToken}` },
+  };
 };

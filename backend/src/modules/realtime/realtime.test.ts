@@ -49,9 +49,7 @@ describe('Módulo de Tempo Real & WebSocket - FASE 6', () => {
     // Conecta cliente Socket.IO na sala da organização
     await new Promise<void>((resolve) => {
       clientSocket = ClientIO(`http://localhost:${serverPort}`, {
-        query: {
-          organizationId: orgId,
-        },
+        auth: { token: authToken },
         transports: ['websocket'],
       });
 

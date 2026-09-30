@@ -7,6 +7,7 @@ const visitorController = new VisitorController();
 export async function visitorRoutes(app: FastifyInstance) {
   // Rota autenticada para servir foto (proteção LGPD)
   app.get('/photo/:fileName', {
+    preHandler: [authMiddleware],
     handler: visitorController.servePhoto.bind(visitorController),
   });
 

@@ -36,7 +36,7 @@ import { api } from '../../config/api';
 import { useRealtime } from '../../contexts/RealtimeContext';
 import { AppHeader } from '../../components/AppHeader';
 import { ScrollToTopButton } from '../../components/ScrollToTopButton';
-import { getPhotoUri } from '../../utils/photo';
+import { getPhotoSource } from '../../utils/photo';
 
 export interface HistoryVisitorItem {
   id: string;
@@ -237,8 +237,8 @@ export const VisitorHistoryScreen: React.FC = () => {
 
         {/* Informações Centrais: Foto e Dados do Visitante */}
         <View style={styles.cardBody}>
-          {getPhotoUri(item.visitor.photoUrl) ? (
-            <Image source={{ uri: getPhotoUri(item.visitor.photoUrl)! }} style={styles.visitorAvatar} />
+          {getPhotoSource(item.visitor.photoUrl) ? (
+            <Image source={getPhotoSource(item.visitor.photoUrl)!} style={styles.visitorAvatar} />
           ) : (
             <View style={styles.visitorAvatarPlaceholder}>
               <Text style={styles.avatarInitial}>
@@ -442,10 +442,10 @@ export const VisitorHistoryScreen: React.FC = () => {
                 contentContainerStyle={{ paddingBottom: 24 }}
               >
                 {/* Foto Ampliada (se houver) */}
-                {getPhotoUri(selectedDetail.visitor.photoUrl) ? (
+                {getPhotoSource(selectedDetail.visitor.photoUrl) ? (
                   <View style={styles.modalPhotoContainer}>
                     <Image
-                      source={{ uri: getPhotoUri(selectedDetail.visitor.photoUrl)! }}
+                      source={getPhotoSource(selectedDetail.visitor.photoUrl)!}
                       style={styles.modalPhoto}
                       resizeMode="cover"
                     />

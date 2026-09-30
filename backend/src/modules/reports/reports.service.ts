@@ -39,6 +39,7 @@ export class ReportsService {
     const visits = await prisma.visitRequest.findMany({
       where,
       orderBy: { createdAt: 'desc' },
+      take: 500,
       include: {
         visitor: {
           select: {
