@@ -27,6 +27,8 @@ import {
 import { colors } from '../../theme/colors';
 import { api } from '../../config/api';
 import { useRealtime } from '../../contexts/RealtimeContext';
+import { useForegroundRefresh } from '../../hooks/useForegroundRefresh';
+import { readScreenCache, writeScreenCache } from '../../utils/screenCache';
 import { AppHeader } from '../../components/AppHeader';
 import { ScrollToTopButton } from '../../components/ScrollToTopButton';
 
@@ -66,11 +68,12 @@ interface PresentVisitorItem {
 }
 
 export const PresentVisitorsScreen: React.FC = () => {
-  const [visitors, setVisitors] = useState<PresentVisitorItem[]>([]);
+  const cached = readScreenCache<PresentVisitorItem[]>('present');
+  const [visitors, setVisitors] = useState<PresentVisitorItem[]>(cached || []);
   const listRef = useRef<FlatList>(null);
   const [showScrollTop, setShowScrollTop] = useState(false);
   const [search, setSearch] = useState('');
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(!cached);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [exitingId, setExitingId] = useState<string | null>(null);
   const [place, setPlace] = useState('ALL');
@@ -84,7 +87,9 @@ export const PresentVisitorsScreen: React.FC = () => {
         : '/visit-requests/present';
       const res = await api.get(url);
       if (res.data.success) {
-        setVisitors(res.data.data.visitors || []);
+        const list = res.data.data.visitors || [];
+        if (!search.trim()) writeScreenCache('present', list);
+        setVisitors(list);
       }
     } catch (err: any) {
       console.warn('Erro ao buscar visitantes presentes:', err.message);
@@ -102,14 +107,12 @@ export const PresentVisitorsScreen: React.FC = () => {
       fetchPresentVisitors();
     });
 
-    // Atualiza o relógio de permanência a cada 10 segundos
-    const interval = setInterval(fetchPresentVisitors, 10000);
-
     return () => {
       unsub();
-      clearInterval(interval);
     };
   }, [fetchPresentVisitors, addListener]);
+
+  useForegroundRefresh(fetchPresentVisitors, 120000);
 
   const handleSearchSubmit = () => {
     setIsLoading(true);

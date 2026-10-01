@@ -20,6 +20,7 @@ import {
 import { colors } from '../../theme/colors';
 import { api } from '../../config/api';
 import { useAuth } from '../../contexts/AuthContext';
+import { useRealtime } from '../../contexts/RealtimeContext';
 import { AppHeader } from '../../components/AppHeader';
 
 interface WhatsAppStatusData {
@@ -35,6 +36,7 @@ interface WhatsAppConfigScreenProps {
 
 export const WhatsAppConfigScreen: React.FC<WhatsAppConfigScreenProps> = ({ onBack }) => {
   const { user } = useAuth();
+  const { addListener } = useRealtime();
   const [statusData, setStatusData] = useState<WhatsAppStatusData>({
     status: 'DISCONNECTED',
   });
@@ -58,14 +60,15 @@ export const WhatsAppConfigScreen: React.FC<WhatsAppConfigScreenProps> = ({ onBa
 
   useEffect(() => {
     fetchStatus();
+    return addListener('whatsapp:status', () => fetchStatus());
+  }, [addListener]);
 
-    // Polling regular se estiver aguardando QR Code ou conectando
-    const interval = setInterval(() => {
-      fetchStatus();
-    }, 4000);
-
+  const isPairing = statusData.status === 'CONNECTING' || statusData.status === 'QR_READY';
+  useEffect(() => {
+    if (!isPairing) return;
+    const interval = setInterval(fetchStatus, 4000);
     return () => clearInterval(interval);
-  }, []);
+  }, [isPairing]);
 
   // Iniciar conexão e gerar QR Code
   const handleConnect = async () => {

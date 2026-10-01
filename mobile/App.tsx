@@ -172,7 +172,7 @@ const MainNavigator: React.FC = () => {
   }
 
   if (user.role === 'SUPER_ADMIN') {
-    const { SuperAdminDashboardScreen } = require('./src/screens/admin/SuperAdminDashboardScreen');
+    const { SuperAdminDashboardScreen } = require('./src/screens/super-admin/SuperAdminDashboardScreen');
     return <SuperAdminDashboardScreen />;
   }
 

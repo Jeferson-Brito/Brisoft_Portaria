@@ -34,6 +34,7 @@ import {
 import { colors } from '../../theme/colors';
 import { api } from '../../config/api';
 import { useRealtime } from '../../contexts/RealtimeContext';
+import { readScreenCache, writeScreenCache } from '../../utils/screenCache';
 import { AppHeader } from '../../components/AppHeader';
 import { ScrollToTopButton } from '../../components/ScrollToTopButton';
 import { getPhotoSource } from '../../utils/photo';
@@ -90,11 +91,12 @@ const STATUS_FILTERS = [
 ];
 
 export const VisitorHistoryScreen: React.FC = () => {
-  const [items, setItems] = useState<HistoryVisitorItem[]>([]);
-  const [totalCount, setTotalCount] = useState(0);
+  const cached = readScreenCache<{ items: HistoryVisitorItem[]; total: number }>('history:ALL');
+  const [items, setItems] = useState<HistoryVisitorItem[]>(cached?.items || []);
+  const [totalCount, setTotalCount] = useState(cached?.total || 0);
   const [selectedStatus, setSelectedStatus] = useState<string>('ALL');
   const [search, setSearch] = useState('');
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(!cached);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [selectedDetail, setSelectedDetail] = useState<HistoryVisitorItem | null>(null);
   const [showScrollTop, setShowScrollTop] = useState(false);
@@ -116,8 +118,11 @@ export const VisitorHistoryScreen: React.FC = () => {
 
       const res = await api.get('/visit-requests/history', { params });
       if (res.data?.success && res.data?.data) {
-        setItems(res.data.data.requests || []);
-        setTotalCount(res.data.data.meta?.total || (res.data.data.requests || []).length);
+        const list = res.data.data.requests || [];
+        const total = res.data.data.meta?.total || list.length;
+        if (!search.trim()) writeScreenCache(`history:${selectedStatus}`, { items: list, total });
+        setItems(list);
+        setTotalCount(total);
       }
     } catch (err: any) {
       console.warn('Erro ao carregar histórico de solicitações:', err.message);
@@ -133,8 +138,8 @@ export const VisitorHistoryScreen: React.FC = () => {
 
   // Atualização em tempo real de novas solicitações ou mudanças de status
   useEffect(() => {
-    const unsubCreated = addListener('visit-request:created', () => fetchHistory());
-    const unsubUpdated = addListener('visit-request:updated', () => fetchHistory());
+    const unsubCreated = addListener('visit_request:created', () => fetchHistory());
+    const unsubUpdated = addListener('visit_request:updated', () => fetchHistory());
 
     return () => {
       unsubCreated();
@@ -349,7 +354,14 @@ export const VisitorHistoryScreen: React.FC = () => {
               <TouchableOpacity
                 key={f.key}
                 style={[styles.filterChip, isSelected && styles.filterChipActive]}
-                onPress={() => setSelectedStatus(f.key)}
+                onPress={() => {
+                  const saved = readScreenCache<{ items: HistoryVisitorItem[]; total: number }>(`history:${f.key}`);
+                  if (saved && !search.trim()) {
+                    setItems(saved.items);
+                    setTotalCount(saved.total);
+                  }
+                  setSelectedStatus(f.key);
+                }}
                 activeOpacity={0.8}
               >
                 <Text

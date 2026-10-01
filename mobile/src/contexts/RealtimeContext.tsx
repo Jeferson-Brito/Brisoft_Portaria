@@ -95,7 +95,7 @@ export const RealtimeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
     const socket = io(socketUrl, {
       auth: { token },
-      transports: ['polling', 'websocket'],
+      transports: ['websocket', 'polling'],
       timeout: 20000,
       reconnection: true,
       reconnectionAttempts: Infinity,
@@ -168,6 +168,18 @@ export const RealtimeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     socket.on('whatsapp:status', (status: any) => {
       setLastEvent({ type: 'whatsapp:status', data: status });
       notifyListeners('whatsapp:status', status);
+    });
+
+    const handledEvents = new Set([
+      'visit_request:created',
+      'visit_request:updated',
+      'notification:alert',
+      'whatsapp:status',
+    ]);
+    socket.onAny((event: string, data: any) => {
+      if (handledEvents.has(event)) return;
+      setLastEvent({ type: event, data });
+      notifyListeners(event, data);
     });
 
     return () => {

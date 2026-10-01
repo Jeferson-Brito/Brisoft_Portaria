@@ -52,7 +52,7 @@ import { api } from '../../config/api';
 import { colors } from '../../theme/colors';
 import { PasswordField } from '../../components/PasswordField';
 import { CustomConfirmModal } from '../../components/CustomConfirmModal';
-import { WhatsAppConfigScreen } from './WhatsAppConfigScreen';
+import { WhatsAppConfigScreen } from '../admin/WhatsAppConfigScreen';
 
 type SuperAdminTab = 'overview' | 'organizations' | 'users' | 'finance' | 'profile';
 

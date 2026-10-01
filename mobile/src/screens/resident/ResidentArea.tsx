@@ -21,7 +21,7 @@ import { api } from '../../config/api';
 import { colors } from '../../theme/colors';
 import { AppHeader } from '../../components/AppHeader';
 import QRCode from 'react-native-qrcode-svg';
-import { ResidentAreas } from './ResidentAreas';
+import { ResidentAmenities } from './ResidentAmenities';
 import { WEEKDAY_SHORT, weekdayText } from '../../utils/release';
 
 type Tab = 'home' | 'visits' | 'packages' | 'areas' | 'profile' | 'alerts' | 'new';
@@ -486,7 +486,7 @@ export const ResidentArea: React.FC = () => {
             </View>
           )}
 
-          {tab === 'areas' && <ResidentAreas />}
+          {tab === 'areas' && <ResidentAmenities />}
 
           {tab === 'packages' && !selectedPackage && (
             packages.length === 0 ? (

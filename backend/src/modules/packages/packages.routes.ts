@@ -27,7 +27,7 @@ export async function packageRoutes(app: FastifyInstance) {
           return reply.status(404).send({ success: false, error: { message: 'Foto não encontrada.' } });
         }
         return reply
-          .header('Cache-Control', 'private, no-store')
+          .header('Cache-Control', 'private, max-age=604800, immutable')
           .header('Content-Disposition', 'inline; filename="photo.jpg"')
           .type(safeImageMime(fileData.mimeType))
           .send(fileData.buffer);

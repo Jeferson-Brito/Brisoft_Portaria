@@ -3,4 +3,6 @@ dist
 .env
 .git
 whatsapp_sessions
+uploads
+tests
 *.log

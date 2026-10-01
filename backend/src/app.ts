@@ -1,5 +1,6 @@
 import fastify from 'fastify';
 import cors from '@fastify/cors';
+import compress from '@fastify/compress';
 import fastifyJwt from '@fastify/jwt';
 import rateLimit from '@fastify/rate-limit';
 import multipart from '@fastify/multipart';
@@ -54,6 +55,12 @@ export function buildApp() {
   });
 
   // Plugins
+  app.register(compress, {
+    global: true,
+    threshold: 1024,
+    encodings: ['br', 'gzip', 'deflate'],
+  });
+
   app.register(cors, {
     origin: resolveCorsOrigin(),
     credentials: true,

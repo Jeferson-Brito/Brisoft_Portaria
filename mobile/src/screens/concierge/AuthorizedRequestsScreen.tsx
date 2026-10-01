@@ -24,6 +24,7 @@ import {
 import { colors } from '../../theme/colors';
 import { api } from '../../config/api';
 import { useRealtime } from '../../contexts/RealtimeContext';
+import { readScreenCache, writeScreenCache } from '../../utils/screenCache';
 import { AppHeader } from '../../components/AppHeader';
 import { ScrollToTopButton } from '../../components/ScrollToTopButton';
 import { ReleaseCancelled, releaseWithRestrictionCheck } from '../../utils/release';
@@ -60,11 +61,12 @@ interface AuthorizedItem {
 }
 
 export const AuthorizedRequestsScreen: React.FC = () => {
-  const [items, setItems] = useState<AuthorizedItem[]>([]);
+  const cached = readScreenCache<AuthorizedItem[]>('authorized');
+  const [items, setItems] = useState<AuthorizedItem[]>(cached || []);
   const listRef = useRef<FlatList>(null);
   const [showScrollTop, setShowScrollTop] = useState(false);
   const [search, setSearch] = useState('');
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(!cached);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [processingId, setProcessingId] = useState<string | null>(null);
 
@@ -81,6 +83,7 @@ export const AuthorizedRequestsScreen: React.FC = () => {
       });
 
       if (res.data?.success && res.data?.data?.requests) {
+        if (!search.trim()) writeScreenCache('authorized', res.data.data.requests);
         setItems(res.data.data.requests);
       }
     } catch (err: any) {

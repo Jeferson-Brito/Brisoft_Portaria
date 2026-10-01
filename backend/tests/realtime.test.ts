@@ -1,11 +1,11 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { createServer } from 'http';
 import { io as ClientIO, Socket as ClientSocket } from 'socket.io-client';
-import { buildApp } from '../../app.js';
+import { buildApp } from '../src/app.js';
 import { FastifyInstance } from 'fastify';
-import { realtimeService } from '../../services/realtime/realtime.service.js';
-import { whatsappService } from '../../services/whatsapp/whatsapp.service.js';
-import { prisma } from '../../lib/prisma.js';
+import { realtimeService } from '../src/services/realtime/realtime.service.js';
+import { whatsappService } from '../src/services/whatsapp/whatsapp.service.js';
+import { prisma } from '../src/lib/prisma.js';
 
 describe('Módulo de Tempo Real & WebSocket - FASE 6', () => {
   let app: FastifyInstance;

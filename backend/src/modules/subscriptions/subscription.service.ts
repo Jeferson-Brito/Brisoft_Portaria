@@ -1,6 +1,7 @@
 import { prisma } from '../../lib/prisma.js';
 import { AppError } from '../../core/errors/app-error.js';
 import { realtimeService } from '../../services/realtime/realtime.service.js';
+import { invalidateAuthCache } from '../../middlewares/auth.middleware.js';
 
 export const STRIPE_PAYMENT_LINK = 'https://buy.stripe.com/4gM3coh0P3IWdi6dGfg7e00';
 
@@ -252,6 +253,7 @@ export class SubscriptionService {
       },
       select: { id: true, createdAt: true, settings: true, isActive: true, slug: true, name: true },
     });
+    invalidateAuthCache();
 
     const info = this.calculateSubscription(updated);
 
@@ -283,6 +285,7 @@ export class SubscriptionService {
       },
       select: { id: true, createdAt: true, settings: true, isActive: true, slug: true },
     });
+    invalidateAuthCache();
 
     const info = this.calculateSubscription(updated);
     realtimeService.emitToOrganization(orgId, 'subscription:updated', info);

@@ -1,6 +1,6 @@
 /**
  * Script para criar o usuário SUPER_ADMIN no banco de dados.
- * Execute com: npx ts-node --esm prisma/init-super-admin.ts
+ * Execute com: npm run prisma:super-admin
  * 
  * ⚠️ Execute apenas UMA VEZ, antes do primeiro deploy em produção.
  */

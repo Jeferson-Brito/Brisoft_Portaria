@@ -23,10 +23,12 @@ build
 # Persistent data & sessions
 /backend/data/
 /backend/whatsapp_sessions/
+/backend/uploads/
 *.baileys_auth*
 
-# Supabase / Prisma local
+# Prisma local
 .prisma
+*.db
 
 # Mobile / Expo
 .expo/

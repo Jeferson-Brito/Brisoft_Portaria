@@ -22,6 +22,8 @@ import {
 import { colors } from '../../theme/colors';
 import { api } from '../../config/api';
 import { useRealtime } from '../../contexts/RealtimeContext';
+import { useForegroundRefresh } from '../../hooks/useForegroundRefresh';
+import { readScreenCache, writeScreenCache } from '../../utils/screenCache';
 import { AppHeader } from '../../components/AppHeader';
 import { ScrollToTopButton } from '../../components/ScrollToTopButton';
 import { ReleaseCancelled, releaseWithRestrictionCheck } from '../../utils/release';
@@ -62,17 +64,20 @@ export interface PendingRequestItem {
 }
 
 export const OpenRequestsScreen: React.FC<{ hideHeader?: boolean }> = ({ hideHeader = false }) => {
-  const [requests, setRequests] = useState<PendingRequestItem[]>([]);
+  const cached = readScreenCache<PendingRequestItem[]>('pending');
+  const [requests, setRequests] = useState<PendingRequestItem[]>(cached || []);
   const listRef = useRef<FlatList>(null);
   const [showScrollTop, setShowScrollTop] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(!cached);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const { addListener, isConnected } = useRealtime();
 
   const fetchPendingRequests = async () => {
     try {
       const response = await api.get('/visit-requests/pending');
-      setRequests(response.data.data.requests || []);
+      const list = response.data.data.requests || [];
+      writeScreenCache('pending', list);
+      setRequests(list);
     } catch (err) {
       console.warn('Erro ao carregar solicitações em aberto:', err);
     } finally {
@@ -96,15 +101,13 @@ export const OpenRequestsScreen: React.FC<{ hideHeader?: boolean }> = ({ hideHea
       fetchPendingRequests();
     });
 
-    // Atualiza a cada 10s para re-calcular o contador de segundos
-    const interval = setInterval(fetchPendingRequests, 10000);
-
     return () => {
       unsubCreated();
       unsubUpdated();
-      clearInterval(interval);
     };
   }, [addListener]);
+
+  useForegroundRefresh(fetchPendingRequests, 120000);
 
   const handleRemind = async (item: PendingRequestItem) => {
     if (item.remindersSentCount >= 3) {

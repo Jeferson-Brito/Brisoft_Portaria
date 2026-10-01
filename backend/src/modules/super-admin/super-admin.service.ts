@@ -3,6 +3,7 @@ import { subscriptionService, rememberPlanPrice } from '../subscriptions/subscri
 import { whatsappService } from '../../services/whatsapp/whatsapp.service.js';
 import { AppError } from '../../core/errors/app-error.js';
 import { invalidateSubscriptionCache } from '../../middlewares/subscription.middleware.js';
+import { invalidateAuthCache } from '../../middlewares/auth.middleware.js';
 import bcrypt from 'bcryptjs';
 
 function isCustomerOrganization(org: { slug?: string | null; name?: string | null }) {
@@ -238,6 +239,7 @@ export class SuperAdminService {
     });
 
     invalidateSubscriptionCache(orgId);
+    invalidateAuthCache();
     return updated;
   }
 
@@ -263,6 +265,7 @@ export class SuperAdminService {
     });
 
     invalidateSubscriptionCache(orgId);
+    invalidateAuthCache();
     return updated;
   }
 
@@ -276,6 +279,7 @@ export class SuperAdminService {
     });
 
     invalidateSubscriptionCache(orgId);
+    invalidateAuthCache();
     return { success: true, message: `Organização ${org.name} excluída com sucesso.` };
   }
 
@@ -416,6 +420,7 @@ export class SuperAdminService {
         organization: { select: { id: true, name: true } },
       },
     });
+    invalidateAuthCache(userId);
 
     return updated;
   }
@@ -446,6 +451,7 @@ export class SuperAdminService {
       where: { id: userId },
       data: { deletedAt: new Date(), isActive: false },
     });
+    invalidateAuthCache(userId);
 
     return { success: true, message: `Usuário ${user.name} excluído com sucesso.` };
   }

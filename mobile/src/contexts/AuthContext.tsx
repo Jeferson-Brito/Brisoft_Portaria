@@ -4,6 +4,7 @@ import { api, setOnUnauthorizedCallback, setMemoryToken } from '../config/api';
 import { registerForPushNotificationsAsync } from '../services/notifications.service';
 import { clearSessionSecrets, getSessionValue, setSessionValue } from '../services/secure-session';
 import { setPhotoAccessToken } from '../utils/photo';
+import { clearScreenCache } from '../utils/screenCache';
 
 export interface Subscription {
   plan: 'TRIAL' | 'BASIC' | 'ENTERPRISE';
@@ -62,6 +63,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   useEffect(() => {
     setOnUnauthorizedCallback(() => {
+      clearScreenCache();
       setUser(null);
       setToken(null);
     });
@@ -106,6 +108,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const response = await api.post('/auth/login', { email, password });
       const { user: loggedUser, token: authToken, refreshToken } = response.data.data;
 
+      clearScreenCache();
       setUser(loggedUser);
       setToken(authToken);
       setMemoryToken(authToken);
@@ -204,6 +207,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       await clearSessionSecrets();
     } finally {
+      clearScreenCache();
       setMemoryToken(null);
       setUser(null);
       setToken(null);

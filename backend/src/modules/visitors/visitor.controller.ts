@@ -167,7 +167,7 @@ export class VisitorController {
       }
 
       return reply
-        .header('Cache-Control', 'private, no-store')
+        .header('Cache-Control', 'private, max-age=604800, immutable')
         .header('Content-Disposition', 'inline; filename="photo.jpg"')
         .type(fileData.mimeType)
         .send(fileData.buffer);

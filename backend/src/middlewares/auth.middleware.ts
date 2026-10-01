@@ -17,6 +17,51 @@ declare module '@fastify/jwt' {
   }
 }
 
+type AuthUser = {
+  id: string;
+  isActive: boolean;
+  deletedAt: Date | null;
+  role: string;
+  organizationId: string;
+  clientId: string | null;
+  email: string;
+  name: string;
+  organization: { isActive: boolean };
+};
+
+// Desativar, excluir ou trocar papel de usuário ou empresa precisa chamar
+// invalidateAuthCache, senão a mudança só vale depois de AUTH_CACHE_TTL_MS.
+const AUTH_CACHE_TTL_MS = 30_000;
+const authCache = new Map<string, { user: AuthUser | null; expiresAt: number }>();
+
+export function invalidateAuthCache(userId?: string) {
+  if (userId) authCache.delete(userId);
+  else authCache.clear();
+}
+
+async function loadAuthUser(userId: string): Promise<AuthUser | null> {
+  const hit = authCache.get(userId);
+  if (hit && hit.expiresAt > Date.now()) return hit.user;
+
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: {
+      id: true,
+      isActive: true,
+      deletedAt: true,
+      role: true,
+      organizationId: true,
+      clientId: true,
+      email: true,
+      name: true,
+      organization: { select: { isActive: true } },
+    },
+  });
+  if (authCache.size > 5000) authCache.clear();
+  authCache.set(userId, { user, expiresAt: Date.now() + AUTH_CACHE_TTL_MS });
+  return user;
+}
+
 export async function authMiddleware(request: FastifyRequest, reply: FastifyReply) {
   try {
     const authHeader = request.headers.authorization;
@@ -36,20 +81,7 @@ export async function authMiddleware(request: FastifyRequest, reply: FastifyRepl
       throw new AppError('Token inválido ou expirado. Faça login novamente.', 401, 'TOKEN_INVALID');
     }
 
-    const user = await prisma.user.findUnique({
-      where: { id: decoded.sub },
-      select: {
-        id: true,
-        isActive: true,
-        deletedAt: true,
-        role: true,
-        organizationId: true,
-        clientId: true,
-        email: true,
-        name: true,
-        organization: { select: { isActive: true } },
-      },
-    });
+    const user = await loadAuthUser(decoded.sub);
 
     if (!user || user.deletedAt || !user.isActive) {
       throw new AppError('Sessão encerrada. Faça login novamente.', 401, 'USER_INACTIVE');

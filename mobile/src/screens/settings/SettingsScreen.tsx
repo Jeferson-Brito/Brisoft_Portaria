@@ -14,7 +14,6 @@ import {
 import { ScrollToTopButton } from '../../components/ScrollToTopButton';
 import {
   Users,
-  Building2,
   Building,
   MessageSquare,
   ShieldCheck,
@@ -43,7 +42,6 @@ interface SettingsScreenProps {
       | 'amenities'
       | 'whatsapp'
       | 'subscription'
-      | 'super_admin_orgs'
   ) => void;
   orgProfile: {
     companyName?: string;
@@ -221,21 +219,6 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
               {isPro ? 'Plano ativo' : isTrial ? `${trialDays} dias` : 'Regularizar'}
             </Text>
           </TouchableOpacity>
-        </View>
-      )}
-
-      {isSuperAdmin && (
-        <View style={styles.group}>
-          <Text style={styles.groupLabel}>Sistema</Text>
-          <View style={styles.groupBox}>
-            <MenuRow
-              icon={<Building2 size={18} color="#FFFFFF" />}
-              iconBg={colors.primary}
-              title="Empresas do SaaS"
-              subtitle="Cadastro e acessos das empresas"
-              onPress={() => onNavigate('super_admin_orgs')}
-            />
-          </View>
         </View>
       )}
 

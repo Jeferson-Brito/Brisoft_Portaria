@@ -2,6 +2,7 @@ import bcrypt from 'bcryptjs';
 import { prisma } from '../../lib/prisma.js';
 import { AppError } from '../../core/errors/app-error.js';
 import { Role } from '../../middlewares/rbac.middleware.js';
+import { invalidateAuthCache } from '../../middlewares/auth.middleware.js';
 
 export interface CreateUserParams {
   organizationId: string;
@@ -169,6 +170,7 @@ export class UserService {
       data: { isActive: !user.isActive },
       select: { id: true, name: true, isActive: true },
     });
+    invalidateAuthCache(userId);
 
     return updated;
   }
@@ -194,6 +196,7 @@ export class UserService {
         isActive: false,
       },
     });
+    invalidateAuthCache(userId);
 
     return { success: true };
   }
@@ -262,6 +265,7 @@ export class UserService {
       data: updateData,
       select: { id: true, name: true, email: true, role: true, phone: true, isActive: true },
     });
+    invalidateAuthCache(userId);
 
     return updated;
   }
@@ -309,6 +313,7 @@ export class UserService {
         phone: true,
       },
     });
+    invalidateAuthCache(userId);
 
     return updated;
   }

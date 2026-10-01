@@ -28,6 +28,7 @@ import {
 } from 'lucide-react-native';
 import { colors } from '../../theme/colors';
 import { api } from '../../config/api';
+import { readScreenCache, writeScreenCache } from '../../utils/screenCache';
 import { AppHeader } from '../../components/AppHeader';
 import { ScrollToTopButton } from '../../components/ScrollToTopButton';
 
@@ -47,16 +48,15 @@ export const ReportsScreen: React.FC = () => {
   const [startDateStr, setStartDateStr] = useState('');
   const [endDateStr, setEndDateStr] = useState('');
   const [activeSubTab, setActiveSubTab] = useState<SubTab>('metrics');
-  const [loading, setLoading] = useState(true);
+  const cached = readScreenCache<{ metrics: any; auditLogs: any[] }>('reports:7');
+  const [loading, setLoading] = useState(!cached);
   const [refreshing, setRefreshing] = useState(false);
-  const [metrics, setMetrics] = useState<any>(null);
-  const [auditLogs, setAuditLogs] = useState<any[]>([]);
+  const [metrics, setMetrics] = useState<any>(cached?.metrics || null);
+  const [auditLogs, setAuditLogs] = useState<any[]>(cached?.auditLogs || []);
   const [filterModalVisible, setFilterModalVisible] = useState(false);
 
   const loadData = async () => {
     try {
-      setLoading(true);
-      
       let url = `/reports/metrics?`;
       if (days === 'custom') {
         const start = startDateStr.split('/').reverse().join('-');
@@ -66,12 +66,23 @@ export const ReportsScreen: React.FC = () => {
         url += `days=${days}`;
       }
 
+      const cacheKey = `reports:${days === 'custom' ? url : days}`;
+      const saved = readScreenCache<{ metrics: any; auditLogs: any[] }>(cacheKey);
+      if (saved) {
+        setMetrics(saved.metrics);
+        setAuditLogs(saved.auditLogs);
+      } else {
+        setLoading(true);
+      }
+
       const [metricsRes, auditRes] = await Promise.all([
         api.get(url),
         api.get('/audit/timeline?limit=30'),
       ]);
-      setMetrics(metricsRes.data.data);
-      setAuditLogs(auditRes.data.data || []);
+      const fresh = { metrics: metricsRes.data.data, auditLogs: auditRes.data.data || [] };
+      writeScreenCache(cacheKey, fresh);
+      setMetrics(fresh.metrics);
+      setAuditLogs(fresh.auditLogs);
     } catch (err) {
       console.log('Erro ao carregar relatórios:', err);
     } finally {

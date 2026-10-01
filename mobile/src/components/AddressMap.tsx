@@ -10,7 +10,7 @@ import {
 import { WebView } from 'react-native-webview';
 import { MapPin } from 'lucide-react-native';
 
-type Suggestion = { text: string; magicKey: string; title: string; detail: string };
+type Suggestion = { text: string; magicKey: string; title: string; detail: string; label: string };
 type Point = { lat: number; lng: number; label: string };
 
 const GEOCODE = 'https://geocode.arcgis.com/arcgis/rest/services/World/GeocodeServer';

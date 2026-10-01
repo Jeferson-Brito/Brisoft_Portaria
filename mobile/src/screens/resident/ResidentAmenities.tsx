@@ -31,7 +31,7 @@ function toIso(value: string) {
   return match ? `${match[3]}-${match[2]}-${match[1]}` : '';
 }
 
-export const ResidentAreas: React.FC = () => {
+export const ResidentAmenities: React.FC = () => {
   const [areas, setAreas] = useState<Area[]>([]);
   const [areaId, setAreaId] = useState('');
   const [date, setDate] = useState('');

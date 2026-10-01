@@ -76,13 +76,13 @@ import { ReportsScreen } from '../reports/ReportsScreen';
 import { ProfileScreen } from '../profile/ProfileScreen';
 import { SettingsScreen } from '../settings/SettingsScreen';
 import { SubscriptionScreen } from '../auth/SubscriptionScreen';
-import { SuperAdminOrganizationsScreen } from '../admin/SuperAdminOrganizationsScreen';
 import { CustomConfirmModal } from '../../components/CustomConfirmModal';
 import { AppHeader } from '../../components/AppHeader';
 import { ScrollToTopButton } from '../../components/ScrollToTopButton';
 import { OnboardingTutorialModal } from '../../components/OnboardingTutorialModal';
 import { SetupGuideBanner } from '../../components/SetupGuideBanner';
 import { useRealtime, RealtimeAlert } from '../../contexts/RealtimeContext';
+import { useForegroundRefresh } from '../../hooks/useForegroundRefresh';
 
 type DateFilterType = 'ALL' | 'TODAY' | 'YESTERDAY' | 'LAST_7_DAYS';
 
@@ -180,13 +180,12 @@ export const DashboardScreen: React.FC = () => {
     | 'org_profile'
     | 'profile'
     | 'subscription'
-    | 'super_admin_orgs'
   >('dashboard');
 
   useEffect(() => {
     const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
       if (activeTab === 'dashboard') return false;
-      const backToSettings = ['whatsapp', 'users_mgmt', 'clients_mgmt', 'restrictions', 'amenities', 'org_profile', 'subscription', 'super_admin_orgs'];
+      const backToSettings = ['whatsapp', 'users_mgmt', 'clients_mgmt', 'restrictions', 'amenities', 'org_profile', 'subscription'];
       if (backToSettings.includes(activeTab)) setActiveTab('settings');
       else if (activeTab === 'profile') setActiveTab(user?.role === 'CONCIERGE' ? 'dashboard' : 'settings');
       else if (activeTab === 'settings') setActiveTab('dashboard');
@@ -359,8 +358,6 @@ export const DashboardScreen: React.FC = () => {
       );
     });
 
-    const interval = setInterval(() => fetchSummaryAndRequests(true), 15000);
-
     return () => {
       unsubCreated();
       unsubUpdated();
@@ -368,9 +365,10 @@ export const DashboardScreen: React.FC = () => {
       unsubPkgPicked();
       unsubAlert();
       unsubSubscription();
-      clearInterval(interval);
     };
   }, [addListener, fetchSummaryAndRequests, fetchOrgProfile, refreshSubscription]);
+
+  useForegroundRefresh(() => fetchSummaryAndRequests(true), 120000);
 
   // Reset da barra de ações compactas e botão voltar ao topo na troca de aba
   useEffect(() => {
@@ -445,14 +443,6 @@ export const DashboardScreen: React.FC = () => {
     if (activeTab === 'subscription') {
       return (
         <SubscriptionScreen
-          onBack={() => setActiveTab('settings')}
-        />
-      );
-    }
-
-    if (activeTab === 'super_admin_orgs') {
-      return (
-        <SuperAdminOrganizationsScreen
           onBack={() => setActiveTab('settings')}
         />
       );

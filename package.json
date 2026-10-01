@@ -14,8 +14,7 @@
     "backend:build": "npm --workspace=backend run build",
     "backend:start": "npm --workspace=backend run start",
     "backend:test": "npm --workspace=backend run test",
-    "backend:migrate": "npm --workspace=backend run prisma:migrate",
-    "backend:seed": "npm --workspace=backend run prisma:seed",
+    "backend:db-push": "npm --workspace=backend run prisma:push",
     "mobile:start": "npm --workspace=mobile run start",
     "mobile:android": "npm --workspace=mobile run android",
     "mobile:ios": "npm --workspace=mobile run ios"
@@ -25,7 +24,6 @@
     "portaria",
     "baileys",
     "whatsapp",
-    "supabase",
     "react-native",
     "fastify"
   ],

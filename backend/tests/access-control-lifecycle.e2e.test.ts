@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { buildApp } from '../../app.js';
-import { prisma } from '../../lib/prisma.js';
+import { buildApp } from '../src/app.js';
+import { prisma } from '../src/lib/prisma.js';
 
 describe('Ciclo Completo E2E: Controle de Acesso e Resiliência (FASE 10)', () => {
   let app: any;
