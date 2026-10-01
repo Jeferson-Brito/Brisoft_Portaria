@@ -1,5 +1,5 @@
 import { prisma } from '../../lib/prisma.js';
-import { subscriptionService } from '../subscriptions/subscription.service.js';
+import { subscriptionService, rememberPlanPrice } from '../subscriptions/subscription.service.js';
 import { whatsappService } from '../../services/whatsapp/whatsapp.service.js';
 import { AppError } from '../../core/errors/app-error.js';
 import { invalidateSubscriptionCache } from '../../middlewares/subscription.middleware.js';
@@ -170,7 +170,7 @@ export class SuperAdminService {
     const trialEndsAt = new Date(Date.now() + trialDays * 24 * 60 * 60 * 1000);
     const initialSettings = {
       plan: data.plan || 'PRO',
-      monthlyPrice: data.monthlyPrice ?? 99.9,
+      monthlyPrice: await this.getPlanPrice(),
       trialDays,
       trialEndsAt: trialEndsAt.toISOString(),
       paymentStatus: data.paymentStatus || 'TRIAL',
@@ -213,7 +213,6 @@ export class SuperAdminService {
       ...currentSettings,
       ...(data.settings || {}),
       ...(data.plan ? { plan: data.plan } : {}),
-      ...(typeof data.monthlyPrice === 'number' ? { monthlyPrice: data.monthlyPrice } : {}),
       ...(data.paymentStatus ? { paymentStatus: data.paymentStatus } : {}),
       ...(data.trialEndsAt ? { trialEndsAt: data.trialEndsAt } : {}),
     };
@@ -535,6 +534,7 @@ export class SuperAdminService {
       });
       invalidateSubscriptionCache(company.id);
     }
+    rememberPlanPrice(price);
     return price;
   }
 

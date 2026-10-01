@@ -63,9 +63,11 @@ async function bootstrap() {
   // Disponibiliza o socket.io no fastify ANTES de finalizar a inicialização
   app.decorate('io', io);
 
-  await app.ready();
+    await app.ready();
+    const { loadGlobalPlanPrice } = await import('./modules/subscriptions/subscription.service.js');
+    await loadGlobalPlanPrice();
 
-  try {
+    try {
     await app.listen({ port: env.PORT, host: '0.0.0.0' });
 
     // Inicia a rotina de exclusão automática de fotos antigas (> 30 dias corridos)

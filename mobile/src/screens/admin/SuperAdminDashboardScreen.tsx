@@ -229,7 +229,6 @@ export const SuperAdminDashboardScreen: React.FC = () => {
         adminPassword: orgForm.adminPassword,
         adminPhone: orgForm.adminPhone.trim() || undefined,
         plan: orgForm.plan,
-        monthlyPrice: parseFloat(orgForm.monthlyPrice.replace(',', '.')) || 99.9,
         trialDays: parseInt(orgForm.trialDays, 10) || 7,
         address: orgForm.address.trim() || undefined,
       });
@@ -264,7 +263,6 @@ export const SuperAdminDashboardScreen: React.FC = () => {
         name: editingOrg.name,
         document: editingOrg.document,
         plan: editingOrg.plan,
-        monthlyPrice: parseFloat(String(editingOrg.monthlyPrice).replace(',', '.')) || 99.9,
         paymentStatus: editingOrg.paymentStatus,
         settings: { address: (editingOrg.address || '').trim() },
       });
@@ -628,7 +626,7 @@ export const SuperAdminDashboardScreen: React.FC = () => {
               <View style={{ flex: 1, marginLeft: 12 }}>
                 <Text style={styles.alertCardTitle}>{item.name}</Text>
                 <Text style={styles.alertCardDesc}>
-                  Assinatura pendente ({formatCurrency(item.monthlyPrice)}/mês). Cobrança aguardando confirmação.
+                  Assinatura pendente ({formatCurrency(planPrice)}/mês). O administrador precisa pagar para continuar.
                 </Text>
               </View>
               <TouchableOpacity
@@ -695,47 +693,51 @@ export const SuperAdminDashboardScreen: React.FC = () => {
           metrics.recentOrganizations?.map((org: any) => (
             <View key={org.id} style={styles.recentOrgCard}>
               <View style={styles.recentOrgHeader}>
-                <View>
-                  <Text style={styles.recentOrgName}>{org.name}</Text>
-                  <Text style={styles.recentOrgSlug}>{org.slug}.brisoftportaria.com</Text>
+                <View style={styles.recentOrgTitleBlock}>
+                  <Text style={styles.recentOrgName} numberOfLines={2}>{org.name}</Text>
+                  <Text style={styles.recentOrgSlug} numberOfLines={1}>{org.slug}.brisoftportaria.com</Text>
                 </View>
-                <View style={{ alignItems: 'flex-end' }}>
-                  <View
+                <View
+                  style={[
+                    styles.statusPill,
+                    {
+                      backgroundColor:
+                        org.paymentStatus === 'ACTIVE'
+                          ? '#DCFCE7'
+                          : org.paymentStatus === 'TRIAL'
+                            ? '#FEF3C7'
+                            : '#FEE2E2',
+                    },
+                  ]}
+                >
+                  <Text
                     style={[
-                      styles.statusPill,
+                      styles.statusPillText,
                       {
-                        backgroundColor:
+                        color:
                           org.paymentStatus === 'ACTIVE'
-                            ? '#DCFCE7'
+                            ? '#15803D'
                             : org.paymentStatus === 'TRIAL'
-                              ? '#FEF3C7'
-                              : '#FEE2E2',
+                              ? '#B45309'
+                              : '#B91C1C',
                       },
                     ]}
                   >
-                    <Text
-                      style={[
-                        styles.statusPillText,
-                        {
-                          color:
-                            org.paymentStatus === 'ACTIVE'
-                              ? '#15803D'
-                              : org.paymentStatus === 'TRIAL'
-                                ? '#B45309'
-                                : '#B91C1C',
-                        },
-                      ]}
-                    >
-                      {org.paymentStatus === 'ACTIVE'
-                        ? 'PAGO & ATIVO'
-                        : org.paymentStatus === 'TRIAL'
-                          ? 'TESTE 7 DIAS'
-                          : 'PENDENTE'}
-                    </Text>
-                  </View>
-                  <Text style={styles.recentOrgPrice}>{org.paymentStatus === 'ACTIVE' ? `${formatCurrency(planPrice)}/mês` : 'Sem cobrança'}</Text>
+                    {org.paymentStatus === 'ACTIVE'
+                      ? 'PAGO'
+                      : org.paymentStatus === 'TRIAL'
+                        ? 'TESTE'
+                        : 'PENDENTE'}
+                  </Text>
                 </View>
               </View>
+              <Text style={styles.recentOrgPrice}>
+                {org.paymentStatus === 'ACTIVE'
+                  ? `${formatCurrency(planPrice)} por mês`
+                  : org.paymentStatus === 'TRIAL'
+                    ? `Teste grátis. Depois, ${formatCurrency(planPrice)} por mês`
+                    : `Bloqueada até pagar ${formatCurrency(planPrice)} por mês`}
+              </Text>
 
               <View style={styles.recentOrgFooter}>
                 <View style={styles.recentOrgInfoRow}>
@@ -836,7 +838,7 @@ export const SuperAdminDashboardScreen: React.FC = () => {
                     <Text style={styles.orgCardSub} numberOfLines={2}>Slug: {org.slug} {org.document ? `• Doc: ${org.document}` : ''}</Text>
                   </View>
 
-                  <View style={{ alignItems: 'flex-end' }}>
+                  <View style={styles.orgStatusColumn}>
                     <View
                       style={[
                         styles.statusPill,
@@ -871,12 +873,18 @@ export const SuperAdminDashboardScreen: React.FC = () => {
                               ? 'Suspenso'
                               : org.paymentStatus === 'EXPIRED'
                                 ? 'Vencido'
-                                : 'Sem pagamento'}
+                                : 'Pendente'}
                       </Text>
                     </View>
-                    <Text style={styles.orgPriceTag}>{org.paymentStatus === 'ACTIVE' ? `${formatCurrency(planPrice)}/mês` : 'Sem cobrança'}</Text>
                   </View>
                 </View>
+                <Text style={styles.orgPriceTag}>
+                  {org.paymentStatus === 'ACTIVE'
+                    ? `${formatCurrency(planPrice)} por mês`
+                    : org.paymentStatus === 'TRIAL'
+                      ? `Teste grátis. Depois, ${formatCurrency(planPrice)} por mês`
+                      : `Pagar ${formatCurrency(planPrice)} por mês para voltar`}
+                </Text>
 
                 {/* Métricas e Status de Conexão */}
                 <View style={styles.orgCardStatsRow}>
@@ -1206,7 +1214,7 @@ export const SuperAdminDashboardScreen: React.FC = () => {
             <TouchableOpacity style={styles.financeOrgTop} activeOpacity={0.7} onPress={() => openPaymentHistory(org)}>
               <View style={{ flex: 1, paddingRight: 8 }}>
                 <Text style={styles.financeOrgName} numberOfLines={2}>{org.name}</Text>
-                <Text style={styles.financeOrgPlan}>{org.paymentStatus === 'ACTIVE' ? `Paga ${formatCurrency(planPrice)} por mês` : 'Sem cobrança agora'}</Text>
+                <Text style={styles.financeOrgPlan}>{org.paymentStatus === 'ACTIVE' ? `Paga ${formatCurrency(planPrice)} por mês` : org.paymentStatus === 'TRIAL' ? `Teste grátis. Depois paga ${formatCurrency(planPrice)} por mês` : `Sem acesso até pagar ${formatCurrency(planPrice)} por mês`}</Text>
                 <Text style={styles.financeHistoryHint}>Histórico de pagamentos</Text>
               </View>
               <View style={[styles.statusPill, { backgroundColor: org.paymentStatus === 'ACTIVE' ? '#DCFCE7' : org.paymentStatus === 'TRIAL' ? '#FEF3C7' : '#FEE2E2' }]}>
@@ -1502,29 +1510,14 @@ export const SuperAdminDashboardScreen: React.FC = () => {
                 onChangeText={(t) => setOrgForm((prev) => ({ ...prev, address: t }))}
               />
 
-              <View style={{ flexDirection: 'row', gap: 10 }}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.inputLabel}>Plano</Text>
-                  <TextInput
-                    style={styles.modalInput}
-                    placeholder="PRO, ENTERPRISE"
-                    placeholderTextColor="#94A3B8"
-                    value={orgForm.plan}
-                    onChangeText={(t) => setOrgForm((prev) => ({ ...prev, plan: t }))}
-                  />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.inputLabel}>Valor Mensal (R$)</Text>
-                  <TextInput
-                    style={styles.modalInput}
-                    placeholder="99.90"
-                    placeholderTextColor="#94A3B8"
-                    keyboardType="numeric"
-                    value={orgForm.monthlyPrice}
-                    onChangeText={(t) => setOrgForm((prev) => ({ ...prev, monthlyPrice: t }))}
-                  />
-                </View>
-              </View>
+              <Text style={styles.inputLabel}>Plano</Text>
+              <TextInput
+                style={styles.modalInput}
+                placeholder="PRO"
+                placeholderTextColor="#94A3B8"
+                value={orgForm.plan}
+                onChangeText={(t) => setOrgForm((prev) => ({ ...prev, plan: t }))}
+              />
 
               <Text style={styles.inputLabel}>Dias de Teste Grátis (Trial)</Text>
               <TextInput
@@ -1636,13 +1629,9 @@ export const SuperAdminDashboardScreen: React.FC = () => {
                   onChangeText={(t) => setEditingOrg((prev: any) => ({ ...prev, address: t }))}
                 />
 
-                <Text style={styles.inputLabel}>Valor Mensal da Assinatura (R$)</Text>
-                <TextInput
-                  style={styles.modalInput}
-                  keyboardType="numeric"
-                  value={String(editingOrg.monthlyPrice || '')}
-                  onChangeText={(t) => setEditingOrg((prev: any) => ({ ...prev, monthlyPrice: t }))}
-                />
+                <Text style={{ fontSize: 13, lineHeight: 19, color: '#475569', marginBottom: 14 }}>
+                  {`A mensalidade é única para todas as empresas: ${formatCurrency(planPrice)}. O administrador desta empresa paga esse valor quando os 7 dias acabam. Sem o pagamento, o acesso é bloqueado.`}
+                </Text>
 
                 <Text style={styles.inputLabel}>Status de Pagamento</Text>
                 <View style={{ flexDirection: 'row', gap: 6, marginBottom: 14 }}>
@@ -2289,6 +2278,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
+    gap: 8,
+  },
+  recentOrgTitleBlock: {
+    flex: 1,
+    paddingRight: 8,
   },
   recentOrgName: {
     fontSize: 15,
@@ -2302,9 +2296,10 @@ const styles = StyleSheet.create({
   },
   recentOrgPrice: {
     fontSize: 13,
-    fontWeight: '800',
+    fontWeight: '700',
     color: '#0F172A',
-    marginTop: 4,
+    marginTop: 10,
+    lineHeight: 18,
   },
   statusPill: {
     paddingHorizontal: 8,
@@ -2464,9 +2459,13 @@ const styles = StyleSheet.create({
   },
   orgPriceTag: {
     fontSize: 13,
-    fontWeight: '800',
+    fontWeight: '700',
     color: '#0F172A',
-    marginTop: 4,
+    marginTop: 10,
+    lineHeight: 18,
+  },
+  orgStatusColumn: {
+    marginLeft: 8,
   },
   orgCardStatsRow: {
     flexDirection: 'row',
@@ -2772,6 +2771,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#64748B',
     marginTop: 2,
+    lineHeight: 17,
   },
   financeHistoryHint: {
     fontSize: 12,

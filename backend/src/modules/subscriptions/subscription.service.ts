@@ -4,6 +4,25 @@ import { realtimeService } from '../../services/realtime/realtime.service.js';
 
 export const STRIPE_PAYMENT_LINK = 'https://buy.stripe.com/4gM3coh0P3IWdi6dGfg7e00';
 
+let cachedPlanPrice = 99.9;
+
+export function currentPlanPrice() {
+  return cachedPlanPrice;
+}
+
+export function rememberPlanPrice(price: number) {
+  if (Number.isFinite(price) && price > 0) cachedPlanPrice = price;
+}
+
+export async function loadGlobalPlanPrice() {
+  const setting = await prisma.systemSetting.findFirst({
+    where: { key: 'saas_plan_monthly_price' },
+  });
+  const parsed = setting ? Number(String(setting.value).replace(',', '.')) : 99.9;
+  rememberPlanPrice(parsed);
+  return currentPlanPrice();
+}
+
 export interface SubscriptionInfo {
   plan: string;
   status: 'TRIAL' | 'ACTIVE' | 'SUSPENDED' | 'CANCELLED' | 'EXPIRED';
@@ -64,9 +83,7 @@ export class SubscriptionService {
       : new Date(createdTime + trialDays * 24 * 60 * 60 * 1000);
 
     const plan = settings.plan || 'PRO';
-    const monthlyPrice = typeof settings.monthlyPrice === 'number' && settings.monthlyPrice > 0
-      ? settings.monthlyPrice
-      : 99.9;
+    const monthlyPrice = currentPlanPrice();
     const paymentHistory = Array.isArray(settings.paymentHistory) ? settings.paymentHistory : [];
 
     let paymentStatus: 'TRIAL' | 'ACTIVE' | 'SUSPENDED' | 'CANCELLED' | 'EXPIRED' = settings.paymentStatus;
@@ -206,9 +223,7 @@ export class SubscriptionService {
 
     const now = new Date();
     const currentPeriodEnd = new Date(now.getTime() + periodDays * 24 * 60 * 60 * 1000);
-    const chargedAmount = typeof settings.monthlyPrice === 'number' && settings.monthlyPrice > 0
-      ? settings.monthlyPrice
-      : 99.9;
+    const chargedAmount = currentPlanPrice();
     const label = source === 'COMPLIMENTARY'
       ? 'Cortesia'
       : source === 'MANUAL'
@@ -226,7 +241,7 @@ export class SubscriptionService {
     settings.paymentStatus = 'ACTIVE';
     settings.paidAt = now.toISOString();
     settings.currentPeriodEnd = currentPeriodEnd.toISOString();
-    settings.monthlyPrice = typeof settings.monthlyPrice === 'number' ? settings.monthlyPrice : 99.9;
+    settings.monthlyPrice = currentPlanPrice();
     settings.paymentHistory = history.slice(0, 36);
 
     const updated = await prisma.organization.update({
