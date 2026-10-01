@@ -438,11 +438,13 @@ export class BaileysProvider implements IWhatsAppProvider {
         }
 
         const senderPn = (msg.key as { senderPn?: string }).senderPn || '';
-        const phoneJid = senderPn
-          ? (senderPn.includes('@') ? senderPn : `${senderPn.replace(/\D/g, '')}@s.whatsapp.net`)
-          : (remoteJid.endsWith('@s.whatsapp.net') ? remoteJid : '');
+        const phoneJid = remoteJid.endsWith('@s.whatsapp.net')
+          ? remoteJid
+          : (senderPn.includes('@') ? senderPn : '');
         const fromPhone = (phoneJid || remoteJid).replace(/[^0-9]/g, '');
-        if (phoneJid.endsWith('@s.whatsapp.net') && fromPhone) {
+        if (remoteJid.endsWith('@lid') && fromPhone) {
+          this.registerJidMapping(fromPhone, remoteJid);
+        } else if (phoneJid.endsWith('@s.whatsapp.net') && fromPhone) {
           this.registerJidMapping(fromPhone, phoneJid);
         }
 
@@ -565,80 +567,62 @@ export class BaileysProvider implements IWhatsAppProvider {
   }
 
   private async sendableJid(toPhone: string): Promise<string> {
-    if (toPhone.endsWith('@s.whatsapp.net')) return toPhone;
-    if (toPhone.endsWith('@lid')) {
-      const lidDigits = toPhone.replace(/\D/g, '');
-      const client = await prisma.client.findFirst({
-        where: { notes: { contains: `[LID:${lidDigits}]` }, deletedAt: null },
-        select: { whatsappNumber: true },
-      }).catch(() => null);
-      if (!client?.whatsappNumber) {
-        throw new Error('Destino LID sem telefone cadastrado. Mensagem para @lid chega como "Aguardando mensagem".');
-      }
-      console.log(`📱 [Baileys] LID ${lidDigits} convertido para o telefone ${client.whatsappNumber}`);
-      return this.resolveJid(client.whatsappNumber);
-    }
+    if (toPhone.endsWith('@s.whatsapp.net') || toPhone.endsWith('@lid')) return toPhone;
     return this.resolveJid(toPhone);
   }
 
+  private addressFromLookup(result: { jid?: string; exists?: unknown; lid?: unknown } | undefined): string | null {
+    if (!result?.exists) return null;
+    const rawLid = typeof result.lid === 'string' ? result.lid.trim() : '';
+    if (rawLid) {
+      const lid = rawLid.includes('@') ? rawLid : `${rawLid.replace(/\D/g, '')}@lid`;
+      if (lid.endsWith('@lid')) return lid;
+    }
+    if (typeof result.jid === 'string' && result.jid.endsWith('@s.whatsapp.net')) return result.jid;
+    return null;
+  }
+
   private async resolveJid(phone: string): Promise<string> {
-    if (phone.endsWith('@s.whatsapp.net')) {
+    if (phone.endsWith('@s.whatsapp.net') || phone.endsWith('@lid')) {
       return phone;
     }
 
     const clean = phone.replace(/\D/g, '');
 
-    // O celular não abre mensagem enviada para o @lid: fica em "Aguardando mensagem".
-    // O cache só vale quando aponta para o número (@s.whatsapp.net).
-    if (this.jidCache.has(clean)) {
-      const cached = this.jidCache.get(clean)!;
-      if (cached.endsWith('@s.whatsapp.net')) {
-        console.log(`📱 [Baileys] JID recuperado do cache de interação recente para ${clean}: ${cached}`);
-        return cached;
-      }
-      this.jidCache.delete(clean);
+    // O celular abre a mensagem no identificador LID, não no número.
+    // O cache só vale quando já aponta para esse identificador.
+    const cached = this.jidCache.get(clean);
+    if (cached?.endsWith('@lid')) {
+      console.log(`📱 [Baileys] JID LID em cache para ${clean}: ${cached}`);
+      return cached;
     }
 
     if (this.sock) {
       try {
-        // 1. Para números brasileiros com 13 dígitos (55 + DDD + 9 dígitos):
-        // No WhatsApp, grande parte das contas brasileiras continuam registradas internamente sem o 9º dígito (12 dígitos).
-        // Se enviarmos para o JID de 13 dígitos, o WhatsApp Web pode exibir, mas o celular oficial fica em "Aguardando mensagem".
-        // Portanto, verificamos primeiro se a conta existe no formato canônico sem o 9º dígito!
+        const candidates: string[] = [];
         if (clean.startsWith('55') && clean.length === 13 && clean[4] === '9') {
-          const withoutNine = `${clean.slice(0, 4)}${clean.slice(5)}`;
-          const [resWithout] = (await this.sock.onWhatsApp(withoutNine)) || [];
-          if (resWithout && resWithout.exists) {
-            console.log(`📱 [Baileys] JID canônico sem 9º dígito resolvido (${withoutNine}): ${resWithout.jid}`);
-            return resWithout.jid;
-          }
+          candidates.push(`${clean.slice(0, 4)}${clean.slice(5)}`, clean);
+        } else if (clean.startsWith('55') && clean.length === 12) {
+          candidates.push(clean, `${clean.slice(0, 4)}9${clean.slice(4)}`);
+        } else {
+          candidates.push(clean);
         }
 
-        // 2. Tenta verificar o número original informado
-        const [direct] = (await this.sock.onWhatsApp(clean)) || [];
-        if (direct && direct.exists) {
-          console.log(`📱 [Baileys] JID verificado para ${clean}: ${direct.jid}`);
-          return direct.jid;
-        }
-
-        // 3. Fallback se não resolveu direto: tenta sem o 9º dígito
-        if (clean.startsWith('55') && clean.length === 13 && clean[4] === '9') {
-          const withoutNine = `${clean.slice(0, 4)}${clean.slice(5)}`;
-          const [resWithout] = (await this.sock.onWhatsApp(withoutNine)) || [];
-          if (resWithout && resWithout.exists) {
-            console.log(`📱 [Baileys] JID resolvido sem 9º dígito (${withoutNine}): ${resWithout.jid}`);
-            return resWithout.jid;
+        let phoneFallback: string | null = null;
+        for (const candidate of candidates) {
+          const [result] = (await this.sock.onWhatsApp(candidate)) || [];
+          const address = this.addressFromLookup(result);
+          if (!address) continue;
+          if (address.endsWith('@lid')) {
+            this.registerJidMapping(clean, address);
+            console.log(`📱 [Baileys] JID LID resolvido (${candidate}): ${address}`);
+            return address;
           }
+          phoneFallback = phoneFallback || address;
         }
-
-        // 4. Se foi informado com 12 dígitos (sem o 9º dígito), tenta com o 9º dígito
-        if (clean.startsWith('55') && clean.length === 12) {
-          const withNine = `${clean.slice(0, 4)}9${clean.slice(4)}`;
-          const [resWith] = (await this.sock.onWhatsApp(withNine)) || [];
-          if (resWith && resWith.exists) {
-            console.log(`📱 [Baileys] JID resolvido com 9º dígito (${withNine}): ${resWith.jid}`);
-            return resWith.jid;
-          }
+        if (phoneFallback) {
+          console.log(`📱 [Baileys] JID de telefone resolvido para ${clean}: ${phoneFallback}`);
+          return phoneFallback;
         }
       } catch (err: any) {
         console.warn('⚠️ [Baileys] Erro ao consultar onWhatsApp:', err?.message || err);
