@@ -157,29 +157,45 @@ export class WhatsAppService {
       return; // Mensagem irrelevante ou não estruturada
     }
 
-    // 1. Tenta localizar o cliente pelo telefone OU pelo WhatsApp LID persistido
+    // 1. Tenta localizar o cliente pelo telefone OU pelo WhatsApp LID persistido.
+    // O cadastro pode ter o 9 do celular e a resposta chegar sem ele, ou o contrário.
     let client = null;
     const phoneLike = cleanPhone.length >= 10 && cleanPhone.length <= 13;
     if (phoneLike) {
-      const variants = new Set<string>([cleanPhone]);
+      const forms = new Set<string>([cleanPhone]);
+      if (cleanPhone.startsWith('55') && cleanPhone.length === 13 && cleanPhone[4] === '9') {
+        forms.add(`${cleanPhone.slice(0, 4)}${cleanPhone.slice(5)}`);
+      }
+      if (cleanPhone.startsWith('55') && cleanPhone.length === 12) {
+        forms.add(`${cleanPhone.slice(0, 4)}9${cleanPhone.slice(4)}`);
+      }
       try {
-        variants.add(formatWhatsAppNumber(cleanPhone));
+        forms.add(formatWhatsAppNumber(cleanPhone));
       } catch {}
-      const tails = [...variants].map((value) => value.slice(-11)).filter((value) => value.length >= 10);
-      client = await prisma.client.findFirst({
-        where: {
-          organizationId,
-          deletedAt: null,
-          OR: tails.map((tail) => ({ whatsappNumber: { contains: tail } })),
-        },
-      });
+      const tails = new Set<string>();
+      for (const form of forms) {
+        if (form.length >= 10) tails.add(form.slice(-10));
+        if (form.length >= 11) tails.add(form.slice(-11));
+      }
+      const parts = [...tails];
+      if (parts.length > 0) {
+        client = await prisma.client.findFirst({
+          where: {
+            organizationId,
+            deletedAt: null,
+            OR: parts.map((tail) => ({ whatsappNumber: { contains: tail } })),
+          },
+        });
+      }
     }
-    if (!client && cleanPhone) {
+    const lidDigits = event.fromJid?.endsWith('@lid') ? event.fromJid.replace(/\D/g, '') : '';
+    const markers = [lidDigits, cleanPhone].filter((value) => value.length > 8);
+    if (!client && markers.length > 0) {
       client = await prisma.client.findFirst({
         where: {
           organizationId,
           deletedAt: null,
-          notes: { contains: `[LID:${cleanPhone}]` },
+          OR: markers.map((value) => ({ notes: { contains: `[LID:${value}]` } })),
         },
       });
     }
@@ -189,9 +205,6 @@ export class WhatsAppService {
       return;
     }
 
-    // Guarda o LID só para reconhecer a resposta. O envio continua no número,
-    // porque mensagem para @lid chega no celular como "Aguardando mensagem".
-    const lidDigits = event.fromJid?.endsWith('@lid') ? event.fromJid.replace(/\D/g, '') : '';
     if (lidDigits && !client.notes?.includes(`[LID:${lidDigits}]`)) {
       try {
         const newNotes = client.notes ? `${client.notes} [LID:${lidDigits}]` : `[LID:${lidDigits}]`;

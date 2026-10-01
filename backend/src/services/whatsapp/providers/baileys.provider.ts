@@ -46,6 +46,7 @@ export class BaileysProvider implements IWhatsAppProvider {
   private isConnecting = false;
   private messageStore = new Map<string, proto.IMessage>();
   private jidCache = new Map<string, string>();
+  private lidPhones = new Map<string, string>();
   private msgRetryCounterCache = new MemoryCache();
   private reconnectAttempts = 0;
   private reconnectTimer: NodeJS.Timeout | null = null;
@@ -114,6 +115,7 @@ export class BaileysProvider implements IWhatsAppProvider {
     if (!phoneOrClean || !targetJid) return;
     const clean = phoneOrClean.replace(/\D/g, '');
     this.jidCache.set(clean, targetJid);
+    if (targetJid.endsWith('@lid')) this.lidPhones.set(targetJid, clean);
     if (clean.startsWith('55') && clean.length === 13 && clean[4] === '9') {
       this.jidCache.set(`${clean.slice(0, 4)}${clean.slice(5)}`, targetJid);
     }
@@ -441,7 +443,8 @@ export class BaileysProvider implements IWhatsAppProvider {
         const phoneJid = remoteJid.endsWith('@s.whatsapp.net')
           ? remoteJid
           : (senderPn.includes('@') ? senderPn : '');
-        const fromPhone = (phoneJid || remoteJid).replace(/[^0-9]/g, '');
+        const mappedPhone = remoteJid.endsWith('@lid') ? this.lidPhones.get(remoteJid) : '';
+        const fromPhone = (mappedPhone || phoneJid || remoteJid).replace(/[^0-9]/g, '');
         if (remoteJid.endsWith('@lid') && fromPhone) {
           this.registerJidMapping(fromPhone, remoteJid);
         } else if (phoneJid.endsWith('@s.whatsapp.net') && fromPhone) {
