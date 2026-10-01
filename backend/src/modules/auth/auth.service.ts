@@ -3,7 +3,7 @@ import { Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma.js';
 import { AppError } from '../../core/errors/app-error.js';
 import { subscriptionService } from '../subscriptions/subscription.service.js';
-import { isValidCnpj, onlyDigits } from '../../utils/cnpj.js';
+import { cnpjExistsAtRevenue, isValidCnpj, isValidCpf, onlyDigits } from '../../utils/cnpj.js';
 import { isDisposableEmail, isGmailAddress, normalizeEmail } from '../../utils/email.js';
 import { verificationService } from '../../services/verification.service.js';
 import { formatWhatsAppNumber } from '../../utils/phone.util.js';
@@ -16,7 +16,8 @@ export interface LoginParams {
 export interface RegisterParams {
   // Dados da empresa
   organizationName: string;
-  organizationDocument?: string; // CNPJ
+  organizationDocument?: string;
+  documentType?: 'CPF' | 'CNPJ';
   // Dados do administrador (dono da assinatura)
   adminName: string;
   adminEmail: string;
@@ -26,15 +27,22 @@ export interface RegisterParams {
 }
 
 export class AuthService {
-  async register({ organizationName, organizationDocument, adminName, adminEmail, adminPassword, adminPhone, verificationCode }: RegisterParams) {
+  async register({
+    organizationName,
+    organizationDocument,
+    documentType = 'CNPJ',
+    adminName,
+    adminEmail,
+    adminPassword,
+    adminPhone,
+    verificationCode,
+  }: RegisterParams) {
     if (adminPassword.length < 8) {
       throw new AppError('A senha deve ter no mínimo 8 caracteres.', 400, 'INVALID_PASSWORD');
     }
 
     const documentDigits = onlyDigits(organizationDocument || '');
-    if (!isValidCnpj(documentDigits)) {
-      throw new AppError('Informe um CNPJ válido.', 400, 'INVALID_CNPJ');
-    }
+    await this.assertDocument(documentType, documentDigits);
 
     const rawEmail = adminEmail.trim().toLowerCase();
     const email = normalizeEmail(rawEmail);
@@ -47,17 +55,24 @@ export class AuthService {
     }
 
     if (await this.documentAlreadyClaimed(documentDigits)) {
-      throw new AppError('Este CNPJ já utilizou o período de teste.', 409, 'CNPJ_ALREADY_USED');
+      throw new AppError(
+        documentType === 'CPF' ? 'Este CPF já está cadastrado.' : 'Este CNPJ já está cadastrado.',
+        409,
+        'DOCUMENT_IN_USE'
+      );
     }
 
     let whatsappNumber = '';
     try {
       whatsappNumber = formatWhatsAppNumber(adminPhone || '');
     } catch {
-      throw new AppError('Informe um WhatsApp válido com DDD.', 400, 'INVALID_PHONE');
+      throw new AppError('Informe um WhatsApp válido com DDD e 9 dígitos.', 400, 'INVALID_PHONE');
+    }
+    if (await this.whatsappAlreadyUsed(whatsappNumber)) {
+      throw new AppError('Este número de WhatsApp já está cadastrado.', 409, 'PHONE_IN_USE');
     }
     if (!verificationCode || verificationCode.trim().length !== 8) {
-      throw new AppError('Confirme o código de 8 caracteres enviado no WhatsApp.', 400, 'CODE_REQUIRED');
+      throw new AppError('Confirme o código de 8 números enviado no WhatsApp.', 400, 'CODE_REQUIRED');
     }
     await verificationService.consume({
       email,
@@ -171,12 +186,59 @@ export class AuthService {
       if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
         const target = JSON.stringify(err.meta?.target || '');
         if (target.includes('document')) {
-          throw new AppError('Este CNPJ já utilizou o período de teste.', 409, 'CNPJ_ALREADY_USED');
+          throw new AppError('Este documento já está cadastrado.', 409, 'DOCUMENT_IN_USE');
         }
         throw new AppError('Este e-mail já está em uso. Faça login ou utilize outro e-mail.', 409, 'EMAIL_IN_USE');
       }
       throw err;
     }
+  }
+
+  async assertDocument(documentType: 'CPF' | 'CNPJ', document: string) {
+    const documentDigits = onlyDigits(document);
+    if (documentType === 'CPF') {
+      if (!isValidCpf(documentDigits)) {
+        throw new AppError('Este CPF é inválido. Confira os números digitados.', 400, 'INVALID_CPF');
+      }
+    } else if (!isValidCnpj(documentDigits)) {
+      throw new AppError('Este CNPJ é inválido. Confira os números digitados.', 400, 'INVALID_CNPJ');
+    } else {
+      try {
+        const exists = await cnpjExistsAtRevenue(documentDigits);
+        if (!exists) {
+          throw new AppError('Este CNPJ não existe na Receita Federal.', 400, 'INVALID_CNPJ');
+        }
+      } catch (err) {
+        if (err instanceof AppError) throw err;
+        throw new AppError('Não foi possível confirmar o CNPJ agora. Tente novamente.', 503, 'CNPJ_LOOKUP_FAILED');
+      }
+    }
+
+    if (await this.documentAlreadyClaimed(documentDigits)) {
+      throw new AppError(
+        documentType === 'CPF' ? 'Este CPF já está cadastrado.' : 'Este CNPJ já está cadastrado.',
+        409,
+        'DOCUMENT_IN_USE'
+      );
+    }
+  }
+
+  async whatsappAlreadyUsed(phone: string, exceptUserId?: string) {
+    const digits = onlyDigits(phone);
+    const local = digits.startsWith('55') && digits.length > 11 ? digits.slice(2) : digits;
+    if (local.length < 10) return false;
+    const candidates = await prisma.user.findMany({
+      where: {
+        deletedAt: null,
+        OR: [{ whatsappNumber: { contains: local.slice(-8) } }, { phone: { contains: local.slice(-8) } }],
+      },
+      select: { id: true, whatsappNumber: true, phone: true },
+    });
+    return candidates.some((item) => {
+      if (exceptUserId && item.id === exceptUserId) return false;
+      const saved = onlyDigits(item.whatsappNumber || item.phone || '');
+      return saved.endsWith(local) || local.endsWith(saved.slice(-11));
+    });
   }
 
   private async emailAlreadyClaimed(rawEmail: string, canonicalEmail: string) {
@@ -324,6 +386,9 @@ export class AuthService {
       throw new AppError('Usuário não encontrado.', 404, 'USER_NOT_FOUND');
     }
     const whatsappNumber = formatWhatsAppNumber(phone);
+    if (await this.whatsappAlreadyUsed(whatsappNumber, user.id)) {
+      throw new AppError('Este número de WhatsApp já está cadastrado.', 409, 'PHONE_IN_USE');
+    }
     await verificationService.send({
       email: user.email,
       phone: whatsappNumber,
@@ -331,6 +396,23 @@ export class AuthService {
       userId: user.id,
     });
     return { phone: whatsappNumber };
+  }
+
+  async confirmOwnWhatsappCode(userId: string, phone: string, code: string) {
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user || user.deletedAt) {
+      throw new AppError('Usuário não encontrado.', 404, 'USER_NOT_FOUND');
+    }
+    const whatsappNumber = formatWhatsAppNumber(phone);
+    if (await this.whatsappAlreadyUsed(whatsappNumber, user.id)) {
+      throw new AppError('Este número de WhatsApp já está cadastrado.', 409, 'PHONE_IN_USE');
+    }
+    await verificationService.matches({
+      email: user.email,
+      phone: whatsappNumber,
+      purpose: 'WHATSAPP_CONFIRM',
+      code,
+    });
   }
 
   async completeProfile(userId: string, newPassword: string, phone: string, code: string) {
@@ -342,6 +424,9 @@ export class AuthService {
       throw new AppError('Usuário não encontrado.', 404, 'USER_NOT_FOUND');
     }
     const whatsappNumber = formatWhatsAppNumber(phone);
+    if (await this.whatsappAlreadyUsed(whatsappNumber, user.id)) {
+      throw new AppError('Este número de WhatsApp já está cadastrado.', 409, 'PHONE_IN_USE');
+    }
     await verificationService.consume({
       email: user.email,
       phone: whatsappNumber,

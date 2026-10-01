@@ -74,7 +74,7 @@ export const LoginScreen: React.FC<{ onRegisterPress?: () => void }> = ({ onRegi
 
   const confirmResetCode = async () => {
     if (resetCode.trim().length !== 8) {
-      setErrorMessage('Digite o código de 8 caracteres recebido no WhatsApp.');
+      setErrorMessage('Digite o código de 8 números recebido no WhatsApp.');
       return;
     }
     try {
@@ -242,11 +242,11 @@ export const LoginScreen: React.FC<{ onRegisterPress?: () => void }> = ({ onRegi
               <Text style={styles.fieldLabel}>Código do WhatsApp</Text>
               <TextInput
                 style={styles.textInput}
-                placeholder="8 caracteres"
+                placeholder="8 números"
                 placeholderTextColor="#94A3B8"
                 value={resetCode}
-                onChangeText={(value) => setResetCode(value.replace(/[^a-zA-Z0-9]/g, '').slice(0, 8).toUpperCase())}
-                autoCapitalize="characters"
+                onChangeText={(value) => setResetCode(value.replace(/\D/g, '').slice(0, 8))}
+                keyboardType="number-pad"
                 autoCorrect={false}
                 editable={!isLoading}
               />

@@ -23,7 +23,7 @@ function signRefreshToken(userId: string, organizationId: string) {
 
 const resetPasswordBodySchema = z.object({
   email: z.string().email('E-mail em formato inválido'),
-  code: z.string().length(8, 'Informe o código de 8 caracteres.'),
+  code: z.string().regex(/^\d{8}$/, 'Informe o código de 8 números.'),
   newPassword: z.string().min(8, 'A nova senha deve ter no mínimo 8 caracteres'),
 });
 
@@ -34,12 +34,13 @@ const loginBodySchema = z.object({
 
 const registerBodySchema = z.object({
   organizationName: z.string().min(2, 'Nome da empresa deve ter ao menos 2 caracteres'),
-  organizationDocument: z.string().min(14, 'Informe o CNPJ da empresa.'),
+  organizationDocument: z.string().min(11, 'Informe o CPF ou o CNPJ.'),
+  documentType: z.enum(['CPF', 'CNPJ']).default('CNPJ'),
   adminName: z.string().min(2, 'Seu nome deve ter ao menos 2 caracteres'),
   adminEmail: z.string().email('E-mail em formato inválido'),
   adminPassword: z.string().min(8, 'A senha deve ter no mínimo 8 caracteres'),
   adminPhone: z.string().min(10, 'Informe o WhatsApp com DDD.'),
-  verificationCode: z.string().length(8, 'Informe o código de 8 caracteres enviado no WhatsApp.'),
+  verificationCode: z.string().regex(/^\d{8}$/, 'Informe o código de 8 números enviado no WhatsApp.'),
 });
 
 const authService = new AuthService();
@@ -155,7 +156,7 @@ export class AuthController {
   async checkResetCode(request: FastifyRequest, reply: FastifyReply) {
     const schema = z.object({
       email: z.string().email('E-mail em formato inválido'),
-      code: z.string().length(8, 'Informe o código de 8 caracteres.'),
+      code: z.string().regex(/^\d{8}$/, 'Informe o código de 8 números.'),
     });
     const parsed = schema.safeParse(request.body);
     if (!parsed.success) {
@@ -218,6 +219,12 @@ export class AuthController {
       });
     }
     try {
+      if (await authService.whatsappAlreadyUsed(parsed.data.phone)) {
+        return reply.status(409).send({
+          success: false,
+          error: { code: 'PHONE_IN_USE', message: 'Este número de WhatsApp já está cadastrado.' },
+        });
+      }
       await verificationService.send({
         email: parsed.data.email,
         phone: parsed.data.phone,
@@ -228,6 +235,58 @@ export class AuthController {
       return reply.status(err.statusCode || 500).send({
         success: false,
         error: { code: err.code || 'INTERNAL_ERROR', message: err.message || 'Não foi possível enviar o código.' },
+      });
+    }
+  }
+
+  async confirmRegisterCode(request: FastifyRequest, reply: FastifyReply) {
+    const schema = z.object({
+      email: z.string().email('E-mail em formato inválido'),
+      phone: z.string().min(10, 'Informe o WhatsApp com DDD.'),
+      code: z.string().regex(/^\d{8}$/, 'Informe o código de 8 números.'),
+    });
+    const parsed = schema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.status(400).send({
+        success: false,
+        error: { code: 'VALIDATION_ERROR', message: parsed.error.errors[0].message },
+      });
+    }
+    try {
+      await verificationService.matches({
+        email: parsed.data.email,
+        phone: parsed.data.phone,
+        code: parsed.data.code,
+        purpose: 'REGISTER',
+      });
+      return reply.send({ success: true });
+    } catch (err: any) {
+      return reply.status(err.statusCode || 500).send({
+        success: false,
+        error: { code: err.code || 'INTERNAL_ERROR', message: err.message || 'Código incorreto.' },
+      });
+    }
+  }
+
+  async checkDocument(request: FastifyRequest, reply: FastifyReply) {
+    const schema = z.object({
+      documentType: z.enum(['CPF', 'CNPJ']),
+      document: z.string().min(11, 'Informe o documento.'),
+    });
+    const parsed = schema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.status(400).send({
+        success: false,
+        error: { code: 'VALIDATION_ERROR', message: parsed.error.errors[0].message },
+      });
+    }
+    try {
+      await authService.assertDocument(parsed.data.documentType, parsed.data.document);
+      return reply.send({ success: true });
+    } catch (err: any) {
+      return reply.status(err.statusCode || 500).send({
+        success: false,
+        error: { code: err.code || 'INVALID_DOCUMENT', message: err.message || 'Documento inválido.' },
       });
     }
   }
@@ -272,11 +331,34 @@ export class AuthController {
     }
   }
 
+  async confirmOwnWhatsappCode(request: FastifyRequest, reply: FastifyReply) {
+    const schema = z.object({
+      phone: z.string().min(10, 'Informe o WhatsApp com DDD.'),
+      code: z.string().regex(/^\d{8}$/, 'Informe o código de 8 números.'),
+    });
+    const parsed = schema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.status(400).send({
+        success: false,
+        error: { code: 'VALIDATION_ERROR', message: parsed.error.errors[0].message },
+      });
+    }
+    try {
+      await authService.confirmOwnWhatsappCode(request.user.sub, parsed.data.phone, parsed.data.code);
+      return reply.send({ success: true });
+    } catch (err: any) {
+      return reply.status(err.statusCode || 500).send({
+        success: false,
+        error: { code: err.code || 'INTERNAL_ERROR', message: err.message || 'Código incorreto.' },
+      });
+    }
+  }
+
   async completeProfile(request: FastifyRequest, reply: FastifyReply) {
     const schema = z.object({
       newPassword: z.string().min(8, 'A nova senha deve ter no mínimo 8 caracteres'),
       phone: z.string().min(10, 'Informe o WhatsApp com DDD.'),
-      code: z.string().length(8, 'Informe o código de 8 caracteres.'),
+      code: z.string().regex(/^\d{8}$/, 'Informe o código de 8 números.'),
     });
     const parsed = schema.safeParse(request.body);
     if (!parsed.success) {

@@ -74,6 +74,7 @@ export async function authMiddleware(request: FastifyRequest, reply: FastifyRepl
       const allowed =
         path === '/api/v1/auth/me' ||
         path === '/api/v1/auth/whatsapp-code' ||
+        path === '/api/v1/auth/whatsapp-code/confirm' ||
         path === '/api/v1/auth/complete-profile' ||
         path === '/api/v1/users/me' ||
         path.startsWith('/api/v1/me/');

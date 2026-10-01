@@ -42,6 +42,7 @@ interface AuthContextData {
 export interface RegisterData {
   organizationName: string;
   organizationDocument: string;
+  documentType: 'CPF' | 'CNPJ';
   adminName: string;
   adminEmail: string;
   adminPassword: string;

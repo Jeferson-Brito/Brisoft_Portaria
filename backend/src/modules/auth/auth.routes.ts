@@ -32,6 +32,16 @@ export async function authRoutes(app: FastifyInstance) {
     handler: authController.sendRegisterCode.bind(authController),
   });
 
+  app.post('/register/confirm-whatsapp', {
+    config: { rateLimit: { max: 8, timeWindow: '10 minutes' } },
+    handler: authController.confirmRegisterCode.bind(authController),
+  });
+
+  app.post('/register/check-document', {
+    config: { rateLimit: { max: 20, timeWindow: '10 minutes' } },
+    handler: authController.checkDocument.bind(authController),
+  });
+
   app.post('/forgot-password', {
     config: { rateLimit: { max: 5, timeWindow: '15 minutes' } },
     handler: authController.forgotPassword.bind(authController),
@@ -51,6 +61,12 @@ export async function authRoutes(app: FastifyInstance) {
     preHandler: [authMiddleware],
     config: { rateLimit: { max: 5, timeWindow: '10 minutes' } },
     handler: authController.sendOwnWhatsappCode.bind(authController),
+  });
+
+  app.post('/whatsapp-code/confirm', {
+    preHandler: [authMiddleware],
+    config: { rateLimit: { max: 8, timeWindow: '10 minutes' } },
+    handler: authController.confirmOwnWhatsappCode.bind(authController),
   });
 
   app.post('/complete-profile', {

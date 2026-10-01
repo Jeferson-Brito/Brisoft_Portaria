@@ -32,18 +32,6 @@ async function main() {
     },
   });
 
-  // Garante subscription ativa para a org system (SUPER_ADMIN nunca é bloqueado, mas precisa existir)
-  await prisma.subscription.upsert({
-    where: { organizationId: systemOrg.id },
-    update: {},
-    create: {
-      organizationId: systemOrg.id,
-      plan: 'ENTERPRISE',
-      status: 'ACTIVE',
-      maxUsers: 999,
-    },
-  });
-
   const existing = await prisma.user.findUnique({ where: { email: SUPER_ADMIN_EMAIL } });
   const passwordHash = existing && process.env.SUPER_ADMIN_RESET_PASSWORD !== 'true'
     ? existing.passwordHash

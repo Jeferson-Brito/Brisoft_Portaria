@@ -6,21 +6,22 @@ import { formatWhatsAppNumber } from '../utils/phone.util.js';
 import { normalizeEmail } from '../utils/email.js';
 import { whatsappService } from './whatsapp/whatsapp.service.js';
 
-const ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-const PURPOSE = {
-  REGISTER: 'REGISTER',
-  PASSWORD_RESET: 'PASSWORD_RESET',
-  WHATSAPP_CONFIRM: 'WHATSAPP_CONFIRM',
-} as const;
-
-export type VerificationPurpose = (typeof PURPOSE)[keyof typeof PURPOSE];
+export type VerificationPurpose = 'REGISTER' | 'PASSWORD_RESET' | 'WHATSAPP_CONFIRM';
 
 function createCode() {
   let code = '';
   for (let index = 0; index < 8; index += 1) {
-    code += ALPHABET[randomInt(ALPHABET.length)];
+    code += String(randomInt(0, 10));
   }
   return code;
+}
+
+function verificationMessage(purpose: VerificationPurpose, code: string) {
+  const intro =
+    purpose === 'PASSWORD_RESET'
+      ? 'Use o código abaixo para redefinir sua senha. Ele vale por 10 minutos. Não compartilhe este código.'
+      : 'Use o código abaixo para confirmar seu WhatsApp. Ele vale por 10 minutos. Não compartilhe este código.';
+  return `*Brisoft Portaria*\n${intro}\n\n*${code}*`;
 }
 
 export class VerificationService {
@@ -46,7 +47,7 @@ export class VerificationService {
     try {
       await whatsappService.sendPlatformMessage(
         phone,
-        `*Brisoft Portaria*\nSeu código é *${code}*.\nEle vale por 10 minutos. Não compartilhe este código.`
+        verificationMessage(params.purpose, code)
       );
     } catch (err: any) {
       await prisma.verificationCode.delete({ where: { id: record.id } }).catch(() => {});
@@ -70,7 +71,7 @@ export class VerificationService {
     if (params.phone && formatWhatsAppNumber(params.phone) !== record.phone) {
       throw new AppError('O WhatsApp informado não é o mesmo que recebeu o código.', 400, 'PHONE_MISMATCH');
     }
-    const ok = await bcrypt.compare(params.code.trim().toUpperCase(), record.codeHash);
+    const ok = await bcrypt.compare(params.code.trim(), record.codeHash);
     if (!ok) {
       throw new AppError('Código incorreto.', 400, 'CODE_INVALID');
     }

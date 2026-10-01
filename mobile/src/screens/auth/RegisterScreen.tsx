@@ -45,6 +45,45 @@ function maskCnpj(value: string) {
   return `${digits.slice(0, 2)}.${digits.slice(2, 5)}.${digits.slice(5, 8)}/${digits.slice(8, 12)}-${digits.slice(12)}`;
 }
 
+function maskCpf(value: string) {
+  const digits = value.replace(/\D/g, '').slice(0, 11);
+  if (digits.length <= 3) return digits;
+  if (digits.length <= 6) return `${digits.slice(0, 3)}.${digits.slice(3)}`;
+  if (digits.length <= 9) return `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6)}`;
+  return `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6, 9)}-${digits.slice(9)}`;
+}
+
+function maskPhone(value: string) {
+  const digits = value.replace(/\D/g, '').slice(0, 11);
+  if (digits.length <= 2) return digits;
+  if (digits.length <= 7) return `(${digits.slice(0, 2)}) ${digits.slice(2)}`;
+  return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
+}
+
+function isValidCpf(value: string) {
+  const cpf = value.replace(/\D/g, '');
+  if (cpf.length !== 11 || /^(\d)\1+$/.test(cpf)) return false;
+  const digit = (length: number) => {
+    let sum = 0;
+    for (let index = 0; index < length; index += 1) sum += Number(cpf[index]) * (length + 1 - index);
+    const rest = (sum * 10) % 11;
+    return rest === 10 ? 0 : rest;
+  };
+  return digit(9) === Number(cpf[9]) && digit(10) === Number(cpf[10]);
+}
+
+function isValidCnpj(value: string) {
+  const cnpj = value.replace(/\D/g, '');
+  if (cnpj.length !== 14 || /^(\d)\1+$/.test(cnpj)) return false;
+  const calc = (factors: number[]) => {
+    const sum = factors.reduce((total, factor, index) => total + Number(cnpj[index]) * factor, 0);
+    const rest = sum % 11;
+    return rest < 2 ? 0 : 11 - rest;
+  };
+  return calc([5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2]) === Number(cnpj[12])
+    && calc([6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2]) === Number(cnpj[13]);
+}
+
 export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onLoginPress }) => {
   const { register } = useAuth();
   const [step, setStep] = useState<1 | 2 | 3>(1); // 1 = Dados Pessoais | 2 = Empresa | 3 = Confirmação
@@ -61,47 +100,80 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onLoginPress }) 
 
   // Campos Empresa
   const [orgName, setOrgName] = useState('');
+  const [documentType, setDocumentType] = useState<'CPF' | 'CNPJ'>('CNPJ');
   const [orgDocument, setOrgDocument] = useState('');
   const [whatsappCode, setWhatsappCode] = useState('');
   const [codeSent, setCodeSent] = useState(false);
+  const [phoneVerified, setPhoneVerified] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
-  const handleNextFromStep1 = () => {
-    if (!adminName.trim()) {
-      Alert.alert('Atenção', 'Informe seu nome completo.');
-      return;
-    }
-    if (!adminEmail.trim() || !adminEmail.includes('@')) {
-      Alert.alert('Atenção', 'Informe um e-mail válido.');
-      return;
-    }
-    if (adminPassword.length < 8) {
-      Alert.alert('Atenção', 'A senha deve ter no mínimo 8 caracteres.');
-      return;
-    }
-    if (adminPassword !== adminConfirmPassword) {
-      Alert.alert('Atenção', 'As senhas não coincidem.');
-      return;
-    }
-    if (adminPhone.replace(/\D/g, '').length < 10) {
-      Alert.alert('Atenção', 'Informe o WhatsApp com DDD. Ele recebe o código de confirmação.');
-      return;
-    }
-    setStep(2);
+  const clearError = (field: string) => {
+    setFieldErrors((current) => {
+      if (!current[field]) return current;
+      const next = { ...current };
+      delete next[field];
+      return next;
+    });
   };
 
-  const handleNextFromStep2 = () => {
-    if (!orgName.trim()) {
-      Alert.alert('Atenção', 'Informe o nome do condomínio ou empresa.');
+  const phoneDigits = adminPhone.replace(/\D/g, '');
+  const documentDigits = orgDocument.replace(/\D/g, '');
+  const step1Filled = Boolean(
+    adminName.trim() && adminEmail.trim() && adminPassword && adminConfirmPassword && phoneDigits.length === 11
+  );
+  const step2Filled = Boolean(orgName.trim() && documentDigits.length === (documentType === 'CPF' ? 11 : 14));
+  const canContinue = step === 1 ? step1Filled && phoneVerified : step === 2 ? step2Filled : Boolean(whatsappCode.trim());
+
+  const handleNextFromStep1 = () => {
+    const next: Record<string, string> = {};
+    if (adminName.trim().length < 2) next.name = 'Informe seu nome completo.';
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(adminEmail.trim())) next.email = 'Informe um e-mail válido.';
+    if (adminPassword.length < 8) next.password = 'A senha deve ter no mínimo 8 caracteres.';
+    if (adminPassword !== adminConfirmPassword) next.confirmPassword = 'As senhas não coincidem.';
+    if (phoneDigits.length !== 11 || phoneDigits[2] !== '9') {
+      next.phone = 'Informe o DDD e o número de celular com o 9.';
+    }
+    if (!phoneVerified) next.phone = next.phone || 'Confirme o WhatsApp antes de continuar.';
+    setFieldErrors(next);
+    if (Object.keys(next).length === 0) setStep(2);
+  };
+
+  const handleNextFromStep2 = async () => {
+    const next: Record<string, string> = {};
+    if (orgName.trim().length < 2) next.orgName = 'Informe o nome do condomínio ou da empresa.';
+    if (documentType === 'CPF' && !isValidCpf(orgDocument)) {
+      next.document = 'Este CPF é inválido. Confira os números digitados.';
+    }
+    if (documentType === 'CNPJ' && !isValidCnpj(orgDocument)) {
+      next.document = 'Este CNPJ é inválido. Confira os números digitados.';
+    }
+    if (next.document || next.orgName) {
+      setFieldErrors(next);
       return;
     }
-    if (orgDocument.replace(/\D/g, '').length !== 14) {
-      Alert.alert('Atenção', 'Informe o CNPJ da empresa com 14 dígitos.');
-      return;
+    try {
+      setIsLoading(true);
+      await api.post('/auth/register/check-document', { documentType, document: orgDocument });
+      setFieldErrors({});
+      setStep(3);
+    } catch (err: any) {
+      setFieldErrors({
+        document: err.response?.data?.error?.message || 'Não foi possível validar o documento.',
+      });
+    } finally {
+      setIsLoading(false);
     }
-    setStep(3);
   };
 
   const sendWhatsappCode = async () => {
+    if (phoneDigits.length !== 11 || phoneDigits[2] !== '9') {
+      setFieldErrors((current) => ({ ...current, phone: 'Informe o DDD e o número de celular com o 9.' }));
+      return;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(adminEmail.trim())) {
+      setFieldErrors((current) => ({ ...current, email: 'Informe um e-mail válido antes de verificar o WhatsApp.' }));
+      return;
+    }
     try {
       setIsLoading(true);
       await api.post('/auth/register/whatsapp-code', {
@@ -109,9 +181,44 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onLoginPress }) 
         phone: adminPhone.trim(),
       });
       setCodeSent(true);
-      Alert.alert('Código enviado', 'Olhe o WhatsApp informado e digite o código de 8 caracteres.');
+      setWhatsappCode('');
+      setPhoneVerified(false);
+      clearError('phone');
+      Alert.alert(
+        'Código enviado',
+        `Enviamos um código pelo WhatsApp para ${adminPhone}. Digite os 8 números no campo abaixo.`
+      );
     } catch (err: any) {
-      Alert.alert('Não foi possível enviar', err.response?.data?.error?.message || 'O WhatsApp da plataforma precisa estar conectado.');
+      setFieldErrors((current) => ({
+        ...current,
+        phone: err.response?.data?.error?.message || 'Não foi possível enviar o código.',
+      }));
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const confirmWhatsappCode = async () => {
+    if (!/^\d{8}$/.test(whatsappCode.trim())) {
+      setFieldErrors((current) => ({ ...current, code: 'Informe o código de 8 números.' }));
+      return;
+    }
+    try {
+      setIsLoading(true);
+      await api.post('/auth/register/confirm-whatsapp', {
+        email: adminEmail.trim(),
+        phone: adminPhone.trim(),
+        code: whatsappCode.trim(),
+      });
+      setPhoneVerified(true);
+      clearError('code');
+      clearError('phone');
+    } catch (err: any) {
+      setPhoneVerified(false);
+      setFieldErrors((current) => ({
+        ...current,
+        code: err.response?.data?.error?.message || 'Código incorreto.',
+      }));
     } finally {
       setIsLoading(false);
     }
@@ -119,7 +226,7 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onLoginPress }) 
 
   const handleFinalRegister = async () => {
     if (whatsappCode.trim().length !== 8) {
-      Alert.alert('Atenção', 'Digite o código de 8 caracteres recebido no WhatsApp.');
+      Alert.alert('Atenção', 'Digite o código de 8 números recebido no WhatsApp.');
       return;
     }
     setIsLoading(true);
@@ -127,6 +234,7 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onLoginPress }) 
       const data: RegisterData = {
         organizationName: orgName.trim(),
         organizationDocument: orgDocument.trim(),
+        documentType,
         adminName: adminName.trim(),
         adminEmail: adminEmail.trim(),
         adminPassword,
@@ -135,7 +243,20 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onLoginPress }) 
       };
       await register(data);
     } catch (err: any) {
-      Alert.alert('Erro ao criar conta', err.message);
+      const message = err.message || 'Não foi possível criar a conta.';
+      if (/e-mail/i.test(message)) {
+        setFieldErrors({ email: message });
+        setStep(1);
+      } else if (/whatsapp|número|numero|celular/i.test(message)) {
+        setPhoneVerified(false);
+        setFieldErrors({ phone: message });
+        setStep(1);
+      } else if (/cpf|cnpj|documento/i.test(message)) {
+        setFieldErrors({ document: message });
+        setStep(2);
+      } else {
+        Alert.alert('Erro ao criar conta', message);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -228,8 +349,8 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onLoginPress }) 
           {step === 1 && (
             <View style={styles.formContainer}>
               {/* Nome Completo */}
-              <View style={styles.inputBox}>
-                <User size={18} color="#64748B" style={styles.inputIcon} />
+              <View style={[styles.inputBox, fieldErrors.name && styles.inputBoxError]}>
+                <User size={18} color={fieldErrors.name ? '#DC2626' : '#64748B'} style={styles.inputIcon} />
                 <View style={styles.inputContent}>
                   <Text style={styles.fieldLabel}>Nome completo</Text>
                   <TextInput
@@ -237,15 +358,15 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onLoginPress }) 
                     placeholder="Digite seu nome completo"
                     placeholderTextColor="#94A3B8"
                     value={adminName}
-                    onChangeText={setAdminName}
+                    onChangeText={(value) => { setAdminName(value); clearError('name'); }}
                     autoCapitalize="words"
                   />
                 </View>
               </View>
+              {fieldErrors.name ? <Text style={styles.fieldError}>{fieldErrors.name}</Text> : null}
 
-              {/* E-mail */}
-              <View style={styles.inputBox}>
-                <Mail size={18} color="#64748B" style={styles.inputIcon} />
+              <View style={[styles.inputBox, fieldErrors.email && styles.inputBoxError]}>
+                <Mail size={18} color={fieldErrors.email ? '#DC2626' : '#64748B'} style={styles.inputIcon} />
                 <View style={styles.inputContent}>
                   <Text style={styles.fieldLabel}>E-mail</Text>
                   <TextInput
@@ -253,31 +374,68 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onLoginPress }) 
                     placeholder="ex: usuario@exemplo.com"
                     placeholderTextColor="#94A3B8"
                     value={adminEmail}
-                    onChangeText={setAdminEmail}
+                    onChangeText={(value) => { setAdminEmail(value); clearError('email'); }}
                     keyboardType="email-address"
                     autoCapitalize="none"
                   />
                 </View>
               </View>
+              {fieldErrors.email ? <Text style={styles.fieldError}>{fieldErrors.email}</Text> : null}
 
-              {/* Telefone / WhatsApp */}
-              <View style={styles.inputBox}>
-                <Phone size={18} color="#64748B" style={styles.inputIcon} />
+              <View style={[styles.inputBox, fieldErrors.phone && styles.inputBoxError]}>
+                <Phone size={18} color={fieldErrors.phone ? '#DC2626' : '#64748B'} style={styles.inputIcon} />
                 <View style={styles.inputContent}>
                   <Text style={styles.fieldLabel}>WhatsApp</Text>
                   <TextInput
                     style={styles.textInput}
-                    placeholder="(00) 00000-0000"
+                    placeholder="(00) 90000-0000"
                     placeholderTextColor="#94A3B8"
                     value={adminPhone}
-                    onChangeText={setAdminPhone}
+                    onChangeText={(value) => {
+                      setAdminPhone(maskPhone(value));
+                      setPhoneVerified(false);
+                      setCodeSent(false);
+                      setWhatsappCode('');
+                      clearError('phone');
+                    }}
                     keyboardType="phone-pad"
                   />
                 </View>
               </View>
+              {fieldErrors.phone ? <Text style={styles.fieldError}>{fieldErrors.phone}</Text> : null}
+              {phoneVerified ? (
+                <Text style={styles.verifiedText}>WhatsApp confirmado</Text>
+              ) : phoneDigits.length === 11 ? (
+                <TouchableOpacity onPress={sendWhatsappCode} disabled={isLoading} style={styles.verifyLink}>
+                  <Text style={styles.verifyLinkText}>{codeSent ? 'Reenviar código' : 'Verificar número'}</Text>
+                </TouchableOpacity>
+              ) : null}
+              {codeSent && !phoneVerified ? (
+                <>
+                  <View style={[styles.inputBox, fieldErrors.code && styles.inputBoxError]}>
+                    <View style={styles.inputContent}>
+                      <Text style={styles.fieldLabel}>Código do WhatsApp</Text>
+                      <TextInput
+                        style={styles.textInput}
+                        placeholder="8 números"
+                        placeholderTextColor="#94A3B8"
+                        value={whatsappCode}
+                        onChangeText={(value) => {
+                          setWhatsappCode(value.replace(/\D/g, '').slice(0, 8));
+                          clearError('code');
+                        }}
+                        keyboardType="number-pad"
+                      />
+                    </View>
+                  </View>
+                  {fieldErrors.code ? <Text style={styles.fieldError}>{fieldErrors.code}</Text> : null}
+                  <TouchableOpacity onPress={confirmWhatsappCode} disabled={isLoading || whatsappCode.length !== 8} style={styles.verifyLink}>
+                    <Text style={styles.verifyLinkText}>Confirmar código</Text>
+                  </TouchableOpacity>
+                </>
+              ) : null}
 
-              {/* Senha */}
-              <View style={styles.inputBox}>
+              <View style={[styles.inputBox, fieldErrors.password && styles.inputBoxError]}>
                 <Lock size={18} color="#64748B" style={styles.inputIcon} />
                 <View style={[styles.inputContent, { paddingRight: 40 }]}>
                   <Text style={styles.fieldLabel}>Senha</Text>
@@ -286,7 +444,7 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onLoginPress }) 
                     placeholder="Digite sua senha (mín. 8 caracteres)"
                     placeholderTextColor="#94A3B8"
                     value={adminPassword}
-                    onChangeText={setAdminPassword}
+                    onChangeText={(value) => { setAdminPassword(value); clearError('password'); }}
                     secureTextEntry={!showPassword}
                   />
                 </View>
@@ -297,10 +455,10 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onLoginPress }) 
                   {showPassword ? <EyeOff size={18} color="#64748B" /> : <Eye size={18} color="#64748B" />}
                 </TouchableOpacity>
               </View>
+              {fieldErrors.password ? <Text style={styles.fieldError}>{fieldErrors.password}</Text> : null}
 
-              {/* Confirmar Senha */}
-              <View style={styles.inputBox}>
-                <Lock size={18} color="#64748B" style={styles.inputIcon} />
+              <View style={[styles.inputBox, fieldErrors.confirmPassword && styles.inputBoxError]}>
+                <Lock size={18} color={fieldErrors.confirmPassword ? '#DC2626' : '#64748B'} style={styles.inputIcon} />
                 <View style={[styles.inputContent, { paddingRight: 40 }]}>
                   <Text style={styles.fieldLabel}>Confirmar senha</Text>
                   <TextInput
@@ -308,7 +466,7 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onLoginPress }) 
                     placeholder="Repita sua senha"
                     placeholderTextColor="#94A3B8"
                     value={adminConfirmPassword}
-                    onChangeText={setAdminConfirmPassword}
+                    onChangeText={(value) => { setAdminConfirmPassword(value); clearError('confirmPassword'); }}
                     secureTextEntry={!showConfirmPassword}
                   />
                 </View>
@@ -319,6 +477,7 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onLoginPress }) 
                   {showConfirmPassword ? <EyeOff size={18} color="#64748B" /> : <Eye size={18} color="#64748B" />}
                 </TouchableOpacity>
               </View>
+              {fieldErrors.confirmPassword ? <Text style={styles.fieldError}>{fieldErrors.confirmPassword}</Text> : null}
 
             </View>
           )}
@@ -327,36 +486,55 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onLoginPress }) 
           {step === 2 && (
             <View style={styles.formContainer}>
               {/* Nome do Condomínio / Empresa */}
-              <View style={styles.inputBox}>
-                <Building size={18} color="#64748B" style={styles.inputIcon} />
+              <View style={[styles.inputBox, fieldErrors.orgName && styles.inputBoxError]}>
+                <Building size={18} color={fieldErrors.orgName ? '#DC2626' : '#64748B'} style={styles.inputIcon} />
                 <View style={styles.inputContent}>
-                  <Text style={styles.fieldLabel}>Nome do Condomínio ou Empresa</Text>
+                  <Text style={styles.fieldLabel}>Nome do condomínio ou empresa</Text>
                   <TextInput
                     style={styles.textInput}
                     placeholder="Ex: Residencial Parque das Flores"
                     placeholderTextColor="#94A3B8"
                     value={orgName}
-                    onChangeText={setOrgName}
+                    onChangeText={(value) => { setOrgName(value); clearError('orgName'); }}
                     autoCapitalize="words"
                   />
                 </View>
               </View>
+              {fieldErrors.orgName ? <Text style={styles.fieldError}>{fieldErrors.orgName}</Text> : null}
 
-              {/* CNPJ ou Documento */}
-              <View style={styles.inputBox}>
-                <FileText size={18} color="#64748B" style={styles.inputIcon} />
+              <View style={styles.choiceRow}>
+                <TouchableOpacity
+                  style={[styles.choice, documentType === 'CPF' && styles.choiceActive]}
+                  onPress={() => { setDocumentType('CPF'); setOrgDocument(''); clearError('document'); }}
+                >
+                  <Text style={[styles.choiceText, documentType === 'CPF' && styles.choiceTextActive]}>Pessoa física</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.choice, documentType === 'CNPJ' && styles.choiceActive]}
+                  onPress={() => { setDocumentType('CNPJ'); setOrgDocument(''); clearError('document'); }}
+                >
+                  <Text style={[styles.choiceText, documentType === 'CNPJ' && styles.choiceTextActive]}>Pessoa jurídica</Text>
+                </TouchableOpacity>
+              </View>
+
+              <View style={[styles.inputBox, fieldErrors.document && styles.inputBoxError]}>
+                <FileText size={18} color={fieldErrors.document ? '#DC2626' : '#64748B'} style={styles.inputIcon} />
                 <View style={styles.inputContent}>
-                  <Text style={styles.fieldLabel}>CNPJ</Text>
+                  <Text style={styles.fieldLabel}>{documentType === 'CPF' ? 'CPF' : 'CNPJ'}</Text>
                   <TextInput
                     style={styles.textInput}
-                    placeholder="00.000.000/0001-00"
+                    placeholder={documentType === 'CPF' ? '000.000.000-00' : '00.000.000/0001-00'}
                     placeholderTextColor="#94A3B8"
                     value={orgDocument}
-                    onChangeText={(value) => setOrgDocument(maskCnpj(value))}
+                    onChangeText={(value) => {
+                      setOrgDocument(documentType === 'CPF' ? maskCpf(value) : maskCnpj(value));
+                      clearError('document');
+                    }}
                     keyboardType="numeric"
                   />
                 </View>
               </View>
+              {fieldErrors.document ? <Text style={styles.fieldError}>{fieldErrors.document}</Text> : null}
 
               {/* Card de Benefício dos 7 dias */}
               <View style={styles.securityAlertCard}>
@@ -402,35 +580,15 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onLoginPress }) 
                   </Text>
                 </View>
               </View>
-
-              <TouchableOpacity style={styles.primaryBtn} onPress={sendWhatsappCode} disabled={isLoading} activeOpacity={0.88}>
-                <Text style={styles.primaryBtnText}>{codeSent ? 'Reenviar código' : 'Enviar código no WhatsApp'}</Text>
-              </TouchableOpacity>
-
-              <View style={[styles.inputBox, { marginTop: 12 }]}>
-                <FileText size={18} color="#64748B" style={styles.inputIcon} />
-                <View style={styles.inputContent}>
-                  <Text style={styles.fieldLabel}>Código do WhatsApp</Text>
-                  <TextInput
-                    style={styles.textInput}
-                    placeholder="8 caracteres"
-                    placeholderTextColor="#94A3B8"
-                    value={whatsappCode}
-                    onChangeText={(value) => setWhatsappCode(value.replace(/[^a-zA-Z0-9]/g, '').slice(0, 8).toUpperCase())}
-                    autoCapitalize="characters"
-                    autoCorrect={false}
-                  />
-                </View>
-              </View>
             </View>
           )}
         </ScrollView>
 
         <View style={styles.footer}>
           <TouchableOpacity
-            style={[styles.primaryBtn, isLoading && { opacity: 0.7 }]}
+            style={[styles.primaryBtn, (!canContinue || isLoading) && styles.primaryBtnDisabled]}
             onPress={step === 1 ? handleNextFromStep1 : step === 2 ? handleNextFromStep2 : handleFinalRegister}
-            disabled={isLoading}
+            disabled={!canContinue || isLoading}
             activeOpacity={0.88}
           >
             {isLoading ? (
@@ -592,6 +750,68 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     position: 'relative',
+  },
+  inputBoxError: {
+    borderColor: '#DC2626',
+    marginBottom: 4,
+  },
+  fieldError: {
+    color: '#DC2626',
+    fontSize: 12,
+    fontWeight: '600',
+    marginBottom: 12,
+    marginLeft: 4,
+  },
+  verifyLink: {
+    alignSelf: 'flex-start',
+    marginBottom: 12,
+    marginLeft: 4,
+    paddingVertical: 4,
+  },
+  verifyLinkText: {
+    color: '#165337',
+    fontWeight: '700',
+    fontSize: 13,
+  },
+  verifiedText: {
+    color: '#165337',
+    fontWeight: '700',
+    fontSize: 13,
+    marginBottom: 12,
+    marginLeft: 4,
+  },
+  choiceRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 12,
+  },
+  choice: {
+    flex: 1,
+    minHeight: 44,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 8,
+  },
+  choiceActive: {
+    borderColor: '#165337',
+    backgroundColor: '#EDF7ED',
+  },
+  choiceText: {
+    color: '#64748B',
+    fontWeight: '700',
+    fontSize: 13,
+  },
+  choiceTextActive: {
+    color: '#165337',
+  },
+  primaryBtnDisabled: {
+    backgroundColor: '#94A3B8',
+    shadowOpacity: 0,
+    elevation: 0,
   },
   inputIcon: {
     marginRight: 12,
