@@ -134,8 +134,17 @@ export class BaileysProvider implements IWhatsAppProvider {
     if (!fs.existsSync(orgSessionPath)) return;
     try {
       const files = fs.readdirSync(orgSessionPath);
-      const selected = files.length > 120
-        ? files.filter((file) => file === 'creds.json' || file.startsWith('session-') || file.startsWith('pre-key-'))
+      // pre-key são muitos e só servem para abrir sessão nova. O que não pode
+      // faltar na restauração é a identidade, as sessões e o mapa de LID,
+      // senão o celular recebe o aviso "Aguardando mensagem".
+      const selected = files.length > 250
+        ? files.filter((file) =>
+            file === 'creds.json' ||
+            file.startsWith('session-') ||
+            file.startsWith('sender-key-') ||
+            file.startsWith('lid-mapping-') ||
+            file.startsWith('app-state-sync-') ||
+            file.startsWith('pre-key-'))
         : files;
       const sessionMap: Record<string, string> = {};
       for (const f of selected) {
@@ -428,15 +437,13 @@ export class BaileysProvider implements IWhatsAppProvider {
           continue;
         }
 
-        const fromPhone = remoteJid.replace(/[^0-9]/g, '');
-        if (fromPhone) {
-          this.jidCache.set(fromPhone, remoteJid);
-          if (fromPhone.startsWith('55') && fromPhone.length === 12) {
-            this.jidCache.set(`${fromPhone.slice(0, 4)}9${fromPhone.slice(4)}`, remoteJid);
-          }
-          if (fromPhone.startsWith('55') && fromPhone.length === 13 && fromPhone[4] === '9') {
-            this.jidCache.set(`${fromPhone.slice(0, 4)}${fromPhone.slice(5)}`, remoteJid);
-          }
+        const senderPn = (msg.key as { senderPn?: string }).senderPn || '';
+        const phoneJid = senderPn
+          ? (senderPn.includes('@') ? senderPn : `${senderPn.replace(/\D/g, '')}@s.whatsapp.net`)
+          : (remoteJid.endsWith('@s.whatsapp.net') ? remoteJid : '');
+        const fromPhone = (phoneJid || remoteJid).replace(/[^0-9]/g, '');
+        if (phoneJid.endsWith('@s.whatsapp.net') && fromPhone) {
+          this.registerJidMapping(fromPhone, phoneJid);
         }
 
         let message = msg.message;
@@ -557,41 +564,40 @@ export class BaileysProvider implements IWhatsAppProvider {
     }).catch((err) => console.warn('Status do WhatsApp não gravado:', err?.message || err));
   }
 
+  private async sendableJid(toPhone: string): Promise<string> {
+    if (toPhone.endsWith('@s.whatsapp.net')) return toPhone;
+    if (toPhone.endsWith('@lid')) {
+      const lidDigits = toPhone.replace(/\D/g, '');
+      const client = await prisma.client.findFirst({
+        where: { notes: { contains: `[LID:${lidDigits}]` }, deletedAt: null },
+        select: { whatsappNumber: true },
+      }).catch(() => null);
+      if (!client?.whatsappNumber) {
+        throw new Error('Destino LID sem telefone cadastrado. Mensagem para @lid chega como "Aguardando mensagem".');
+      }
+      console.log(`📱 [Baileys] LID ${lidDigits} convertido para o telefone ${client.whatsappNumber}`);
+      return this.resolveJid(client.whatsappNumber);
+    }
+    return this.resolveJid(toPhone);
+  }
+
   private async resolveJid(phone: string): Promise<string> {
-    if (phone.includes('@')) {
+    if (phone.endsWith('@s.whatsapp.net')) {
       return phone;
     }
 
     const clean = phone.replace(/\D/g, '');
 
-    // Se já temos o JID ativo do contato através de uma interação recente, usa diretamente!
+    // O celular não abre mensagem enviada para o @lid: fica em "Aguardando mensagem".
+    // O cache só vale quando aponta para o número (@s.whatsapp.net).
     if (this.jidCache.has(clean)) {
       const cached = this.jidCache.get(clean)!;
-      console.log(`📱 [Baileys] JID recuperado do cache de interação recente para ${clean}: ${cached}`);
-      return cached;
-    }
-
-    // Se o cliente tem um WhatsApp LID mapeado no banco, usa diretamente o @lid
-    try {
-      const clientWithLid = await prisma.client.findFirst({
-        where: {
-          whatsappNumber: { contains: clean.slice(-8) },
-          notes: { contains: '[LID:' },
-          deletedAt: null,
-        },
-        select: { notes: true, whatsappNumber: true },
-      });
-      if (clientWithLid?.notes) {
-        const match = clientWithLid.notes.match(/\[LID:([0-9]+)\]/);
-        if (match && match[1]) {
-          const lidJid = `${match[1]}@lid`;
-          this.registerJidMapping(clean, lidJid);
-          this.registerJidMapping(clientWithLid.whatsappNumber, lidJid);
-          console.log(`📱 [Baileys] JID recuperado de LID persistido para ${clean}: ${lidJid}`);
-          return lidJid;
-        }
+      if (cached.endsWith('@s.whatsapp.net')) {
+        console.log(`📱 [Baileys] JID recuperado do cache de interação recente para ${clean}: ${cached}`);
+        return cached;
       }
-    } catch (e) {}
+      this.jidCache.delete(clean);
+    }
 
     if (this.sock) {
       try {
@@ -742,7 +748,7 @@ export class BaileysProvider implements IWhatsAppProvider {
       throw new Error('WhatsApp não está conectado no momento.');
     }
 
-    const jid = toPhone.includes('@') ? toPhone : await this.resolveJid(toPhone);
+    const jid = await this.sendableJid(toPhone);
     console.log(`🚀 [Baileys] Enviando mensagem de texto para JID: ${jid}...`);
     const sent = await this.sock.sendMessage(jid, { text });
     if (sent?.key?.id && sent.message) {
@@ -757,7 +763,7 @@ export class BaileysProvider implements IWhatsAppProvider {
       throw new Error('WhatsApp não está conectado no momento.');
     }
 
-    const jid = toPhone.includes('@') ? toPhone : await this.resolveJid(toPhone);
+    const jid = await this.sendableJid(toPhone);
     console.log(`🚀 [Baileys] Enviando imagem para JID: ${jid}...`);
 
     let imageContent: any;

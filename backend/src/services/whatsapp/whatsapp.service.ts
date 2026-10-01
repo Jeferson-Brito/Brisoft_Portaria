@@ -189,22 +189,18 @@ export class WhatsAppService {
       return;
     }
 
-    // Associa o WhatsApp LID ao cadastro do cliente para respostas futuras serem 100% instantâneas
-    if (event.fromJid && (event.fromJid.endsWith('@lid') || cleanPhone.length > 13) && !client.notes?.includes(cleanPhone)) {
+    // Guarda o LID só para reconhecer a resposta. O envio continua no número,
+    // porque mensagem para @lid chega no celular como "Aguardando mensagem".
+    const lidDigits = event.fromJid?.endsWith('@lid') ? event.fromJid.replace(/\D/g, '') : '';
+    if (lidDigits && !client.notes?.includes(`[LID:${lidDigits}]`)) {
       try {
-        const newNotes = client.notes ? `${client.notes} [LID:${cleanPhone}]` : `[LID:${cleanPhone}]`;
+        const newNotes = client.notes ? `${client.notes} [LID:${lidDigits}]` : `[LID:${lidDigits}]`;
         await prisma.client.update({
           where: { id: client.id },
           data: { notes: newNotes },
         });
         client.notes = newNotes;
-        console.log(`🔗 [WhatsAppService] LID ${cleanPhone} vinculado com sucesso ao cliente ${client.name} (${client.whatsappNumber})!`);
-
-        const provider = this.getProvider(organizationId);
-        if (provider.registerJidMapping) {
-          provider.registerJidMapping(client.whatsappNumber, event.fromJid);
-          provider.registerJidMapping(cleanPhone, event.fromJid);
-        }
+        console.log(`🔗 [WhatsAppService] LID ${lidDigits} vinculado com sucesso ao cliente ${client.name} (${client.whatsappNumber})!`);
       } catch (err: any) {
         console.warn('Aviso ao vincular LID ao cliente:', err?.message || err);
       }
@@ -248,7 +244,7 @@ export class WhatsAppService {
       console.log(`ℹ️ [WhatsAppService] Cliente ${client.name} não possui solicitações pendentes no momento.`);
       try {
         const provider = this.getProvider(organizationId);
-        const targetDest = event.fromJid || client.whatsappNumber;
+        const targetDest = client.whatsappNumber;
         await provider.sendMessage(
           targetDest,
           `Olá, *${client.name}*! No momento você não possui nenhuma solicitação pendente de autorização na portaria.`
@@ -320,7 +316,7 @@ export class WhatsAppService {
         ? `✅ *Entrada Autorizada!*\n\nA liberação de *${pendingRequest.visitor.name}* foi confirmada com sucesso e a portaria já foi notificada para permitir o acesso.`
         : `❌ *Entrada Recusada!*\n\nA recusa da visita de *${pendingRequest.visitor.name}* foi registrada com sucesso e a portaria não permitirá a entrada.`;
 
-      const targetDestination = event.fromJid || client.whatsappNumber;
+      const targetDestination = client.whatsappNumber;
       await provider.sendMessage(targetDestination, confirmationMsg);
       console.log(`📤 [WhatsAppService] Resposta de confirmação enviada para ${client.name} (${targetDestination})`);
     } catch (confErr: any) {
