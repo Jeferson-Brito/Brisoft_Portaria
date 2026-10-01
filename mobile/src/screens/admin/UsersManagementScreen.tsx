@@ -26,7 +26,6 @@ import {
   CircleCheck,
   CircleX,
   Trash2,
-  UserCheck,
   Pencil,
   Key,
   MoreVertical,
@@ -60,9 +59,7 @@ export const UsersManagementScreen: React.FC<UsersManagementScreenProps> = ({ on
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [phone, setPhone] = useState('');
-  const [role, setRole] = useState<'CONCIERGE' | 'SUPERVISOR' | 'ADMIN' | 'CLIENT'>('CONCIERGE');
-  const [clientId, setClientId] = useState('');
-  const [clients, setClients] = useState<any[]>([]);
+  const [role, setRole] = useState<'CONCIERGE' | 'SUPERVISOR' | 'ADMIN'>('CONCIERGE');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Modal Editar Usuário
@@ -84,7 +81,8 @@ export const UsersManagementScreen: React.FC<UsersManagementScreenProps> = ({ on
     try {
       setIsLoading(true);
       const res = await api.get('/users');
-      setUsers(res.data.data?.users || res.data.data || []);
+      const list = res.data.data?.users || res.data.data || [];
+      setUsers(list.filter((item: any) => item.role !== 'CLIENT'));
     } catch (err: any) {
       console.warn('Erro ao carregar usuários:', err.message);
     } finally {
@@ -125,7 +123,6 @@ export const UsersManagementScreen: React.FC<UsersManagementScreenProps> = ({ on
         password: password.trim(),
         role: isSupervisor ? 'CONCIERGE' : role,
         phone: phone.trim() || undefined,
-        clientId: role === 'CLIENT' ? clientId : undefined,
       });
 
       if (res.data.success) {
@@ -306,27 +303,26 @@ export const UsersManagementScreen: React.FC<UsersManagementScreenProps> = ({ on
               <ArrowLeft size={20} color={colors.white} />
             </TouchableOpacity>
           )}
-          <View style={styles.iconCircle}>
-            <UserCheck size={22} color={colors.white} />
-          </View>
-          <View style={{ flex: 1, marginLeft: 10 }}>
-            <Text style={styles.headerTitle}>Gestão da Equipe & Porteiros</Text>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.headerTitle}>Equipe da portaria</Text>
             <Text style={styles.headerSubtitle}>
               {isAdmin
-                ? 'Administração de porteiros, supervisores e acessos'
-                : 'Gerenciamento de operadores e senhas da portaria'}
+                ? 'Porteiros, supervisores e administradores'
+                : 'Porteiros e senhas da portaria'}
             </Text>
           </View>
         </View>
+      </View>
 
+      <View style={styles.toolbar}>
         <TouchableOpacity
-          style={styles.addBtn}
+          style={styles.addButton}
           onPress={() => setIsModalOpen(true)}
           activeOpacity={0.85}
         >
-          <Plus size={18} color="#165337" style={{ marginRight: 6 }} />
-          <Text style={styles.addBtnText}>
-            {isSupervisor && !isAdmin ? 'Cadastrar Novo Porteiro' : 'Cadastrar Novo Membro'}
+          <Plus size={18} color={colors.white} style={{ marginRight: 6 }} />
+          <Text style={styles.addButtonText}>
+            {isSupervisor && !isAdmin ? 'Cadastrar porteiro' : 'Cadastrar membro'}
           </Text>
         </TouchableOpacity>
       </View>
@@ -540,33 +536,7 @@ export const UsersManagementScreen: React.FC<UsersManagementScreenProps> = ({ on
                         Admin
                       </Text>
                     </TouchableOpacity>
-                    <TouchableOpacity
-                      style={[styles.roleOption, role === 'CLIENT' && styles.roleOptionSelected]}
-                      onPress={async () => {
-                        setRole('CLIENT');
-                        if (clients.length === 0) {
-                          const res = await api.get('/clients');
-                          setClients(res.data.data?.clients || res.data.data || []);
-                        }
-                      }}
-                    >
-                      <Text style={[styles.roleOptionText, role === 'CLIENT' && styles.roleOptionTextSelected]}>
-                        Morador
-                      </Text>
-                    </TouchableOpacity>
                   </View>
-                </View>
-              )}
-
-              {role === 'CLIENT' && !isSupervisor && (
-                <View style={{ marginBottom: 12 }}>
-                  {clients.map((client) => (
-                    <TouchableOpacity key={client.id} onPress={() => setClientId(client.id)} style={{ paddingVertical: 8 }}>
-                      <Text style={{ color: clientId === client.id ? '#165337' : '#0F172A', fontWeight: clientId === client.id ? '700' : '400' }}>
-                        {client.name}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
                 </View>
               )}
 
@@ -763,7 +733,6 @@ const styles = StyleSheet.create({
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 14,
   },
   backBtn: {
     width: 36,
@@ -774,36 +743,35 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginRight: 10,
   },
-  iconCircle: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   headerTitle: {
-    fontSize: 17,
+    fontSize: 18,
     fontWeight: '800',
     color: colors.white,
   },
   headerSubtitle: {
-    fontSize: 12,
-    color: '#94A3B8',
+    fontSize: 13,
+    color: '#D1FAE5',
     marginTop: 2,
   },
-  addBtn: {
+  toolbar: {
+    backgroundColor: colors.white,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+  },
+  addButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.white,
-    borderRadius: 10,
-    paddingVertical: 11,
+    backgroundColor: '#165337',
+    height: 46,
+    borderRadius: 12,
   },
-  addBtnText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#165337',
+  addButtonText: {
+    color: colors.white,
+    fontSize: 15,
+    fontWeight: '800',
   },
   listContent: {
     padding: 16,

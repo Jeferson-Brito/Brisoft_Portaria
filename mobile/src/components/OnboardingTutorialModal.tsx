@@ -33,6 +33,7 @@ import {
   PhoneCall,
 } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { buildPlaceTerms } from '../utils/placeTerms';
 
 export interface OnboardingTutorialModalProps {
   visible: boolean;
@@ -83,10 +84,11 @@ export const OnboardingTutorialModal: React.FC<OnboardingTutorialModalProps> = (
     onNavigate(screen);
   };
 
+  const terms = buildPlaceTerms(orgProfile?.clientLabel, orgProfile?.unitLabel);
   const stepsMeta = [
     { id: 1, title: 'Segmento', icon: Building2 },
     { id: 2, title: 'WhatsApp', icon: MessageSquare },
-    { id: 3, title: 'Moradores', icon: Users },
+    { id: 3, title: terms.clients, icon: Users },
     { id: 4, title: 'Porteiros', icon: UserCheck },
     { id: 5, title: 'Operação', icon: Sparkles },
   ];
@@ -167,7 +169,7 @@ export const OnboardingTutorialModal: React.FC<OnboardingTutorialModalProps> = (
 
             <Text style={styles.stepTitle}>Vincular WhatsApp da Portaria</Text>
             <Text style={styles.stepDescription}>
-              O WhatsApp é o motor principal do Combate Portaria. É através dele que o morador recebe as notificações de visita e autoriza na hora sem precisar instalar aplicativo nenhum!
+              O WhatsApp é o motor principal do Brisoft Portaria. É através dele que o morador recebe as notificações de visita e autoriza na hora sem precisar instalar aplicativo nenhum!
             </Text>
 
             {/* 3 Passos para Conectar */}
@@ -232,7 +234,7 @@ export const OnboardingTutorialModal: React.FC<OnboardingTutorialModalProps> = (
               </Text>
             </View>
 
-            <Text style={styles.stepTitle}>Cadastrar Unidades & Moradores</Text>
+            <Text style={styles.stepTitle}>Cadastrar {terms.units} e {terms.clients}</Text>
             <Text style={styles.stepDescription}>
               Para que os porteiros possam acionar os responsáveis, você precisa cadastrar as unidades e os contatos de quem reside ou trabalha no local.
             </Text>
@@ -244,7 +246,7 @@ export const OnboardingTutorialModal: React.FC<OnboardingTutorialModalProps> = (
               <View style={styles.highlightStepBox}>
                 <Text style={styles.highlightStepNumber}>1º</Text>
                 <View style={{ flex: 1, marginLeft: 10 }}>
-                  <Text style={styles.highlightStepTitle}>Cadastrar a Unidade primeiro</Text>
+                  <Text style={styles.highlightStepTitle}>Cadastrar a {terms.unit} primeiro</Text>
                   <Text style={styles.highlightStepDesc}>
                     Crie as unidades físicas (ex: Apto 101, Apto 102 - Bloco A, ou Sala 501).
                   </Text>
@@ -254,7 +256,7 @@ export const OnboardingTutorialModal: React.FC<OnboardingTutorialModalProps> = (
               <View style={styles.highlightStepBox}>
                 <Text style={styles.highlightStepNumber}>2º</Text>
                 <View style={{ flex: 1, marginLeft: 10 }}>
-                  <Text style={styles.highlightStepTitle}>Cadastrar o Morador / Cliente</Text>
+                  <Text style={styles.highlightStepTitle}>Cadastrar o {terms.client}</Text>
                   <Text style={styles.highlightStepDesc}>
                     Insira o nome do morador, o número de WhatsApp com DDD e vincule à unidade criada.
                   </Text>
@@ -276,7 +278,7 @@ export const OnboardingTutorialModal: React.FC<OnboardingTutorialModalProps> = (
               activeOpacity={0.88}
             >
               <Users size={18} color="#FFFFFF" style={{ marginRight: 8 }} />
-              <Text style={styles.actionBtnText}>Cadastrar Unidades e Moradores</Text>
+              <Text style={styles.actionBtnText}>Cadastrar {terms.units} e {terms.clients}</Text>
               <ArrowRight size={18} color="#FFFFFF" style={{ marginLeft: 6 }} />
             </TouchableOpacity>
           </View>
@@ -446,7 +448,7 @@ export const OnboardingTutorialModal: React.FC<OnboardingTutorialModalProps> = (
               <View style={{ marginLeft: 10 }}>
                 <Text style={styles.headerTitle}>Guia de Implantação</Text>
                 <Text style={styles.headerSubtitle}>
-                  Combate Portaria Inteligente
+                  Brisoft Portaria
                 </Text>
               </View>
             </View>

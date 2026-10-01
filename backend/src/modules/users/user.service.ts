@@ -3,6 +3,8 @@ import { prisma } from '../../lib/prisma.js';
 import { AppError } from '../../core/errors/app-error.js';
 import { Role } from '../../middlewares/rbac.middleware.js';
 import { invalidateAuthCache } from '../../middlewares/auth.middleware.js';
+import { placeTermsFromSettings } from '../../utils/placeTerms.js';
+import { retiredEmail } from '../../utils/email.js';
 
 export interface CreateUserParams {
   organizationId: string;
@@ -36,9 +38,12 @@ export class UserService {
       throw new AppError('A senha deve ter no mínimo 8 caracteres.', 400, 'INVALID_PASSWORD');
     }
 
+    const normalizedEmail = email.trim().toLowerCase();
+    await this.freeRetiredEmail(normalizedEmail);
+
     const existingUser = await prisma.user.findFirst({
       where: {
-        email: email.trim().toLowerCase(),
+        email: normalizedEmail,
         deletedAt: null,
       },
     });
@@ -72,35 +77,47 @@ export class UserService {
       }
     }
 
+    let linkedClientWhatsapp: string | null = null;
     if (role === 'CLIENT') {
+      const named = placeTermsFromSettings(
+        (
+          await prisma.organization.findUnique({
+            where: { id: organizationId },
+            select: { settings: true },
+          })
+        )?.settings
+      );
+      const who = named.client.toLowerCase();
       if (creatorRole !== 'ADMIN' && creatorRole !== 'SUPER_ADMIN') {
-        throw new AppError('Apenas o administrador pode criar o acesso do morador.', 403, 'FORBIDDEN');
+        throw new AppError(`Apenas o administrador pode criar o acesso do ${who}.`, 403, 'FORBIDDEN');
       }
       if (!clientId) {
-        throw new AppError('Selecione o morador que vai usar este acesso.', 400, 'CLIENT_REQUIRED');
+        throw new AppError(`Selecione o ${who} que vai usar este acesso.`, 400, 'CLIENT_REQUIRED');
       }
       const client = await prisma.client.findFirst({
         where: { id: clientId, organizationId, deletedAt: null },
       });
       if (!client) {
-        throw new AppError('Morador não encontrado nesta empresa.', 404, 'CLIENT_NOT_FOUND');
+        throw new AppError(`${named.client} não encontrado nesta empresa.`, 404, 'CLIENT_NOT_FOUND');
       }
+      linkedClientWhatsapp = client.whatsappNumber;
       const existingLink = await prisma.user.findFirst({ where: { clientId, deletedAt: null } });
       if (existingLink) {
-        throw new AppError('Este morador já possui um acesso ao aplicativo.', 409, 'CLIENT_ALREADY_LINKED');
+        throw new AppError(`Este ${who} já possui um acesso ao aplicativo.`, 409, 'CLIENT_ALREADY_LINKED');
       }
     }
 
     const passwordHash = await bcrypt.hash(password, 12);
+    const savedPhone = phone?.trim() || linkedClientWhatsapp;
 
     const user = await prisma.user.create({
       data: {
         organizationId,
         name,
-        email: email.trim().toLowerCase(),
+        email: normalizedEmail,
         passwordHash,
         role,
-        phone,
+        phone: savedPhone,
         whatsappNumber: null,
         whatsappVerifiedAt: null,
         mustCompleteProfile: true,
@@ -114,6 +131,7 @@ export class UserService {
         role: true,
         phone: true,
         isActive: true,
+        clientId: true,
         createdAt: true,
       },
     });
@@ -143,6 +161,7 @@ export class UserService {
         role: true,
         phone: true,
         isActive: true,
+        clientId: true,
         lastLoginAt: true,
         createdAt: true,
       },
@@ -150,6 +169,27 @@ export class UserService {
     });
 
     return users;
+  }
+
+  /** Solta o e-mail de contas já apagadas, ou cujo morador também já foi apagado. */
+  private async freeRetiredEmail(email: string) {
+    const holders = await prisma.user.findMany({
+      where: { email },
+      include: { client: { select: { deletedAt: true } } },
+    });
+    for (const holder of holders) {
+      const residentRemoved = Boolean(holder.clientId && holder.client?.deletedAt);
+      if (!holder.deletedAt && !residentRemoved) continue;
+      await prisma.user.update({
+        where: { id: holder.id },
+        data: {
+          email: retiredEmail(holder.email, holder.id),
+          deletedAt: holder.deletedAt ?? new Date(),
+          isActive: false,
+        },
+      });
+      invalidateAuthCache(holder.id);
+    }
   }
 
   async toggleActive(userId: string, organizationId: string, actorRole: Role) {
@@ -194,6 +234,7 @@ export class UserService {
       data: {
         deletedAt: new Date(),
         isActive: false,
+        email: retiredEmail(user.email, user.id),
       },
     });
     invalidateAuthCache(userId);

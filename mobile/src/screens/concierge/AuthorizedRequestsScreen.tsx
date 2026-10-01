@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { usePlaceTerms } from '../../utils/placeTerms';
 import {
   View,
   Text,
@@ -61,6 +62,7 @@ interface AuthorizedItem {
 }
 
 export const AuthorizedRequestsScreen: React.FC = () => {
+  const terms = usePlaceTerms();
   const cached = readScreenCache<AuthorizedItem[]>('authorized');
   const [items, setItems] = useState<AuthorizedItem[]>(cached || []);
   const listRef = useRef<FlatList>(null);
@@ -165,7 +167,7 @@ export const AuthorizedRequestsScreen: React.FC = () => {
           <Text style={styles.destText}>
             {item.destination.name} {item.destination.block ? `(${item.destination.block})` : ''}
           </Text>
-          <Text style={styles.clientText}> • Morador: {item.client.name}</Text>
+          <Text style={styles.clientText}> • {terms.client}: {item.client.name}</Text>
         </View>
 
         {/* Veículo (se houver) */}
@@ -208,7 +210,7 @@ export const AuthorizedRequestsScreen: React.FC = () => {
     <View style={styles.container}>
       <AppHeader
         title="Visitas Autorizadas"
-        subtitle="Liberados pelo morador aguardando entrada física"
+        subtitle={`Liberados pelo ${terms.client.toLowerCase()} e aguardando a entrada`}
         badge={items.length}
       />
 
@@ -218,7 +220,7 @@ export const AuthorizedRequestsScreen: React.FC = () => {
           <Search size={18} color="#94A3B8" style={{ marginRight: 8 }} />
           <TextInput
             style={styles.searchInput}
-            placeholder="Buscar por visitante, unidade..."
+            placeholder={`Buscar por visitante, ${terms.unit.toLowerCase()}...`}
             placeholderTextColor="#94A3B8"
             value={search}
             onChangeText={setSearch}
@@ -258,7 +260,7 @@ export const AuthorizedRequestsScreen: React.FC = () => {
               <ShieldCheck size={48} color="#94A3B8" style={{ marginBottom: 12 }} />
               <Text style={styles.emptyTitle}>Nenhuma visita autorizada aguardando entrada</Text>
               <Text style={styles.emptySubtitle}>
-                Assim que um morador responder "1" no WhatsApp, a visita autorizada aparecerá aqui para você registrar a entrada.
+                Assim que um {terms.client.toLowerCase()} responder "1" no WhatsApp, a visita autorizada aparecerá aqui para você registrar a entrada.
               </Text>
             </View>
           }

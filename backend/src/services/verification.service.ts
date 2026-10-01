@@ -25,7 +25,13 @@ function verificationMessage(purpose: VerificationPurpose, code: string) {
 }
 
 export class VerificationService {
-  async send(params: { email?: string; phone: string; purpose: VerificationPurpose; userId?: string }) {
+  async send(params: {
+    email?: string;
+    phone: string;
+    purpose: VerificationPurpose;
+    userId?: string;
+    organizationId?: string;
+  }) {
     const phone = formatWhatsAppNumber(params.phone);
     const email = params.email?.trim() ? normalizeEmail(params.email) : `wa-${phone}@pending.local`;
     const code = createCode();
@@ -47,7 +53,8 @@ export class VerificationService {
     });
 
     try {
-      await whatsappService.sendPlatformMessage(
+      await whatsappService.sendVerificationMessage(
+        params.organizationId,
         phone,
         verificationMessage(params.purpose, code)
       );

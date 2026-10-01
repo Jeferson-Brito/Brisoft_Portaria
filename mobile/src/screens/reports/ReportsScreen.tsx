@@ -13,6 +13,7 @@ import {
   TextInput,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { usePlaceTerms } from '../../utils/placeTerms';
 import {
   Clock,
   CircleCheck,
@@ -42,6 +43,7 @@ const DAYS_LABELS: Record<DaysFilter, string> = {
 };
 
 export const ReportsScreen: React.FC = () => {
+  const terms = usePlaceTerms();
   const scrollRef = useRef<ScrollView>(null);
   const [showScrollTop, setShowScrollTop] = useState(false);
   const [days, setDays] = useState<DaysFilter | 'custom'>(7);
@@ -179,7 +181,7 @@ export const ReportsScreen: React.FC = () => {
                 {metrics?.performance?.averageResponseTimeFormatted || '0 s'}
               </Text>
               <Text style={styles.heroCardDescription}>
-                Tempo que o morador leva entre receber a mensagem e responder com autorização ou recusa.
+                Tempo que o {terms.client.toLowerCase()} leva entre receber a mensagem e responder com autorização ou recusa.
               </Text>
             </View>
 
@@ -314,7 +316,7 @@ export const ReportsScreen: React.FC = () => {
 
                     <View style={styles.timelineFooter}>
                       <Text style={styles.timelineActor}>
-                        Por: {log.actorType === 'WHATSAPP_CLIENT' ? 'Morador (WhatsApp)' : log.actorType === 'USER' ? 'Porteiro' : 'Sistema'}
+                        Por: {log.actorType === 'WHATSAPP_CLIENT' ? `${terms.client} (WhatsApp)` : log.actorType === 'USER' ? 'Porteiro' : 'Sistema'}
                       </Text>
                       <Text style={styles.timelineTime}>
                         {new Date(log.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}

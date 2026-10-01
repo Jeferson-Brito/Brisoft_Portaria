@@ -18,6 +18,7 @@ import {
   Power,
 } from 'lucide-react-native';
 import { colors } from '../../theme/colors';
+import { usePlaceTerms } from '../../utils/placeTerms';
 import { api } from '../../config/api';
 import { useAuth } from '../../contexts/AuthContext';
 import { useRealtime } from '../../contexts/RealtimeContext';
@@ -35,6 +36,7 @@ interface WhatsAppConfigScreenProps {
 }
 
 export const WhatsAppConfigScreen: React.FC<WhatsAppConfigScreenProps> = ({ onBack }) => {
+  const terms = usePlaceTerms();
   const { user } = useAuth();
   const { addListener } = useRealtime();
   const [statusData, setStatusData] = useState<WhatsAppStatusData>({
@@ -185,7 +187,7 @@ export const WhatsAppConfigScreen: React.FC<WhatsAppConfigScreenProps> = ({ onBa
               +{statusData.phoneConnected || '55...'}
             </Text>
             <Text style={styles.connectedSubtext}>
-              Pronto para despachar solicitações de entrada e receber respostas dos moradores.
+              Pronto para despachar solicitações de entrada e receber respostas dos {terms.clients.toLowerCase()}.
             </Text>
 
             <TouchableOpacity

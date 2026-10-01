@@ -30,12 +30,14 @@ interface ClientAutocompleteProps {
   onSelectClient: (client: ClientDestinationItem | null, selectedDestinationId: string) => void;
   selectedClientId?: string;
   selectedClient?: ClientDestinationItem | null;
+  showLabel?: boolean;
 }
 
 export const ClientAutocomplete: React.FC<ClientAutocompleteProps> = ({
   onSelectClient,
   selectedClientId,
   selectedClient,
+  showLabel = true,
 }) => {
   const [query, setQuery] = useState('');
   const [clients, setClients] = useState<ClientDestinationItem[]>([]);
@@ -99,7 +101,7 @@ export const ClientAutocomplete: React.FC<ClientAutocompleteProps> = ({
 
   return (
     <View style={styles.container}>
-      <Text style={styles.label}>Destino / Morador</Text>
+      {showLabel ? <Text style={styles.label}>Destino</Text> : null}
 
       {/* 1. SELEÇÃO ATIVA: CARD COMPACTO E MODERNO */}
       {selectedItem ? (

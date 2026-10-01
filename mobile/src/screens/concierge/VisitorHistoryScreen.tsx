@@ -32,6 +32,7 @@ import {
   Tag,
 } from 'lucide-react-native';
 import { colors } from '../../theme/colors';
+import { usePlaceTerms } from '../../utils/placeTerms';
 import { api } from '../../config/api';
 import { useRealtime } from '../../contexts/RealtimeContext';
 import { readScreenCache, writeScreenCache } from '../../utils/screenCache';
@@ -91,6 +92,7 @@ const STATUS_FILTERS = [
 ];
 
 export const VisitorHistoryScreen: React.FC = () => {
+  const terms = usePlaceTerms();
   const cached = readScreenCache<{ items: HistoryVisitorItem[]; total: number }>('history:ALL');
   const [items, setItems] = useState<HistoryVisitorItem[]>(cached?.items || []);
   const [totalCount, setTotalCount] = useState(cached?.total || 0);
@@ -326,7 +328,7 @@ export const VisitorHistoryScreen: React.FC = () => {
           <Search size={18} color="#94A3B8" style={{ marginRight: 8 }} />
           <TextInput
             style={styles.searchInput}
-            placeholder="Buscar por visitante, morador, unidade, placa..."
+            placeholder={`Buscar por visitante, ${terms.client.toLowerCase()}, ${terms.unit.toLowerCase()}, placa...`}
             placeholderTextColor="#94A3B8"
             value={search}
             onChangeText={setSearch}
@@ -522,16 +524,16 @@ export const VisitorHistoryScreen: React.FC = () => {
 
                 {/* Destino & Morador */}
                 <View style={styles.modalSection}>
-                  <Text style={styles.modalSectionTitle}>Unidade / Destino</Text>
+                  <Text style={styles.modalSectionTitle}>{terms.unit}</Text>
                   <View style={styles.detailRow}>
-                    <Text style={styles.detailLabel}>Unidade:</Text>
+                    <Text style={styles.detailLabel}>{terms.unit}:</Text>
                     <Text style={styles.detailValueBold}>
                       {selectedDetail.destination.name}
                       {selectedDetail.destination.block ? ` - ${selectedDetail.destination.block}` : ''}
                     </Text>
                   </View>
                   <View style={styles.detailRow}>
-                    <Text style={styles.detailLabel}>Morador:</Text>
+                    <Text style={styles.detailLabel}>{terms.client}:</Text>
                     <Text style={styles.detailValue}>{selectedDetail.client.name}</Text>
                   </View>
                   <View style={styles.detailRow}>

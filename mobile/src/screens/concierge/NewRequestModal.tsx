@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import { X, Send, CircleCheck, ArrowRight, ShieldAlert } from 'lucide-react-native';
 import { colors } from '../../theme/colors';
+import { usePlaceTerms } from '../../utils/placeTerms';
 import { api } from '../../config/api';
 import { ClientAutocomplete, ClientDestinationItem } from '../../components/ClientAutocomplete';
 import { VisitorFormSection, VisitorFormData } from '../../components/VisitorFormSection';
@@ -29,6 +30,7 @@ export const NewRequestModal: React.FC<NewRequestModalProps> = ({
   onClose,
   onSuccess,
 }) => {
+  const terms = usePlaceTerms();
   const [step, setStep] = useState<'form' | 'confirmation'>('form');
   const [selectedClient, setSelectedClient] = useState<ClientDestinationItem | null>(null);
   const [selectedDestinationId, setSelectedDestinationId] = useState<string>('');
@@ -56,7 +58,7 @@ export const NewRequestModal: React.FC<NewRequestModalProps> = ({
 
   const handleProceedToConfirmation = () => {
     if (!selectedClient || !selectedDestinationId) {
-      Alert.alert('Atenção', 'Selecione o cliente e a unidade de destino.');
+      Alert.alert('Atenção', `Selecione o ${terms.client.toLowerCase()} e a ${terms.unit.toLowerCase()} de destino.`);
       return;
     }
     if (!visitorForm.name.trim()) {
@@ -191,10 +193,10 @@ export const NewRequestModal: React.FC<NewRequestModalProps> = ({
               <View style={styles.summaryCard}>
                 <Text style={styles.summarySectionTitle}>Destino da Visita</Text>
                 <Text style={styles.summaryTextBold}>
-                  {selectedClient?.destinations[0]?.destination.name || 'Unidade'}
+                  {selectedClient?.destinations[0]?.destination.name || terms.unit}
                 </Text>
                 <Text style={styles.summaryText}>
-                  Morador/Responsável: {selectedClient?.name}
+                  {terms.client}: {selectedClient?.name}
                 </Text>
                 <Text style={styles.summaryTextMuted}>
                   WhatsApp: {selectedClient?.whatsappNumber}

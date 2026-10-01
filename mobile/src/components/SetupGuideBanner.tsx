@@ -12,12 +12,13 @@ import {
   ArrowRight,
 } from 'lucide-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { usePlaceTerms } from '../utils/placeTerms';
 
 interface SetupGuideBannerProps {
   userId?: string;
   onOpenTutorial: () => void;
   onNavigate: (
-    screen: 'org_profile' | 'whatsapp' | 'clients_mgmt' | 'users_mgmt'
+    screen: 'org_profile' | 'whatsapp' | 'clients_mgmt' | 'residents' | 'users_mgmt'
   ) => void;
 }
 
@@ -26,13 +27,16 @@ export const SetupGuideBanner: React.FC<SetupGuideBannerProps> = ({
   onOpenTutorial,
   onNavigate,
 }) => {
+  const terms = usePlaceTerms();
   const [isDismissed, setIsDismissed] = useState(false);
 
   useEffect(() => {
     const checkDismissed = async () => {
       if (!userId) return;
       try {
-        const val = await AsyncStorage.getItem(`@combate_portaria:guide_banner_dismissed_${userId}`);
+        const val =
+          (await AsyncStorage.getItem(`@brisoft_portaria:guide_banner_dismissed_${userId}`)) ||
+          (await AsyncStorage.getItem(`@combate_portaria:guide_banner_dismissed_${userId}`));
         if (val === 'true') {
           setIsDismissed(true);
         }
@@ -47,7 +51,7 @@ export const SetupGuideBanner: React.FC<SetupGuideBannerProps> = ({
     setIsDismissed(true);
     if (userId) {
       try {
-        await AsyncStorage.setItem(`@combate_portaria:guide_banner_dismissed_${userId}`, 'true');
+        await AsyncStorage.setItem(`@brisoft_portaria:guide_banner_dismissed_${userId}`, 'true');
       } catch (err) {
         // ignore
       }
@@ -103,11 +107,11 @@ export const SetupGuideBanner: React.FC<SetupGuideBannerProps> = ({
 
         <TouchableOpacity
           style={styles.chip}
-          onPress={() => onNavigate('clients_mgmt')}
+          onPress={() => onNavigate('residents')}
           activeOpacity={0.8}
         >
           <Users size={13} color="#1D4ED8" style={{ marginRight: 5 }} />
-          <Text style={styles.chipText}>3. Moradores</Text>
+          <Text style={styles.chipText}>3. {terms.clients}</Text>
           <ChevronRight size={12} color="#1D4ED8" />
         </TouchableOpacity>
 

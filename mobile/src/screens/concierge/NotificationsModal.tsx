@@ -17,6 +17,7 @@ import {
   Trash2,
 } from 'lucide-react-native';
 import { colors } from '../../theme/colors';
+import { usePlaceTerms } from '../../utils/placeTerms';
 import { RealtimeAlert } from '../../contexts/RealtimeContext';
 
 interface NotificationsModalProps {
@@ -34,6 +35,7 @@ export const NotificationsModal: React.FC<NotificationsModalProps> = ({
   onClear,
   onSelectNotification,
 }) => {
+  const terms = usePlaceTerms();
   const renderItem = ({ item }: { item: RealtimeAlert }) => {
     const isAuth = item.type === 'AUTHORIZED';
     const isDenied = item.type === 'DENIED';
@@ -144,7 +146,7 @@ export const NotificationsModal: React.FC<NotificationsModalProps> = ({
                 <Bell size={44} color="#94A3B8" style={{ marginBottom: 12 }} />
                 <Text style={styles.emptyTitle}>Sem novas notificações</Text>
                 <Text style={styles.emptySubtitle}>
-                  Quando moradores autorizarem ou recusarem acessos pelo WhatsApp, os avisos aparecerão aqui em tempo real.
+                  Quando os {terms.clients.toLowerCase()} autorizarem ou recusarem acessos pelo WhatsApp, os avisos aparecerão aqui em tempo real.
                 </Text>
               </View>
             }

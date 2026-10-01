@@ -1,6 +1,8 @@
 import { prisma } from '../../lib/prisma.js';
 import { AppError } from '../../core/errors/app-error.js';
 import { formatWhatsAppNumber } from '../../utils/phone.util.js';
+import { retiredEmail } from '../../utils/email.js';
+import { invalidateAuthCache } from '../../middlewares/auth.middleware.js';
 
 export interface CreateClientParams {
   organizationId: string;
@@ -254,6 +256,22 @@ export class ClientService {
         isActive: false,
       },
     });
+
+    const linkedUsers = await prisma.user.findMany({
+      where: { clientId: id, deletedAt: null },
+      select: { id: true, email: true },
+    });
+    for (const user of linkedUsers) {
+      await prisma.user.update({
+        where: { id: user.id },
+        data: {
+          deletedAt: new Date(),
+          isActive: false,
+          email: retiredEmail(user.email, user.id),
+        },
+      });
+      invalidateAuthCache(user.id);
+    }
 
     return { success: true };
   }

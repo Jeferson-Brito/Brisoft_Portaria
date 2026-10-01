@@ -6,7 +6,7 @@ import { subscriptionService } from '../subscriptions/subscription.service.js';
 import { cnpjExistsAtRevenue, isValidCnpj, isValidCpf, onlyDigits } from '../../utils/cnpj.js';
 import { isDisposableEmail, isGmailAddress, normalizeEmail } from '../../utils/email.js';
 import { verificationService } from '../../services/verification.service.js';
-import { formatWhatsAppNumber } from '../../utils/phone.util.js';
+import { formatWhatsAppNumber, sameWhatsappNumber } from '../../utils/phone.util.js';
 
 export interface LoginParams {
   email: string;
@@ -227,6 +227,16 @@ export class AuthService {
     const digits = onlyDigits(phone);
     const local = digits.startsWith('55') && digits.length > 11 ? digits.slice(2) : digits;
     if (local.length < 10) return false;
+
+    if (exceptUserId) {
+      const owner = await prisma.user.findUnique({
+        where: { id: exceptUserId },
+        select: { client: { select: { whatsappNumber: true } } },
+      });
+      const ownNumber = owner?.client?.whatsappNumber;
+      if (ownNumber && sameWhatsappNumber(phone, ownNumber)) return false;
+    }
+
     const candidates = await prisma.user.findMany({
       where: {
         deletedAt: null,
@@ -236,8 +246,8 @@ export class AuthService {
     });
     return candidates.some((item) => {
       if (exceptUserId && item.id === exceptUserId) return false;
-      const saved = onlyDigits(item.whatsappNumber || item.phone || '');
-      return saved.endsWith(local) || local.endsWith(saved.slice(-11));
+      const saved = item.whatsappNumber || item.phone || '';
+      return sameWhatsappNumber(phone, saved);
     });
   }
 
@@ -328,6 +338,7 @@ export class AuthService {
       phone: user.whatsappNumber,
       purpose: 'PASSWORD_RESET',
       userId: user.id,
+      organizationId: user.organizationId,
     });
   }
 
@@ -394,6 +405,7 @@ export class AuthService {
       phone: whatsappNumber,
       purpose: 'WHATSAPP_CONFIRM',
       userId: user.id,
+      organizationId: user.organizationId,
     });
     return { phone: whatsappNumber };
   }
@@ -444,6 +456,12 @@ export class AuthService {
         mustCompleteProfile: false,
       },
     });
+    if (user.clientId) {
+      await prisma.client.update({
+        where: { id: user.clientId },
+        data: { whatsappNumber },
+      });
+    }
     return this.getProfile(user.id);
   }
 
@@ -504,6 +522,7 @@ export class AuthService {
         clientId: user.clientId,
         mustCompleteProfile: user.mustCompleteProfile,
         whatsappVerified: Boolean(user.whatsappVerifiedAt),
+        whatsappNumber: user.client?.whatsappNumber || user.whatsappNumber || user.phone || null,
         resident: user.client
           ? {
               id: user.client.id,
@@ -555,6 +574,7 @@ export class AuthService {
       clientId: user.clientId,
       mustCompleteProfile: user.mustCompleteProfile,
       whatsappVerified: Boolean(user.whatsappVerifiedAt),
+      whatsappNumber: user.client?.whatsappNumber || user.whatsappNumber || user.phone || null,
       resident: user.client
         ? {
             id: user.client.id,

@@ -24,6 +24,8 @@ export interface User {
   clientId?: string | null;
     mustCompleteProfile?: boolean;
     whatsappVerified?: boolean;
+    whatsappNumber?: string | null;
+    phone?: string | null;
     resident?: { id: string; name: string; units: Array<{ id: string; name: string; block?: string | null; isPrimary?: boolean }> } | null;
   subscription?: Subscription | null;
 }
@@ -176,6 +178,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         organizationId: freshUser.organization?.id || current?.organizationId,
         organizationName: freshUser.organization?.name || current?.organizationName,
         clientId: freshUser.clientId ?? current?.clientId ?? null,
+        whatsappNumber: freshUser.whatsappNumber ?? current?.whatsappNumber ?? null,
+        phone: freshUser.phone ?? current?.phone ?? null,
         resident: freshUser.resident ?? current?.resident ?? null,
         subscription: freshUser.subscription ?? current?.subscription ?? null,
       };

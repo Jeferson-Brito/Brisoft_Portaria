@@ -84,7 +84,7 @@ async function bootstrap() {
     if (env.NODE_ENV === 'production') {
       const pingUrl = process.env.RENDER_EXTERNAL_URL
         ? `${process.env.RENDER_EXTERNAL_URL}/health`
-        : 'https://combate-portaria-backend.onrender.com/health';
+        : 'https://portaria.brisoft.com.br/health';
       setInterval(async () => {
         try {
           await fetch(pingUrl);

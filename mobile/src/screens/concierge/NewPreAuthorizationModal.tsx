@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { X, Calendar, Clock, CircleCheck, UserCheck, ShieldCheck } from 'lucide-react-native';
 import { colors } from '../../theme/colors';
+import { usePlaceTerms } from '../../utils/placeTerms';
 import { ClientAutocomplete, ClientDestinationItem } from '../../components/ClientAutocomplete';
 import { api } from '../../config/api';
 
@@ -26,6 +27,7 @@ export const NewPreAuthorizationModal: React.FC<NewPreAuthorizationModalProps> =
   onClose,
   onSuccess,
 }) => {
+  const terms = usePlaceTerms();
   const [selectedClient, setSelectedClient] = useState<ClientDestinationItem | null>(null);
   const [selectedDestinationId, setSelectedDestinationId] = useState<string>('');
   const [visitorName, setVisitorName] = useState('');
@@ -58,7 +60,7 @@ export const NewPreAuthorizationModal: React.FC<NewPreAuthorizationModalProps> =
 
   const handleSubmit = async () => {
     if (!selectedClient || !selectedDestinationId) {
-      Alert.alert('Atenção', 'Selecione o morador e a unidade de destino.');
+      Alert.alert('Atenção', `Selecione o ${terms.client.toLowerCase()} e a ${terms.unit.toLowerCase()} de destino.`);
       return;
     }
 
@@ -122,13 +124,14 @@ export const NewPreAuthorizationModal: React.FC<NewPreAuthorizationModalProps> =
             <View style={styles.infoBox}>
               <UserCheck size={20} color={colors.statusPending} style={{ marginRight: 10 }} />
               <Text style={styles.infoBoxText}>
-                Cadastre aqui visitas previamente comunicadas pelo morador. Ao chegarem na portaria, a liberação será instantânea.
+                Cadastre aqui visitas previamente comunicadas pelo {terms.client.toLowerCase()}. Ao chegarem na portaria, a liberação será instantânea.
               </Text>
             </View>
 
             {/* 1. Selecionar Morador / Destino */}
-            <Text style={styles.sectionLabel}>1. MORADOR & UNIDADE DE DESTINO *</Text>
+            <Text style={styles.sectionLabel}>1. DESTINO *</Text>
             <ClientAutocomplete
+              showLabel={false}
               onSelectClient={(client, destId) => {
                 setSelectedClient(client);
                 setSelectedDestinationId(destId);

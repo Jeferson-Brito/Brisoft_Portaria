@@ -30,6 +30,7 @@ import {
 import { useAuth } from '../../contexts/AuthContext';
 import { api } from '../../config/api';
 import { colors } from '../../theme/colors';
+import { usePlaceTerms } from '../../utils/placeTerms';
 
 interface SettingsScreenProps {
   onNavigate: (
@@ -38,6 +39,8 @@ interface SettingsScreenProps {
       | 'org_profile'
       | 'users_mgmt'
       | 'clients_mgmt'
+      | 'residents'
+      | 'units'
       | 'restrictions'
       | 'amenities'
       | 'whatsapp'
@@ -60,6 +63,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
   onOpenTutorial,
 }) => {
   const { user, signOut, refreshSubscription } = useAuth();
+  const terms = usePlaceTerms();
   const scrollRef = useRef<ScrollView>(null);
   const [showScrollTop, setShowScrollTop] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -229,19 +233,29 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
             <MenuRow
               icon={<Users size={18} color={colors.primary} />}
               iconBg={colors.primarySoft}
-              title={orgProfile.clientLabel ? `${orgProfile.clientLabel}s e unidades` : 'Moradores e unidades'}
-              onPress={() => onNavigate('clients_mgmt')}
+              title={terms.clients}
+              subtitle="Cadastro, busca e acesso ao aplicativo"
+              onPress={() => onNavigate('residents')}
+            />
+            <MenuRow
+              icon={<Building size={18} color="#0F766E" />}
+              iconBg="#CCFBF1"
+              title={terms.units}
+              subtitle="Cadastro, busca e edição"
+              onPress={() => onNavigate('units')}
             />
             <MenuRow
               icon={<UserCheck size={18} color="#1D4ED8" />}
               iconBg="#EFF6FF"
               title="Equipe da portaria"
+              subtitle="Porteiros, supervisores e acessos"
               onPress={() => onNavigate('users_mgmt')}
             />
             <MenuRow
               icon={<Shield size={18} color="#B91C1C" />}
               iconBg="#FEE2E2"
               title="Lista de restrição"
+              subtitle="Pessoas com entrada bloqueada"
               onPress={() => onNavigate('restrictions')}
               last={!isAdmin}
             />
@@ -251,7 +265,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
                   icon={<Building size={18} color="#B45309" />}
                   iconBg="#FEF3C7"
                   title="Perfil do estabelecimento"
-                  subtitle={orgProfile.companyName || 'Nome, endereço e tipo do local'}
+                  subtitle="Nome, endereço e tipo do local"
                   onPress={() => onNavigate('org_profile')}
                 />
                 <MenuRow

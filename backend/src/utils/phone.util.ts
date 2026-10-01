@@ -19,3 +19,28 @@ export function formatWhatsAppNumber(phone: string): string {
 
   return cleaned;
 }
+
+/** Formas equivalentes de um celular brasileiro, com e sem o 9 depois do DDD. */
+export function whatsappDigitForms(phone: string): string[] {
+  const digits = phone.replace(/\D/g, '');
+  const local = digits.startsWith('55') && digits.length > 11 ? digits.slice(2) : digits;
+  if (local.length < 10) return [];
+
+  const forms = new Set<string>([local, `55${local}`]);
+  if (local.length === 11 && local[2] === '9') {
+    const withoutNine = `${local.slice(0, 2)}${local.slice(3)}`;
+    forms.add(withoutNine);
+    forms.add(`55${withoutNine}`);
+  }
+  if (local.length === 10) {
+    const withNine = `${local.slice(0, 2)}9${local.slice(2)}`;
+    forms.add(withNine);
+    forms.add(`55${withNine}`);
+  }
+  return [...forms];
+}
+
+export function sameWhatsappNumber(left: string, right: string): boolean {
+  const forms = new Set(whatsappDigitForms(left));
+  return whatsappDigitForms(right).some((form) => forms.has(form));
+}

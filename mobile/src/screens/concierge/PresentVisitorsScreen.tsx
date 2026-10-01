@@ -25,6 +25,7 @@ import {
   Share2,
 } from 'lucide-react-native';
 import { colors } from '../../theme/colors';
+import { usePlaceTerms } from '../../utils/placeTerms';
 import { api } from '../../config/api';
 import { useRealtime } from '../../contexts/RealtimeContext';
 import { useForegroundRefresh } from '../../hooks/useForegroundRefresh';
@@ -68,6 +69,7 @@ interface PresentVisitorItem {
 }
 
 export const PresentVisitorsScreen: React.FC = () => {
+  const terms = usePlaceTerms();
   const cached = readScreenCache<PresentVisitorItem[]>('present');
   const [visitors, setVisitors] = useState<PresentVisitorItem[]>(cached || []);
   const listRef = useRef<FlatList>(null);
@@ -130,7 +132,7 @@ export const PresentVisitorsScreen: React.FC = () => {
     const stamp = new Date().toLocaleString('pt-BR');
     const lines = visible.map((item, index) => {
       const unit = [item.destination?.name, item.destination?.block].filter(Boolean).join(' · ');
-      return `${index + 1}. ${item.visitor.name} — ${unit} — ${item.client?.name || 'Morador'} — entrada ${item.stayDurationFormatted}`;
+      return `${index + 1}. ${item.visitor.name} — ${unit} — ${item.client?.name || terms.client} — entrada ${item.stayDurationFormatted}`;
     });
     await Share.share({
       message: `Pessoas no local (${stamp})\n${visible.length} presente(s)\n\n${lines.join('\n')}`,
@@ -235,7 +237,7 @@ export const PresentVisitorsScreen: React.FC = () => {
         <View style={styles.destinationRow}>
           <Building size={15} color={colors.primaryLight} style={{ marginRight: 6 }} />
           <Text style={styles.destinationName}>{item.destination.name}</Text>
-          <Text style={styles.clientName}> • Morador: {item.client.name}</Text>
+          <Text style={styles.clientName}> • {terms.client}: {item.client.name}</Text>
         </View>
 
         {/* Info de Entrada */}
@@ -276,7 +278,7 @@ export const PresentVisitorsScreen: React.FC = () => {
           <Search size={18} color={colors.textSecondary} style={{ marginRight: 8 }} />
           <TextInput
             style={styles.searchInput}
-            placeholder="Buscar por visitante, placa, unidade..."
+            placeholder={`Buscar por visitante, placa, ${terms.unit.toLowerCase()}...`}
             placeholderTextColor={colors.textSecondary}
             value={search}
             onChangeText={setSearch}
@@ -297,7 +299,7 @@ export const PresentVisitorsScreen: React.FC = () => {
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filters}>
         {['ALL', ...places].map((item) => (
           <TouchableOpacity key={item} style={[styles.filterChip, place === item && styles.filterChipActive]} onPress={() => setPlace(item)}>
-            <Text style={[styles.filterText, place === item && styles.filterTextActive]}>{item === 'ALL' ? 'Todas as unidades' : item}</Text>
+            <Text style={[styles.filterText, place === item && styles.filterTextActive]}>{item === 'ALL' ? `Todas as ${terms.units.toLowerCase()}` : item}</Text>
           </TouchableOpacity>
         ))}
       </ScrollView>

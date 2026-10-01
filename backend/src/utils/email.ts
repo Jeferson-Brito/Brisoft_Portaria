@@ -75,6 +75,16 @@ export function isDisposableEmail(email: string) {
   return DISPOSABLE_DOMAINS.has(domain);
 }
 
+/** Libera o e-mail único de uma conta apagada para um cadastro novo. */
+export function retiredEmail(email: string, id: string) {
+  const lower = email.trim().toLowerCase();
+  const at = lower.lastIndexOf('@');
+  const local = at > 0 ? lower.slice(0, at).replace(/\+removido-[^+@]+$/, '') : lower;
+  const domain = at > 0 ? lower.slice(at + 1) : 'removido.local';
+  const stamp = id.replace(/-/g, '').slice(0, 12);
+  return `${local}+removido-${stamp}@${domain}`;
+}
+
 export function isGmailAddress(email: string) {
   const lower = email.trim().toLowerCase();
   return lower.endsWith('@gmail.com') || lower.endsWith('@googlemail.com');

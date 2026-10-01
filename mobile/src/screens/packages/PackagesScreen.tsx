@@ -37,6 +37,7 @@ import {
 } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { colors } from '../../theme/colors';
+import { usePlaceTerms } from '../../utils/placeTerms';
 import { api } from '../../config/api';
 import { AppHeader } from '../../components/AppHeader';
 import { ScrollToTopButton } from '../../components/ScrollToTopButton';
@@ -48,6 +49,7 @@ interface PackagesScreenProps {
 }
 
 export const PackagesScreen: React.FC<PackagesScreenProps> = ({ onBack }) => {
+  const terms = usePlaceTerms();
   const [activeSubTab, setActiveSubTab] = useState<'pending' | 'history'>('pending');
   const [searchQuery, setSearchQuery] = useState('');
   const listRef = useRef<FlatList>(null);
@@ -300,7 +302,7 @@ export const PackagesScreen: React.FC<PackagesScreenProps> = ({ onBack }) => {
           <Search size={18} color="#64748B" style={{ marginRight: 8 }} />
           <TextInput
             style={styles.searchInput}
-            placeholder="Buscar por morador, unidade, código..."
+            placeholder={`Buscar por ${terms.client.toLowerCase()}, ${terms.unit.toLowerCase()}, código...`}
             placeholderTextColor="#94A3B8"
             value={searchQuery}
             onChangeText={setSearchQuery}
@@ -392,7 +394,7 @@ export const PackagesScreen: React.FC<PackagesScreenProps> = ({ onBack }) => {
                 {searchQuery.trim()
                   ? `Nenhum resultado para "${searchQuery}". Verifique a busca.`
                   : activeSubTab === 'pending'
-                  ? 'Todas as encomendas já foram retiradas pelos moradores.'
+                  ? `Todas as encomendas já foram retiradas pelos ${terms.clients.toLowerCase()}.`
                   : 'Nenhuma encomenda registrada no histórico ainda.'}
               </Text>
             </View>
@@ -498,7 +500,7 @@ export const PackagesScreen: React.FC<PackagesScreenProps> = ({ onBack }) => {
                     >
                       <Check size={18} color="#FFFFFF" style={{ marginRight: 6 }} />
                       <Text style={styles.directPickupBtnText}>
-                        Marcar que Morador Já Coletou
+                        Marcar que {terms.client} já coletou
                       </Text>
                     </TouchableOpacity>
 
@@ -673,7 +675,7 @@ export const PackagesScreen: React.FC<PackagesScreenProps> = ({ onBack }) => {
                 {isSubmitting ? (
                   <ActivityIndicator color="#FFFFFF" />
                 ) : (
-                  <Text style={styles.submitBtnText}>Salvar e Avisar Morador no WhatsApp</Text>
+                  <Text style={styles.submitBtnText}>Salvar e avisar {terms.client.toLowerCase()} no WhatsApp</Text>
                 )}
               </TouchableOpacity>
             </ScrollView>
@@ -705,7 +707,7 @@ export const PackagesScreen: React.FC<PackagesScreenProps> = ({ onBack }) => {
             <Text style={styles.confirmPopupSubtitle}>
               Entrega para{' '}
               <Text style={{ fontWeight: '700', color: '#0F172A' }}>
-                {selectedPackageForPickup?.destination?.name || 'Unidade'}
+                {selectedPackageForPickup?.destination?.name || terms.unit}
               </Text>
               {selectedPackageForPickup?.client?.name ? ` — ${selectedPackageForPickup.client.name}` : ''}
               {` (${selectedPackageForPickup?.code || ''})`}
@@ -714,7 +716,7 @@ export const PackagesScreen: React.FC<PackagesScreenProps> = ({ onBack }) => {
             <View style={styles.codeSectionBox}>
               <Text style={styles.codeSectionLabel}>Código de Retirada (4 dígitos)</Text>
               <Text style={styles.codeSectionHint}>
-                Solicite o código que o morador recebeu no WhatsApp:
+                Solicite o código que o {terms.client.toLowerCase()} recebeu no WhatsApp:
               </Text>
               <TextInput
                 style={styles.pickupCodeInput}

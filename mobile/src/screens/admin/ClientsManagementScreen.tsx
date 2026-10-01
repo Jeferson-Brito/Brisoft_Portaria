@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -13,6 +13,7 @@ import {
   ScrollView,
   Platform,
   StatusBar,
+  Dimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
@@ -27,17 +28,37 @@ import {
   Trash2,
   MoreVertical,
   Plus,
+  Key,
+  Lock,
+  SlidersHorizontal,
 } from 'lucide-react-native';
 import { colors } from '../../theme/colors';
 import { api } from '../../config/api';
+import { useAuth } from '../../contexts/AuthContext';
+import { PasswordField } from '../../components/PasswordField';
+import { usePlaceTerms } from '../../utils/placeTerms';
 
 interface ClientsManagementScreenProps {
   onBack?: () => void;
+  section?: 'all' | 'residents' | 'units';
 }
 
-export const ClientsManagementScreen: React.FC<ClientsManagementScreenProps> = ({ onBack }) => {
+export const ClientsManagementScreen: React.FC<ClientsManagementScreenProps> = ({ onBack, section = 'all' }) => {
+  const { user: currentUser } = useAuth();
+  const terms = usePlaceTerms();
+  const clientLower = terms.client.toLowerCase();
+  const clientsLower = terms.clients.toLowerCase();
+  const unitLower = terms.unit.toLowerCase();
+  const unitsLower = terms.units.toLowerCase();
+  const isAdmin = currentUser?.role === 'ADMIN' || currentUser?.role === 'SUPER_ADMIN';
   // Aba ativa: 'clients' (Moradores) por padrão ou 'destinations' (Unidades / Aptos)
-  const [activeTab, setActiveTab] = useState<'clients' | 'destinations'>('clients');
+  const [activeTab, setActiveTab] = useState<'clients' | 'destinations'>(section === 'units' ? 'destinations' : 'clients');
+  const [accessByClient, setAccessByClient] = useState<Record<string, any>>({});
+  const [accessFilter, setAccessFilter] = useState<'all' | 'with' | 'without'>('all');
+  const [isFilterOpen, setIsFilterOpen] = useState(false);
+  const filterButtonRef = useRef<View>(null);
+  const [filterAnchor, setFilterAnchor] = useState({ x: 0, y: 0, width: 0, height: 0 });
+  const [menuClient, setMenuClient] = useState<any>(null);
 
   const [clients, setClients] = useState<any[]>([]);
   const [destinations, setDestinations] = useState<any[]>([]);
@@ -70,6 +91,11 @@ export const ClientsManagementScreen: React.FC<ClientsManagementScreenProps> = (
   const [editDocument, setEditDocument] = useState('');
   const [editSelectedDestId, setEditSelectedDestId] = useState('');
   const [isSubmittingEdit, setIsSubmittingEdit] = useState(false);
+  const [accessClient, setAccessClient] = useState<any>(null);
+  const [accessName, setAccessName] = useState('');
+  const [accessEmail, setAccessEmail] = useState('');
+  const [accessPassword, setAccessPassword] = useState('');
+  const [isAccessSubmitting, setIsAccessSubmitting] = useState(false);
 
   // Modal Editar Unidade
   const [isEditDestModalOpen, setIsEditDestModalOpen] = useState(false);
@@ -90,7 +116,32 @@ export const ClientsManagementScreen: React.FC<ClientsManagementScreenProps> = (
         api.get('/destinations'),
       ]);
 
-      setClients(clientsRes.data.data?.clients || clientsRes.data.data?.items || clientsRes.data.data || []);
+      const clientList = clientsRes.data.data?.clients || clientsRes.data.data?.items || clientsRes.data.data || [];
+      setClients(clientList);
+      try {
+        const usersRes = await api.get('/users', { params: { role: 'CLIENT' } });
+        const accessUsers = usersRes.data.data?.users || [];
+        const map: Record<string, any> = {};
+        for (const accessUser of accessUsers) {
+          if (accessUser.clientId) map[accessUser.clientId] = accessUser;
+        }
+        if (Object.keys(map).length < accessUsers.length) {
+          for (const accessUser of accessUsers) {
+            const byEmail = clientList.find(
+              (client: any) =>
+                client.email &&
+                accessUser.email &&
+                String(client.email).trim().toLowerCase() === String(accessUser.email).trim().toLowerCase()
+            );
+            if (byEmail && !map[byEmail.id]) {
+              map[byEmail.id] = { ...accessUser, clientId: byEmail.id };
+            }
+          }
+        }
+        setAccessByClient(map);
+      } catch (err) {
+        console.warn('Falha ao carregar acessos dos moradores:', err);
+      }
       const destList = destsRes.data.data?.destinations || destsRes.data.data || [];
       setDestinations(destList);
       if (destList.length > 0 && !selectedDestId) {
@@ -139,7 +190,7 @@ export const ClientsManagementScreen: React.FC<ClientsManagementScreenProps> = (
   // ==================== AÇÕES DE UNIDADE ====================
   const handleCreateDestination = async () => {
     if (!destName.trim()) {
-      Alert.alert('Atenção', 'Informe o nome da unidade (ex: Apartamento 101).');
+      Alert.alert('Atenção', `Informe o nome da ${unitLower}.`);
       return;
     }
 
@@ -152,7 +203,7 @@ export const ClientsManagementScreen: React.FC<ClientsManagementScreenProps> = (
       });
 
       if (res.data.success) {
-        Alert.alert('Sucesso', 'Unidade cadastrada com sucesso!');
+        Alert.alert('Sucesso', 'Cadastro salvo.');
         setIsDestModalOpen(false);
         setDestName('');
         setDestBlock('');
@@ -160,7 +211,7 @@ export const ClientsManagementScreen: React.FC<ClientsManagementScreenProps> = (
         loadData();
       }
     } catch (err: any) {
-      Alert.alert('Erro', err.response?.data?.error?.message || 'Falha ao cadastrar unidade');
+      Alert.alert('Erro', err.response?.data?.error?.message || `Falha ao cadastrar ${unitLower}`);
     } finally {
       setIsSubmittingDest(false);
     }
@@ -177,7 +228,7 @@ export const ClientsManagementScreen: React.FC<ClientsManagementScreenProps> = (
 
   const handleEditDestination = async () => {
     if (!editDestName.trim()) {
-      Alert.alert('Atenção', 'O nome da unidade não pode ficar em branco.');
+      Alert.alert('Atenção', `O nome da ${unitLower} não pode ficar em branco.`);
       return;
     }
 
@@ -189,11 +240,11 @@ export const ClientsManagementScreen: React.FC<ClientsManagementScreenProps> = (
         code: editDestCode.trim() || undefined,
       });
 
-      Alert.alert('Sucesso', 'Unidade atualizada com sucesso!');
+      Alert.alert('Sucesso', 'Cadastro salvo.');
       setIsEditDestModalOpen(false);
       loadData();
     } catch (err: any) {
-      Alert.alert('Erro', err.response?.data?.error?.message || 'Falha ao atualizar unidade');
+      Alert.alert('Erro', err.response?.data?.error?.message || `Falha ao atualizar ${unitLower}`);
     } finally {
       setIsSubmittingEditDest(false);
     }
@@ -202,8 +253,8 @@ export const ClientsManagementScreen: React.FC<ClientsManagementScreenProps> = (
   const handleDeleteDestination = (d: any) => {
     setActiveMenuId(null);
     Alert.alert(
-      'Excluir Unidade',
-      `Tem certeza que deseja excluir ${d.name}? Os moradores vinculados permanecerão no sistema, mas sem esta unidade.`,
+      `Excluir ${terms.unit}`,
+      `Tem certeza que deseja excluir ${d.name}? Os ${clientsLower} vinculados permanecem no sistema, mas sem esta ${unitLower}.`,
       [
         { text: 'Cancelar', style: 'cancel' },
         {
@@ -212,10 +263,10 @@ export const ClientsManagementScreen: React.FC<ClientsManagementScreenProps> = (
           onPress: async () => {
             try {
               await api.delete(`/destinations/${d.id}`);
-              Alert.alert('Sucesso', 'Unidade removida com sucesso.');
+              Alert.alert('Sucesso', 'Cadastro removido.');
               loadData();
             } catch (err: any) {
-              Alert.alert('Erro', err.response?.data?.error?.message || 'Falha ao excluir unidade');
+              Alert.alert('Erro', err.response?.data?.error?.message || `Falha ao excluir ${unitLower}`);
             }
           },
         },
@@ -226,7 +277,7 @@ export const ClientsManagementScreen: React.FC<ClientsManagementScreenProps> = (
   // ==================== AÇÕES DE MORADOR ====================
   const handleCreateClient = async () => {
     if (!clientName.trim() || !whatsapp.trim()) {
-      Alert.alert('Atenção', 'Preencha o nome do morador e o WhatsApp.');
+      Alert.alert('Atenção', `Preencha o nome do ${clientLower} e o WhatsApp.`);
       return;
     }
 
@@ -249,7 +300,7 @@ export const ClientsManagementScreen: React.FC<ClientsManagementScreenProps> = (
       });
 
       if (res.data.success) {
-        Alert.alert('Sucesso', 'Morador cadastrado com sucesso e vinculado à unidade!');
+        Alert.alert('Sucesso', `${terms.client} cadastrado e vinculado à ${unitLower}!`);
         setIsClientModalOpen(false);
         setClientName('');
         setWhatsapp('');
@@ -258,7 +309,7 @@ export const ClientsManagementScreen: React.FC<ClientsManagementScreenProps> = (
         loadData();
       }
     } catch (err: any) {
-      Alert.alert('Erro', err.response?.data?.error?.message || 'Falha ao cadastrar morador');
+      Alert.alert('Erro', err.response?.data?.error?.message || `Falha ao cadastrar ${clientLower}`);
     } finally {
       setIsSubmittingClient(false);
     }
@@ -296,11 +347,11 @@ export const ClientsManagementScreen: React.FC<ClientsManagementScreenProps> = (
         document: editDocument.trim() || undefined,
         destinationIds: editSelectedDestId ? [editSelectedDestId] : undefined,
       });
-      Alert.alert('Sucesso', 'Dados do morador atualizados com sucesso!');
+      Alert.alert('Sucesso', `Dados do ${clientLower} atualizados com sucesso!`);
       setIsEditClientModalOpen(false);
       loadData();
     } catch (err: any) {
-      Alert.alert('Erro', err.response?.data?.error?.message || 'Falha ao atualizar morador');
+      Alert.alert('Erro', err.response?.data?.error?.message || `Falha ao atualizar ${clientLower}`);
     } finally {
       setIsSubmittingEdit(false);
     }
@@ -308,7 +359,7 @@ export const ClientsManagementScreen: React.FC<ClientsManagementScreenProps> = (
 
   const handleDeleteClient = (c: any) => {
     Alert.alert(
-      'Excluir morador',
+      `Excluir ${clientLower}`,
       `Tem certeza que deseja excluir ${c.name}? O histórico de visitas será mantido.`,
       [
         { text: 'Cancelar', style: 'cancel' },
@@ -317,11 +368,13 @@ export const ClientsManagementScreen: React.FC<ClientsManagementScreenProps> = (
           style: 'destructive',
           onPress: async () => {
             try {
+              const access = accessByClient[c.id];
+              if (access?.id) await api.delete(`/users/${access.id}`);
               await api.delete(`/clients/${c.id}`);
-              Alert.alert('Sucesso', 'Morador removido com sucesso.');
+              Alert.alert('Sucesso', `${terms.client} removido com sucesso.`);
               loadData();
             } catch (err: any) {
-              Alert.alert('Erro', err.response?.data?.error?.message || 'Falha ao excluir morador');
+              Alert.alert('Erro', err.response?.data?.error?.message || `Falha ao excluir ${clientLower}`);
             }
           },
         },
@@ -329,6 +382,98 @@ export const ClientsManagementScreen: React.FC<ClientsManagementScreenProps> = (
     );
     setActiveMenuId(null);
   };
+
+  const openAccessModal = (client: any) => {
+    const access = accessByClient[client.id];
+    setAccessClient(client);
+    setAccessName(access?.name || client.name || '');
+    setAccessEmail(access?.email || client.email || '');
+    setAccessPassword('');
+    setActiveMenuId(null);
+  };
+
+  const handleSaveAccess = async () => {
+    if (!accessClient) return;
+    const access = accessByClient[accessClient.id];
+    if (!accessEmail.trim()) {
+      Alert.alert('Atenção', `Informe o e-mail de acesso do ${clientLower}.`);
+      return;
+    }
+    if (!access && accessPassword.trim().length < 8) {
+      Alert.alert('Atenção', 'A senha deve ter no mínimo 8 caracteres.');
+      return;
+    }
+    if (access && accessPassword.trim() && accessPassword.trim().length < 8) {
+      Alert.alert('Atenção', 'A nova senha deve ter no mínimo 8 caracteres.');
+      return;
+    }
+    try {
+      setIsAccessSubmitting(true);
+      if (access) {
+        await api.patch(`/users/${access.id}`, {
+          name: accessName.trim() || accessClient.name,
+          email: accessEmail.trim(),
+          ...(accessPassword.trim() ? { newPassword: accessPassword.trim() } : {}),
+        });
+        Alert.alert('Sucesso', `Acesso do ${clientLower} atualizado.`);
+      } else {
+        const created = await api.post('/users', {
+          name: accessName.trim() || accessClient.name,
+          email: accessEmail.trim(),
+          password: accessPassword.trim(),
+          role: 'CLIENT',
+          clientId: accessClient.id,
+        });
+        const accessUser = created.data?.data?.user;
+        setAccessByClient((current) => ({
+          ...current,
+          [accessClient.id]: {
+            ...(accessUser || {}),
+            id: accessUser?.id,
+            clientId: accessClient.id,
+            email: accessEmail.trim(),
+            name: accessName.trim() || accessClient.name,
+          },
+        }));
+        Alert.alert('Sucesso', `O ${clientLower} já pode entrar no aplicativo com esse e-mail e senha.`);
+      }
+      setAccessClient(null);
+      loadData();
+    } catch (err: any) {
+      Alert.alert('Erro', err.response?.data?.error?.message || 'Falha ao salvar o acesso');
+    } finally {
+      setIsAccessSubmitting(false);
+    }
+  };
+
+  const handleRemoveAccess = (client: any) => {
+    const access = accessByClient[client.id];
+    if (!access) return;
+    setActiveMenuId(null);
+    Alert.alert('Remover acesso', `${client.name} deixa de entrar no aplicativo. O cadastro continua.`, [
+      { text: 'Cancelar', style: 'cancel' },
+      {
+        text: 'Remover acesso',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await api.delete(`/users/${access.id}`);
+            Alert.alert('Sucesso', 'Acesso removido.');
+            loadData();
+          } catch (err: any) {
+            Alert.alert('Erro', err.response?.data?.error?.message || 'Falha ao remover o acesso');
+          }
+        },
+      },
+    ]);
+  };
+
+  const visibleClients = clients.filter((client) => {
+    const hasAccess = !!accessByClient[client.id];
+    if (accessFilter === 'with') return hasAccess;
+    if (accessFilter === 'without') return !hasAccess;
+    return true;
+  });
 
   const insets = useSafeAreaInsets();
   const topPadding = Math.max(insets.top, Platform.OS === 'android' ? (StatusBar.currentHeight || 28) : 0) + 14;
@@ -344,12 +489,20 @@ export const ClientsManagementScreen: React.FC<ClientsManagementScreenProps> = (
             </TouchableOpacity>
           )}
           <View style={{ flex: 1 }}>
-            <Text style={styles.headerTitle}>Gestão de Moradores & Unidades</Text>
-            <Text style={styles.headerSubtitle}>Cadastro de residentes e apartamentos</Text>
+            <Text style={styles.headerTitle}>
+              {section === 'units' ? terms.units : section === 'residents' ? terms.clients : `${terms.clients} e ${terms.units}`}
+            </Text>
+            <Text style={styles.headerSubtitle}>
+              {section === 'units'
+                ? `Cadastro de ${unitsLower}`
+                : section === 'residents'
+                  ? 'Cadastro, acesso ao aplicativo e busca'
+                  : `Cadastro de ${clientsLower} e ${unitsLower}`}
+            </Text>
           </View>
         </View>
 
-        {/* Abas Internas (Moradores e Unidades / Aptos) */}
+        {section === 'all' && (
         <View style={styles.tabsContainer}>
           <TouchableOpacity
             style={[styles.tabButton, activeTab === 'clients' && styles.tabButtonActive]}
@@ -358,7 +511,7 @@ export const ClientsManagementScreen: React.FC<ClientsManagementScreenProps> = (
           >
             <Users size={16} color={activeTab === 'clients' ? '#165337' : 'rgba(255,255,255,0.75)'} style={{ marginRight: 6 }} />
             <Text style={[styles.tabButtonText, activeTab === 'clients' && styles.tabButtonTextActive]}>
-              Morador
+              {terms.client}
             </Text>
           </TouchableOpacity>
 
@@ -369,12 +522,13 @@ export const ClientsManagementScreen: React.FC<ClientsManagementScreenProps> = (
           >
             <Home size={16} color={activeTab === 'destinations' ? '#165337' : 'rgba(255,255,255,0.75)'} style={{ marginRight: 6 }} />
             <Text style={[styles.tabButtonText, activeTab === 'destinations' && styles.tabButtonTextActive]}>
-              Unidade / Apto
+              {terms.unit}
             </Text>
           </TouchableOpacity>
         </View>
+        )}
 
-        {/* Linha de Busca + Botão Adicionar ao lado */}
+        {section === 'all' && (
         <View style={styles.searchActionRow}>
           <View style={styles.searchBar}>
             <Search size={18} color="#94A3B8" style={{ marginRight: 8 }} />
@@ -382,8 +536,8 @@ export const ClientsManagementScreen: React.FC<ClientsManagementScreenProps> = (
               style={styles.searchInput}
               placeholder={
                 activeTab === 'clients'
-                  ? 'Buscar morador ou celular...'
-                  : 'Buscar unidade, bloco ou código...'
+                  ? `Buscar ${clientLower} ou celular...`
+                  : `Buscar ${unitLower}...`
               }
               placeholderTextColor="#94A3B8"
               value={searchQuery}
@@ -398,7 +552,7 @@ export const ClientsManagementScreen: React.FC<ClientsManagementScreenProps> = (
               activeOpacity={0.85}
             >
               <Plus size={16} color="#165337" style={{ marginRight: 4 }} />
-              <Text style={styles.actionBtnHeaderText}>Morador</Text>
+              <Text style={styles.actionBtnHeaderText}>{terms.client}</Text>
             </TouchableOpacity>
           ) : (
             <TouchableOpacity
@@ -407,24 +561,66 @@ export const ClientsManagementScreen: React.FC<ClientsManagementScreenProps> = (
               activeOpacity={0.85}
             >
               <Plus size={16} color="#165337" style={{ marginRight: 4 }} />
-              <Text style={styles.actionBtnHeaderText}>Unidade</Text>
+              <Text style={styles.actionBtnHeaderText}>{terms.unit}</Text>
             </TouchableOpacity>
           )}
         </View>
+        )}
       </View>
+
+      {section !== 'all' && (
+        <View style={styles.toolbar}>
+          <View style={styles.searchFilterRow}>
+            <View style={styles.searchBarLight}>
+              <Search size={18} color="#94A3B8" style={{ marginRight: 8 }} />
+              <TextInput
+                style={styles.searchInput}
+                placeholder={activeTab === 'clients' ? 'Buscar por nome ou celular' : `Buscar ${unitLower}`}
+                placeholderTextColor="#94A3B8"
+                value={searchQuery}
+                onChangeText={handleSearch}
+              />
+            </View>
+            {section === 'residents' && (
+              <View ref={filterButtonRef} collapsable={false}>
+                <TouchableOpacity
+                  style={[styles.filterButton, accessFilter !== 'all' && styles.filterButtonActive]}
+                  onPress={() => {
+                    filterButtonRef.current?.measureInWindow((x, y, width, height) => {
+                      setFilterAnchor({ x, y, width, height });
+                      setIsFilterOpen(true);
+                    });
+                  }}
+                  activeOpacity={0.85}
+                >
+                  <SlidersHorizontal size={18} color={accessFilter !== 'all' ? colors.white : '#165337'} />
+                </TouchableOpacity>
+              </View>
+            )}
+          </View>
+          <TouchableOpacity
+            style={styles.addButton}
+            onPress={() => (activeTab === 'clients' ? setIsClientModalOpen(true) : setIsDestModalOpen(true))}
+            activeOpacity={0.85}
+          >
+            <Plus size={18} color={colors.white} style={{ marginRight: 6 }} />
+            <Text style={styles.addButtonText}>{activeTab === 'clients' ? `Cadastrar ${clientLower}` : `Cadastrar ${unitLower}`}</Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
       {/* Conteúdo Principal da Aba Selecionada */}
       {isLoading ? (
         <View style={styles.centerContainer}>
           <ActivityIndicator size="large" color="#2563EB" />
           <Text style={styles.loadingText}>
-            {activeTab === 'clients' ? 'Carregando moradores...' : 'Carregando unidades...'}
+            {activeTab === 'clients' ? `Carregando ${clientsLower}...` : `Carregando ${unitsLower}...`}
           </Text>
         </View>
       ) : activeTab === 'clients' ? (
         /* ================= LISTA DE MORADORES ================= */
         <FlatList
-          data={clients}
+          data={visibleClients}
           keyExtractor={(item) => item.id}
           refreshControl={
             <RefreshControl
@@ -440,9 +636,9 @@ export const ClientsManagementScreen: React.FC<ClientsManagementScreenProps> = (
           ListEmptyComponent={
             <View style={styles.emptyContainer}>
               <Users size={48} color="#94A3B8" style={{ marginBottom: 12 }} />
-              <Text style={styles.emptyTitle}>Nenhum morador cadastrado</Text>
+              <Text style={styles.emptyTitle}>Nenhum {clientLower} cadastrado</Text>
               <Text style={styles.emptySub}>
-                Toque no botão "Morador" acima para cadastrar os residentes.
+                Toque em cadastrar para incluir o primeiro {clientLower}.
               </Text>
             </View>
           }
@@ -451,7 +647,7 @@ export const ClientsManagementScreen: React.FC<ClientsManagementScreenProps> = (
               .map((d: any) => d.destination?.name || d.name)
               .filter(Boolean)
               .join(', ');
-            const menuOpen = activeMenuId === item.id;
+            const access = accessByClient[item.id];
 
             return (
               <View style={styles.clientCard}>
@@ -467,7 +663,7 @@ export const ClientsManagementScreen: React.FC<ClientsManagementScreenProps> = (
                   </View>
                   <TouchableOpacity
                     style={styles.menuBtn}
-                    onPress={() => setActiveMenuId(menuOpen ? null : item.id)}
+                    onPress={() => setMenuClient(item)}
                     activeOpacity={0.7}
                   >
                     <MoreVertical size={18} color="#64748B" />
@@ -483,19 +679,9 @@ export const ClientsManagementScreen: React.FC<ClientsManagementScreenProps> = (
                   <Text style={styles.clientDocText}>Doc: {item.document}</Text>
                 )}
 
-                {menuOpen && (
-                  <View style={styles.actionMenu}>
-                    <TouchableOpacity style={styles.actionItem} onPress={() => openEditClient(item)}>
-                      <Pencil size={15} color="#1D4ED8" />
-                      <Text style={[styles.actionText, { color: '#1D4ED8' }]}>Editar dados</Text>
-                    </TouchableOpacity>
-                    <View style={styles.actionDivider} />
-                    <TouchableOpacity style={styles.actionItem} onPress={() => handleDeleteClient(item)}>
-                      <Trash2 size={15} color="#DC2626" />
-                      <Text style={[styles.actionText, { color: '#DC2626' }]}>Excluir morador</Text>
-                    </TouchableOpacity>
-                  </View>
-                )}
+                <Text style={[styles.accessBadge, access ? styles.accessBadgeOn : styles.accessBadgeOff]}>
+                  {access ? `Acesso: ${access.email}` : 'Sem acesso ao aplicativo'}
+                </Text>
               </View>
             );
           }}
@@ -519,9 +705,9 @@ export const ClientsManagementScreen: React.FC<ClientsManagementScreenProps> = (
           ListEmptyComponent={
             <View style={styles.emptyContainer}>
               <Home size={48} color="#94A3B8" style={{ marginBottom: 12 }} />
-              <Text style={styles.emptyTitle}>Nenhuma unidade cadastrada</Text>
+              <Text style={styles.emptyTitle}>Nenhuma {unitLower} na lista</Text>
               <Text style={styles.emptySub}>
-                Toque no botão "Unidade" acima para cadastrar apartamentos e blocos.
+                Toque em cadastrar para incluir a primeira {unitLower}.
               </Text>
             </View>
           }
@@ -560,10 +746,10 @@ export const ClientsManagementScreen: React.FC<ClientsManagementScreenProps> = (
                   <Users size={14} color="#2563EB" style={{ marginRight: 6 }} />
                   <Text style={styles.unitResidentsText}>
                     {residentsCount === 0
-                      ? 'Nenhum morador vinculado'
+                      ? `Nenhum ${clientLower} vinculado`
                       : residentsCount === 1
-                      ? '1 morador vinculado'
-                      : `${residentsCount} moradores vinculados`}
+                      ? `1 ${clientLower} vinculado`
+                      : `${residentsCount} ${clientsLower} vinculados`}
                   </Text>
                 </View>
 
@@ -571,12 +757,12 @@ export const ClientsManagementScreen: React.FC<ClientsManagementScreenProps> = (
                   <View style={styles.actionMenu}>
                     <TouchableOpacity style={styles.actionItem} onPress={() => openEditDest(item)}>
                       <Pencil size={15} color="#1D4ED8" />
-                      <Text style={[styles.actionText, { color: '#1D4ED8' }]}>Editar unidade</Text>
+                      <Text style={[styles.actionText, { color: '#1D4ED8' }]}>Editar {unitLower}</Text>
                     </TouchableOpacity>
                     <View style={styles.actionDivider} />
                     <TouchableOpacity style={styles.actionItem} onPress={() => handleDeleteDestination(item)}>
                       <Trash2 size={15} color="#DC2626" />
-                      <Text style={[styles.actionText, { color: '#DC2626' }]}>Excluir unidade</Text>
+                      <Text style={[styles.actionText, { color: '#DC2626' }]}>Excluir {unitLower}</Text>
                     </TouchableOpacity>
                   </View>
                 )}
@@ -586,15 +772,157 @@ export const ClientsManagementScreen: React.FC<ClientsManagementScreenProps> = (
         />
       )}
 
+      <Modal visible={isFilterOpen} animationType="fade" transparent onRequestClose={() => setIsFilterOpen(false)}>
+        <View style={styles.popupRoot}>
+          <TouchableOpacity style={styles.sheetBackdrop} activeOpacity={1} onPress={() => setIsFilterOpen(false)} />
+          <View
+            style={[
+              styles.filterPopup,
+              {
+                top: filterAnchor.y + filterAnchor.height + 6,
+                right: Math.max(12, Dimensions.get('window').width - (filterAnchor.x + filterAnchor.width)),
+              },
+            ]}
+          >
+            {([
+              ['all', 'Todos'],
+              ['with', 'Com acesso'],
+              ['without', 'Sem acesso'],
+            ] as const).map(([value, label]) => {
+              const selected = accessFilter === value;
+              return (
+                <TouchableOpacity
+                  key={value}
+                  style={[styles.filterPopupOption, selected && styles.filterPopupOptionSelected]}
+                  onPress={() => {
+                    setAccessFilter(value);
+                    setIsFilterOpen(false);
+                  }}
+                >
+                  <Text style={[styles.filterPopupText, selected && styles.filterPopupTextSelected]}>{label}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </View>
+      </Modal>
+
+      <Modal visible={!!menuClient} animationType="slide" transparent onRequestClose={() => setMenuClient(null)}>
+        <View style={styles.modalOverlay}>
+          <TouchableOpacity style={styles.sheetBackdrop} activeOpacity={1} onPress={() => setMenuClient(null)} />
+          <View style={styles.sheet}>
+            <Text style={styles.sheetTitle}>{menuClient?.name}</Text>
+            <Text style={styles.sheetSubtitle}>O que você quer fazer com este {clientLower}?</Text>
+            {isAdmin && (
+              <TouchableOpacity
+                style={styles.sheetAction}
+                onPress={() => {
+                  const client = menuClient;
+                  setMenuClient(null);
+                  openAccessModal(client);
+                }}
+              >
+                <Key size={18} color="#165337" />
+                <Text style={styles.sheetActionText}>
+                  {menuClient && accessByClient[menuClient.id] ? 'Editar acesso' : 'Criar acesso'}
+                </Text>
+              </TouchableOpacity>
+            )}
+            {isAdmin && menuClient && accessByClient[menuClient.id] && (
+              <TouchableOpacity
+                style={styles.sheetAction}
+                onPress={() => {
+                  const client = menuClient;
+                  setMenuClient(null);
+                  handleRemoveAccess(client);
+                }}
+              >
+                <Lock size={18} color="#B45309" />
+                <Text style={[styles.sheetActionText, { color: '#B45309' }]}>Remover acesso</Text>
+              </TouchableOpacity>
+            )}
+            <TouchableOpacity
+              style={styles.sheetAction}
+              onPress={() => {
+                const client = menuClient;
+                setMenuClient(null);
+                openEditClient(client);
+              }}
+            >
+              <Pencil size={18} color="#1D4ED8" />
+              <Text style={[styles.sheetActionText, { color: '#1D4ED8' }]}>Editar cadastro</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.sheetAction}
+              onPress={() => {
+                const client = menuClient;
+                setMenuClient(null);
+                handleDeleteClient(client);
+              }}
+            >
+              <Trash2 size={18} color="#DC2626" />
+              <Text style={[styles.sheetActionText, { color: '#DC2626' }]}>Excluir {clientLower}</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal visible={!!accessClient} animationType="slide" transparent onRequestClose={() => setAccessClient(null)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>{accessByClient[accessClient?.id] ? 'Editar acesso' : 'Criar acesso'}</Text>
+            <Text style={styles.modalSubtitle}>
+              {accessClient?.name} entra no aplicativo com este e-mail e senha.
+            </Text>
+            <View style={styles.formGroup}>
+              <Text style={styles.inputLabel}>Nome *</Text>
+              <TextInput style={styles.input} value={accessName} onChangeText={setAccessName} placeholderTextColor="#94A3B8" />
+            </View>
+            <View style={styles.formGroup}>
+              <Text style={styles.inputLabel}>E-mail de acesso *</Text>
+              <TextInput
+                style={styles.input}
+                value={accessEmail}
+                onChangeText={setAccessEmail}
+                keyboardType="email-address"
+                autoCapitalize="none"
+                placeholder="morador@email.com"
+                placeholderTextColor="#94A3B8"
+              />
+            </View>
+            <View style={styles.formGroup}>
+              <Text style={styles.inputLabel}>
+                {accessByClient[accessClient?.id] ? 'Nova senha (opcional)' : 'Senha * (mínimo 8 caracteres)'}
+              </Text>
+              <PasswordField
+                containerStyle={styles.input}
+                value={accessPassword}
+                onChangeText={setAccessPassword}
+                placeholder={accessByClient[accessClient?.id] ? 'Deixe em branco para manter' : 'Senha provisória'}
+                showStrength
+              />
+            </View>
+            <View style={styles.modalActions}>
+              <TouchableOpacity style={styles.cancelBtn} onPress={() => setAccessClient(null)} disabled={isAccessSubmitting}>
+                <Text style={styles.cancelBtnText}>Cancelar</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.saveBtn} onPress={handleSaveAccess} disabled={isAccessSubmitting}>
+                {isAccessSubmitting ? <ActivityIndicator color={colors.white} size="small" /> : <Text style={styles.saveBtnText}>Salvar</Text>}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
       {/* Modal 1: Cadastrar Morador */}
       <Modal visible={isClientModalOpen} animationType="slide" transparent onRequestClose={() => setIsClientModalOpen(false)}>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Cadastrar Novo Morador</Text>
-            <Text style={styles.modalSubtitle}>Insira os dados do morador para receber as visitas.</Text>
+            <Text style={styles.modalTitle}>Cadastrar {terms.client}</Text>
+            <Text style={styles.modalSubtitle}>Dados de quem recebe as visitas e autoriza pelo WhatsApp.</Text>
 
             <View style={styles.formGroup}>
-              <Text style={styles.inputLabel}>Nome do Morador / Responsável *</Text>
+              <Text style={styles.inputLabel}>Nome do {terms.client} *</Text>
               <TextInput
                 style={styles.input}
                 placeholder="Ex: Carlos Oliveira"
@@ -617,7 +945,7 @@ export const ClientsManagementScreen: React.FC<ClientsManagementScreenProps> = (
             </View>
 
             <View style={styles.formGroup}>
-              <Text style={styles.inputLabel}>Unidade / Apartamento *</Text>
+              <Text style={styles.inputLabel}>{terms.unit} *</Text>
               {destinations.length === 0 ? (
                 <TouchableOpacity
                   style={styles.noDestBox}
@@ -627,7 +955,7 @@ export const ClientsManagementScreen: React.FC<ClientsManagementScreenProps> = (
                   }}
                 >
                   <Text style={styles.noDestText}>
-                    Nenhuma unidade cadastrada. Toque aqui para criar a primeira!
+                    Ainda não há {unitLower}. Toque aqui para criar a primeira!
                   </Text>
                 </TouchableOpacity>
               ) : (
@@ -678,7 +1006,7 @@ export const ClientsManagementScreen: React.FC<ClientsManagementScreenProps> = (
                 {isSubmittingClient ? (
                   <ActivityIndicator color={colors.white} size="small" />
                 ) : (
-                  <Text style={styles.saveBtnText}>Salvar Morador</Text>
+                  <Text style={styles.saveBtnText}>Salvar {terms.client}</Text>
                 )}
               </TouchableOpacity>
             </View>
@@ -690,14 +1018,14 @@ export const ClientsManagementScreen: React.FC<ClientsManagementScreenProps> = (
       <Modal visible={isDestModalOpen} animationType="slide" transparent onRequestClose={() => setIsDestModalOpen(false)}>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Cadastrar Nova Unidade</Text>
-            <Text style={styles.modalSubtitle}>Ex: Apartamento, Sala Comercial, Consultório.</Text>
+            <Text style={styles.modalTitle}>Cadastrar {terms.unit}</Text>
+            <Text style={styles.modalSubtitle}>Exemplo: {terms.unit} 101.</Text>
 
             <View style={styles.formGroup}>
-              <Text style={styles.inputLabel}>Nome da Unidade *</Text>
+              <Text style={styles.inputLabel}>Nome da {terms.unit} *</Text>
               <TextInput
                 style={styles.input}
-                placeholder="Ex: Apartamento 101"
+                placeholder={`Ex: ${terms.unit} 101`}
                 placeholderTextColor="#94A3B8"
                 value={destName}
                 onChangeText={setDestName}
@@ -743,7 +1071,7 @@ export const ClientsManagementScreen: React.FC<ClientsManagementScreenProps> = (
                 {isSubmittingDest ? (
                   <ActivityIndicator color={colors.white} size="small" />
                 ) : (
-                  <Text style={styles.saveBtnText}>Criar Unidade</Text>
+                  <Text style={styles.saveBtnText}>Criar {terms.unit}</Text>
                 )}
               </TouchableOpacity>
             </View>
@@ -755,8 +1083,8 @@ export const ClientsManagementScreen: React.FC<ClientsManagementScreenProps> = (
       <Modal visible={isEditClientModalOpen} animationType="slide" transparent onRequestClose={() => setIsEditClientModalOpen(false)}>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Editar Dados do Morador</Text>
-            <Text style={styles.modalSubtitle}>Atualize as informações do morador e seus destinos.</Text>
+            <Text style={styles.modalTitle}>Editar {terms.client}</Text>
+            <Text style={styles.modalSubtitle}>Atualize as informações e o vínculo com a {unitLower}.</Text>
 
             <View style={styles.formGroup}>
               <Text style={styles.inputLabel}>Nome Completo *</Text>
@@ -782,9 +1110,9 @@ export const ClientsManagementScreen: React.FC<ClientsManagementScreenProps> = (
             </View>
 
             <View style={styles.formGroup}>
-              <Text style={styles.inputLabel}>Unidade / Apartamento</Text>
+              <Text style={styles.inputLabel}>{terms.unit}</Text>
               {destinations.length === 0 ? (
-                <Text style={styles.noDestText}>Nenhuma unidade cadastrada.</Text>
+                <Text style={styles.noDestText}>Ainda não há {unitLower}.</Text>
               ) : (
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexDirection: 'row', marginTop: 4 }}>
                   {destinations.map((d) => {
@@ -858,14 +1186,14 @@ export const ClientsManagementScreen: React.FC<ClientsManagementScreenProps> = (
       <Modal visible={isEditDestModalOpen} animationType="slide" transparent onRequestClose={() => setIsEditDestModalOpen(false)}>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Editar Unidade / Apto</Text>
-            <Text style={styles.modalSubtitle}>Atualize os dados desta unidade ou apartamento.</Text>
+            <Text style={styles.modalTitle}>Editar {terms.unit}</Text>
+            <Text style={styles.modalSubtitle}>Atualize os dados desta {unitLower}.</Text>
 
             <View style={styles.formGroup}>
-              <Text style={styles.inputLabel}>Nome da Unidade *</Text>
+              <Text style={styles.inputLabel}>Nome da {terms.unit} *</Text>
               <TextInput
                 style={styles.input}
-                placeholder="Ex: Apartamento 101"
+                placeholder={`Ex: ${terms.unit} 101`}
                 placeholderTextColor="#94A3B8"
                 value={editDestName}
                 onChangeText={setEditDestName}
@@ -911,7 +1239,7 @@ export const ClientsManagementScreen: React.FC<ClientsManagementScreenProps> = (
                 {isSubmittingEditDest ? (
                   <ActivityIndicator color={colors.white} size="small" />
                 ) : (
-                  <Text style={styles.saveBtnText}>Salvar Unidade</Text>
+                  <Text style={styles.saveBtnText}>Salvar {terms.unit}</Text>
                 )}
               </TouchableOpacity>
             </View>
@@ -936,7 +1264,6 @@ const styles = StyleSheet.create({
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 14,
   },
   backBtn: {
     width: 36,
@@ -953,8 +1280,8 @@ const styles = StyleSheet.create({
     color: colors.white,
   },
   headerSubtitle: {
-    fontSize: 12,
-    color: '#94A3B8',
+    fontSize: 13,
+    color: '#D1FAE5',
     marginTop: 2,
   },
   // Container de Abas (Morador / Unidade)
@@ -963,7 +1290,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.2)',
     borderRadius: 10,
     padding: 3,
-    marginBottom: 12,
+    marginTop: 14,
   },
   tabButton: {
     flex: 1,
@@ -990,6 +1317,162 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+    marginTop: 14,
+  },
+  toolbar: {
+    backgroundColor: colors.white,
+    paddingHorizontal: 16,
+    paddingTop: 14,
+    paddingBottom: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+    gap: 10,
+  },
+  searchFilterRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  searchBarLight: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    height: 46,
+  },
+  filterButton: {
+    width: 46,
+    height: 46,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#165337',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.white,
+  },
+  filterButtonActive: {
+    backgroundColor: '#165337',
+  },
+  popupRoot: {
+    flex: 1,
+  },
+  filterPopup: {
+    position: 'absolute',
+    minWidth: 168,
+    backgroundColor: colors.white,
+    borderRadius: 12,
+    paddingVertical: 6,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    shadowColor: '#0F172A',
+    shadowOpacity: 0.16,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 8,
+  },
+  filterPopupOption: {
+    paddingHorizontal: 14,
+    paddingVertical: 11,
+  },
+  filterPopupOptionSelected: {
+    backgroundColor: '#E7F0EA',
+  },
+  filterPopupText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#0F172A',
+  },
+  filterPopupTextSelected: {
+    color: '#165337',
+    fontWeight: '800',
+  },
+  sheetBackdrop: {
+    flex: 1,
+  },
+  sheet: {
+    backgroundColor: colors.white,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingHorizontal: 20,
+    paddingTop: 18,
+    paddingBottom: 28,
+    gap: 8,
+  },
+  sheetTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  sheetSubtitle: {
+    fontSize: 13,
+    color: '#64748B',
+    marginBottom: 6,
+  },
+  sheetOption: {
+    paddingVertical: 14,
+    paddingHorizontal: 14,
+    borderRadius: 12,
+    backgroundColor: '#F8FAFC',
+  },
+  sheetOptionSelected: {
+    backgroundColor: '#E7F0EA',
+  },
+  sheetOptionText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#0F172A',
+  },
+  sheetOptionTextSelected: {
+    color: '#165337',
+    fontWeight: '800',
+  },
+  sheetAction: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 4,
+  },
+  sheetActionText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#165337',
+  },
+  addButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#165337',
+    height: 46,
+    borderRadius: 12,
+  },
+  addButtonText: {
+    color: colors.white,
+    fontSize: 15,
+    fontWeight: '800',
+  },
+  filterChipLight: {
+    flex: 1,
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 9,
+    borderRadius: 10,
+    backgroundColor: '#F1F5F9',
+  },
+  filterChipLightActive: {
+    backgroundColor: '#165337',
+  },
+  filterChipLightText: {
+    color: '#475569',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  filterChipLightTextActive: {
+    color: colors.white,
   },
   searchBar: {
     flex: 1,
@@ -1256,5 +1739,44 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
     color: colors.white,
+  },
+  filterRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  filterChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255,255,255,0.16)',
+  },
+  filterChipActive: {
+    backgroundColor: '#FFFFFF',
+  },
+  filterChipText: {
+    color: 'rgba(255,255,255,0.85)',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  filterChipTextActive: {
+    color: '#165337',
+  },
+  accessBadge: {
+    marginTop: 8,
+    alignSelf: 'flex-start',
+    fontSize: 12,
+    fontWeight: '700',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    overflow: 'hidden',
+  },
+  accessBadgeOn: {
+    color: '#166534',
+    backgroundColor: '#DCFCE7',
+  },
+  accessBadgeOff: {
+    color: '#92400E',
+    backgroundColor: '#FEF3C7',
   },
 });

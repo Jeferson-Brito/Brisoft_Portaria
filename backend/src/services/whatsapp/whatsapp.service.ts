@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { prisma } from '../../lib/prisma.js';
+import { placeTermsFromSettings } from '../../utils/placeTerms.js';
 import {
   IWhatsAppProvider,
   WhatsAppStatusInfo,
@@ -287,11 +288,20 @@ export class WhatsAppService {
       answeredAt: updated.answeredAt,
     });
 
+    const place = placeTermsFromSettings(
+      (
+        await prisma.organization.findUnique({
+          where: { id: organizationId },
+          select: { settings: true },
+        })
+      )?.settings
+    );
+    const who = place.client.toLowerCase();
     realtimeService.notifyAlert(organizationId, {
       title: isAuthorize ? 'Entrada Autorizada!' : 'Entrada Recusada!',
       message: isAuthorize
-        ? `O morador ${client.name} autorizou a entrada de ${pendingRequest.visitor.name} (${pendingRequest.destination.name}).`
-        : `O morador ${client.name} RECUSOU a entrada de ${pendingRequest.visitor.name} (${pendingRequest.destination.name}).`,
+        ? `O ${who} ${client.name} autorizou a entrada de ${pendingRequest.visitor.name} (${pendingRequest.destination.name}).`
+        : `O ${who} ${client.name} RECUSOU a entrada de ${pendingRequest.visitor.name} (${pendingRequest.destination.name}).`,
       type: isAuthorize ? 'AUTHORIZED' : 'DENIED',
       visitRequestId: pendingRequest.id,
       visitorName: pendingRequest.visitor.name,
@@ -304,8 +314,8 @@ export class WhatsAppService {
         visitRequestId: pendingRequest.id,
         eventType: newStatus,
         description: isAuthorize
-          ? `Entrada autorizada pelo morador ${client.name} via WhatsApp.`
-          : `Entrada recusada pelo morador ${client.name} via WhatsApp.`,
+          ? `Entrada autorizada pelo ${who} ${client.name} via WhatsApp.`
+          : `Entrada recusada pelo ${who} ${client.name} via WhatsApp.`,
         actorType: 'WHATSAPP_CLIENT',
         actorId: client.whatsappNumber,
         metadata: JSON.stringify({
@@ -482,6 +492,18 @@ export class WhatsAppService {
       }
     }
     return statuses;
+  }
+
+  public async sendVerificationMessage(organizationId: string | undefined, toPhone: string, text: string) {
+    if (organizationId) {
+      const provider = this.getProvider(organizationId);
+      const status = await provider.getStatus(organizationId);
+      if (status.status === 'CONNECTED') {
+        await provider.sendMessage(toPhone, text);
+        return;
+      }
+    }
+    await this.sendPlatformMessage(toPhone, text);
   }
 
   public async sendPlatformMessage(toPhone: string, text: string) {

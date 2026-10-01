@@ -28,20 +28,15 @@ export const getBaseUrl = () => {
     return process.env.EXPO_PUBLIC_API_URL;
   }
 
-  // Se estiver em desenvolvimento local no navegador
   if (__DEV__ && Platform.OS === 'web') {
     return 'http://localhost:3333/api/v1';
   }
 
-  // Se estiver rodando em desenvolvimento local no Expo Go
   if (__DEV__) {
     const hostIp = getHostIp();
-    if (hostIp && hostIp !== '192.168.15.115') {
-      return `http://${hostIp}:3333/api/v1`;
-    }
+    if (hostIp) return `http://${hostIp}:3333/api/v1`;
   }
 
-  // Padrão para app instalado (APK / Produção)
   return PRODUCTION_API_URL;
 };
 

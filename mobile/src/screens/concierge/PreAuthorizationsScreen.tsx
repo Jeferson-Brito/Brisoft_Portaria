@@ -26,6 +26,7 @@ import {
   QrCode,
 } from 'lucide-react-native';
 import { colors } from '../../theme/colors';
+import { usePlaceTerms } from '../../utils/placeTerms';
 import { api } from '../../config/api';
 import { AppHeader } from '../../components/AppHeader';
 import { ScrollToTopButton } from '../../components/ScrollToTopButton';
@@ -64,6 +65,7 @@ interface PreAuthItem {
 }
 
 export const PreAuthorizationsScreen: React.FC<PreAuthorizationsScreenProps> = ({ onBack }) => {
+  const terms = usePlaceTerms();
   const [items, setItems] = useState<PreAuthItem[]>([]);
   const listRef = useRef<FlatList>(null);
   const [showScrollTop, setShowScrollTop] = useState(false);
@@ -206,7 +208,7 @@ export const PreAuthorizationsScreen: React.FC<PreAuthorizationsScreenProps> = (
         <View style={styles.destinationRow}>
           <Building size={16} color={colors.primaryLight} style={{ marginRight: 6 }} />
           <Text style={styles.destinationName}>{item.destination.name}</Text>
-          <Text style={styles.clientName}> • Morador: {item.client.name}</Text>
+          <Text style={styles.clientName}> • {terms.client}: {item.client.name}</Text>
         </View>
 
         {/* Horário Previsto */}
@@ -319,7 +321,7 @@ export const PreAuthorizationsScreen: React.FC<PreAuthorizationsScreenProps> = (
                 <UserCheck size={48} color={colors.textSecondary} style={{ marginBottom: 12 }} />
                 <Text style={styles.emptyTitle}>Nenhum agendamento ativo hoje</Text>
                 <Text style={styles.emptySubtitle}>
-                  Quando os moradores comunicarem visitas antecipadas, elas aparecerão aqui para liberação rápida.
+                  Quando os {terms.clients.toLowerCase()} comunicarem visitas antecipadas, elas aparecerão aqui para liberação rápida.
                 </Text>
               </View>
             }

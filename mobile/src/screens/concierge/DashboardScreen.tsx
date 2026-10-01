@@ -75,6 +75,7 @@ import { OrganizationProfileScreen } from '../admin/OrganizationProfileScreen';
 import { ReportsScreen } from '../reports/ReportsScreen';
 import { ProfileScreen } from '../profile/ProfileScreen';
 import { SettingsScreen } from '../settings/SettingsScreen';
+import { PlaceTermsProvider, buildPlaceTerms } from '../../utils/placeTerms';
 import { SubscriptionScreen } from '../auth/SubscriptionScreen';
 import { CustomConfirmModal } from '../../components/CustomConfirmModal';
 import { AppHeader } from '../../components/AppHeader';
@@ -174,6 +175,8 @@ export const DashboardScreen: React.FC = () => {
     | 'settings'
     | 'users_mgmt'
     | 'clients_mgmt'
+    | 'residents'
+    | 'units'
     | 'restrictions'
     | 'amenities'
     | 'preauthorizations'
@@ -185,7 +188,7 @@ export const DashboardScreen: React.FC = () => {
   useEffect(() => {
     const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
       if (activeTab === 'dashboard') return false;
-      const backToSettings = ['whatsapp', 'users_mgmt', 'clients_mgmt', 'restrictions', 'amenities', 'org_profile', 'subscription'];
+      const backToSettings = ['whatsapp', 'users_mgmt', 'clients_mgmt', 'residents', 'units', 'restrictions', 'amenities', 'org_profile', 'subscription'];
       if (backToSettings.includes(activeTab)) setActiveTab('settings');
       else if (activeTab === 'profile') setActiveTab(user?.role === 'CONCIERGE' ? 'dashboard' : 'settings');
       else if (activeTab === 'settings') setActiveTab('dashboard');
@@ -242,7 +245,9 @@ export const DashboardScreen: React.FC = () => {
       if (!user?.id) return;
       if (user.role === 'ADMIN' || user.role === 'SUPER_ADMIN') {
         try {
-          const completed = await AsyncStorage.getItem(`@combate_portaria:tutorial_completed_${user.id}`);
+          const completed =
+            (await AsyncStorage.getItem(`@brisoft_portaria:tutorial_completed_${user.id}`)) ||
+            (await AsyncStorage.getItem(`@combate_portaria:tutorial_completed_${user.id}`));
           if (!completed) {
             setIsTutorialModalOpen(true);
           }
@@ -258,7 +263,7 @@ export const DashboardScreen: React.FC = () => {
     setIsTutorialModalOpen(false);
     if (user?.id) {
       try {
-        await AsyncStorage.setItem(`@combate_portaria:tutorial_completed_${user.id}`, 'true');
+        await AsyncStorage.setItem(`@brisoft_portaria:tutorial_completed_${user.id}`, 'true');
       } catch (err) {
         // ignore
       }
@@ -425,6 +430,8 @@ export const DashboardScreen: React.FC = () => {
     if (activeTab === 'whatsapp') return <WhatsAppConfigScreen onBack={() => setActiveTab('settings')} />;
     if (activeTab === 'users_mgmt') return <UsersManagementScreen onBack={() => setActiveTab('settings')} />;
     if (activeTab === 'clients_mgmt') return <ClientsManagementScreen onBack={() => setActiveTab('settings')} />;
+    if (activeTab === 'residents') return <ClientsManagementScreen section="residents" onBack={() => setActiveTab('settings')} />;
+    if (activeTab === 'units') return <ClientsManagementScreen section="units" onBack={() => setActiveTab('settings')} />;
     if (activeTab === 'restrictions') return <RestrictionsScreen onBack={() => setActiveTab('settings')} />;
     if (activeTab === 'amenities') return <AmenitiesScreen onBack={() => setActiveTab('settings')} />;
     if (activeTab === 'reports') return <ReportsScreen />;
@@ -473,7 +480,7 @@ export const DashboardScreen: React.FC = () => {
         status: req.status,
         createdAt: req.createdAt,
         title: req.visitor?.name || 'Visitante',
-        clientName: req.client?.name || req.client?.ownerName || 'Morador',
+        clientName: req.client?.name || req.client?.ownerName || terms.client,
         destName: req.destination?.name
           ? `${req.destination.name}${req.destination.block ? ` - ${req.destination.block}` : ''}`
           : '',
@@ -1002,7 +1009,7 @@ export const DashboardScreen: React.FC = () => {
                   });
 
                   const visitorName = req.visitor?.name || 'Visitante';
-                  const clientName = req.client?.name || req.client?.ownerName || 'Morador';
+                  const clientName = req.client?.name || req.client?.ownerName || terms.client;
                   const destName = req.destination?.name
                     ? `${req.destination.name}${req.destination.block ? ` - ${req.destination.block}` : ''}`
                     : '';
@@ -1291,8 +1298,10 @@ export const DashboardScreen: React.FC = () => {
   };
 
   const isConcierge = user?.role === 'CONCIERGE';
+  const terms = buildPlaceTerms(orgProfile.clientLabel, orgProfile.unitLabel);
 
   return (
+    <PlaceTermsProvider clientLabel={orgProfile.clientLabel} unitLabel={orgProfile.unitLabel}>
     <View style={styles.safeArea}>
       <StatusBar barStyle="dark-content" backgroundColor="#F4F7F5" />
 
@@ -1555,7 +1564,7 @@ export const DashboardScreen: React.FC = () => {
                     </View>
                     {(req.destination?.unit || req.client?.unit) && (
                       <View style={styles.detailRow}>
-                        <Text style={styles.detailLabel}>Unidade / Sala</Text>
+                        <Text style={styles.detailLabel}>{terms.unit}</Text>
                         <Text style={styles.detailValue}>{req.destination?.unit || req.client?.unit}</Text>
                       </View>
                     )}
@@ -1613,7 +1622,7 @@ export const DashboardScreen: React.FC = () => {
                 const createdDate = new Date(pkg.receivedAt || pkg.createdAt);
                 const dateStr = createdDate.toLocaleDateString('pt-BR');
                 const timeStr = createdDate.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-                const clientName = pkg.client?.name || pkg.recipientName || 'Morador';
+                const clientName = pkg.client?.name || pkg.recipientName || terms.client;
                 const destName = pkg.destination?.name
                   ? `${pkg.destination.name}${pkg.destination.block ? ` - ${pkg.destination.block}` : ''}`
                   : '—';
@@ -1866,6 +1875,7 @@ export const DashboardScreen: React.FC = () => {
         />
       </View>
     </View>
+    </PlaceTermsProvider>
   );
 };
 
