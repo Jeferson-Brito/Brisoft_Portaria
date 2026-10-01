@@ -14,6 +14,7 @@ import { RealtimeProvider } from './src/contexts/RealtimeContext';
 import { RealtimeAlertBanner } from './src/components/RealtimeAlertBanner';
 import { LoginScreen } from './src/screens/auth/LoginScreen';
 import { RegisterScreen } from './src/screens/auth/RegisterScreen';
+import { CompleteProfileScreen } from './src/screens/auth/CompleteProfileScreen';
 
 const AnimatedLoadingScreen: React.FC = () => {
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -164,6 +165,10 @@ const MainNavigator: React.FC = () => {
       return <RegisterScreen onLoginPress={() => setShowRegister(false)} />;
     }
     return <LoginScreen onRegisterPress={() => setShowRegister(true)} />;
+  }
+
+  if (user.mustCompleteProfile && user.role !== 'SUPER_ADMIN') {
+    return <CompleteProfileScreen />;
   }
 
   if (user.role === 'SUPER_ADMIN') {

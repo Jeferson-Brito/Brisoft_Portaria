@@ -31,6 +31,10 @@ export class UserService {
       throw new AppError('Supervisores só possuem permissão para cadastrar porteiros.', 403, 'FORBIDDEN');
     }
 
+    if (password.length < 8) {
+      throw new AppError('A senha deve ter no mínimo 8 caracteres.', 400, 'INVALID_PASSWORD');
+    }
+
     const existingUser = await prisma.user.findFirst({
       where: {
         email: email.trim().toLowerCase(),
@@ -96,6 +100,9 @@ export class UserService {
         passwordHash,
         role,
         phone,
+        whatsappNumber: null,
+        whatsappVerifiedAt: null,
+        mustCompleteProfile: true,
         clientId: role === 'CLIENT' ? clientId : null,
       },
       select: {
@@ -195,7 +202,8 @@ export class UserService {
     userId: string,
     organizationId: string,
     actorRole: Role,
-    data: { name?: string; email?: string; role?: Role; phone?: string | null; newPassword?: string }
+    data: { name?: string; email?: string; role?: Role; phone?: string | null; newPassword?: string },
+    actorId?: string
   ) {
     const user = await prisma.user.findUnique({ where: { id: userId } });
 
@@ -237,8 +245,14 @@ export class UserService {
     if (data.phone !== undefined) updateData.phone = data.phone?.trim() || null;
 
     if (data.newPassword) {
-      if (data.newPassword.length < 6) {
-        throw new AppError('A nova senha deve ter no mínimo 6 caracteres.', 400, 'INVALID_PASSWORD');
+      if (data.newPassword.length < 8) {
+        throw new AppError('A nova senha deve ter no mínimo 8 caracteres.', 400, 'INVALID_PASSWORD');
+      }
+      if (actorId && user.id === actorId) {
+        throw new AppError('Altere sua senha pelo perfil, informando a senha atual.', 403, 'FORBIDDEN');
+      }
+      if ((user.role === 'ADMIN' || user.role === 'SUPER_ADMIN') && actorRole !== 'SUPER_ADMIN') {
+        throw new AppError('Não é possível redefinir a senha de outro administrador.', 403, 'FORBIDDEN');
       }
       updateData.passwordHash = await bcrypt.hash(data.newPassword, 12);
     }
@@ -273,8 +287,8 @@ export class UserService {
       if (!data.currentPassword) {
         throw new AppError('Informe a senha atual para definir uma nova senha.', 400, 'INVALID_CREDENTIALS');
       }
-      if (data.newPassword.length < 6) {
-        throw new AppError('A nova senha deve ter no mínimo 6 caracteres.', 400, 'INVALID_PASSWORD');
+      if (data.newPassword.length < 8) {
+        throw new AppError('A nova senha deve ter no mínimo 8 caracteres.', 400, 'INVALID_PASSWORD');
       }
       const isMatch = await bcrypt.compare(data.currentPassword, user.passwordHash);
       if (!isMatch) {

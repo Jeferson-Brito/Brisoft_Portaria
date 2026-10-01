@@ -109,7 +109,7 @@ describe('Módulo de WhatsApp & Baileys - FASE 5', () => {
     const incomingRes = await app.inject({
       method: 'POST',
       url: '/api/v1/whatsapp/simulate-incoming',
-      headers: { Authorization: `Bearer ${conciergeToken}` },
+      headers: { Authorization: `Bearer ${adminToken}` },
       payload: {
         fromPhone: clientPhone,
         text: '1',
@@ -140,7 +140,7 @@ describe('Módulo de WhatsApp & Baileys - FASE 5', () => {
     const incomingRes = await app.inject({
       method: 'POST',
       url: '/api/v1/whatsapp/simulate-incoming',
-      headers: { Authorization: `Bearer ${conciergeToken}` },
+      headers: { Authorization: `Bearer ${adminToken}` },
       payload: {
         fromPhone: clientPhone,
         text: '2',
@@ -180,7 +180,7 @@ describe('Módulo de WhatsApp & Baileys - FASE 5', () => {
     await app.inject({
       method: 'POST',
       url: '/api/v1/whatsapp/simulate-incoming',
-      headers: { Authorization: `Bearer ${conciergeToken}` },
+      headers: { Authorization: `Bearer ${adminToken}` },
       payload: {
         fromPhone: clientPhone,
         text: '2',

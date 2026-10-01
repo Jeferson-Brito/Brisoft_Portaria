@@ -2,6 +2,9 @@ import { Server as HTTPServer } from 'http';
 import { Server as SocketIOServer, Socket } from 'socket.io';
 import { createVerifier } from 'fast-jwt';
 import { env } from '../../config/env.js';
+import { prisma } from '../../lib/prisma.js';
+
+const STAFF_SOCKET_ROLES = new Set(['SUPER_ADMIN', 'ADMIN', 'SUPERVISOR', 'CONCIERGE']);
 
 export interface RealtimeAlertPayload {
   title: string;
@@ -32,7 +35,16 @@ export class RealtimeService {
   public init(httpServer: HTTPServer): SocketIOServer {
     this.io = new SocketIOServer(httpServer, {
       cors: {
-        origin: '*',
+        origin:
+          env.NODE_ENV === 'production'
+            ? [
+                ...new Set(
+                  [env.API_URL, env.PUBLIC_WEB_URL || '', 'https://portaria.brisoft.com.br', ...(env.CORS_ORIGINS || '').split(',')]
+                    .map((item) => item.trim())
+                    .filter((item) => item.startsWith('http'))
+                ),
+              ]
+            : '*',
         methods: ['GET', 'POST'],
       },
       pingTimeout: 30000,
@@ -41,7 +53,7 @@ export class RealtimeService {
 
     const verifyToken = createVerifier({ key: env.JWT_SECRET });
 
-    this.io.use((socket, next) => {
+    this.io.use(async (socket, next) => {
       try {
         const rawToken = socket.handshake.auth?.token;
         const token = typeof rawToken === 'string' ? rawToken.replace(/^Bearer\s+/i, '') : '';
@@ -49,12 +61,42 @@ export class RealtimeService {
           next(new Error('Token ausente'));
           return;
         }
-        const payload = verifyToken(token) as { sub?: string; organizationId?: string };
-        if (!payload?.organizationId) {
-          next(new Error('Token sem organizacao'));
+        const payload = verifyToken(token) as { sub?: string; role?: string; typ?: string };
+        if (!payload?.sub || !payload.role || payload.typ === 'refresh') {
+          next(new Error('Token invalido'));
           return;
         }
-        socket.data.user = payload;
+
+        const user = await prisma.user.findUnique({
+          where: { id: payload.sub },
+          select: {
+            id: true,
+            role: true,
+            isActive: true,
+            deletedAt: true,
+            organizationId: true,
+            organization: { select: { isActive: true } },
+          },
+        });
+
+        if (!user || user.deletedAt || !user.isActive) {
+          next(new Error('Sessao encerrada'));
+          return;
+        }
+        if (user.role !== 'SUPER_ADMIN' && !user.organization.isActive) {
+          next(new Error('Organizacao inativa'));
+          return;
+        }
+        if (!STAFF_SOCKET_ROLES.has(user.role)) {
+          next(new Error('Canal restrito a portaria'));
+          return;
+        }
+
+        socket.data.user = {
+          sub: user.id,
+          organizationId: user.organizationId,
+          role: user.role,
+        };
         next();
       } catch {
         next(new Error('Token invalido'));
@@ -111,7 +153,7 @@ export class RealtimeService {
       this.pushTokens.set(organizationId, tokens);
     }
     tokens.add(token);
-    console.log(`📱 [Push] Token registrado para org ${organizationId}: ${token}`);
+    console.log(`📱 [Push] Token registrado para org ${organizationId} (${token.slice(0, 12)}…)`);
 
     // Persiste no banco de dados (PostgreSQL) para sobreviver a reinicializações e cold starts do Render
     try {

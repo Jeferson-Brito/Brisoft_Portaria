@@ -97,7 +97,7 @@ export class PreAuthorizationService {
         notes: data.notes ? data.notes.trim() : null,
         vehicleModel: data.vehicleModel ? data.vehicleModel.trim() : null,
         vehiclePlate: data.vehiclePlate ? data.vehiclePlate.trim() : null,
-        qrToken: `VIS-${randomBytes(4).toString('hex').toUpperCase()}`,
+        qrToken: `VIS-${randomBytes(16).toString('hex').toUpperCase()}`,
         weekdays: normalizeWeekdays(data.weekdays),
         isUsed: false,
       },

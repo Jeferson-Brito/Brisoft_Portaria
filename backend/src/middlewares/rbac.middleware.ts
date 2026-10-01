@@ -3,6 +3,8 @@ import { AppError } from '../core/errors/app-error.js';
 
 export type Role = 'SUPER_ADMIN' | 'ADMIN' | 'SUPERVISOR' | 'CONCIERGE' | 'CLIENT';
 
+export const STAFF_ROLES: Role[] = ['ADMIN', 'SUPERVISOR', 'CONCIERGE'];
+
 export function requireRole(allowedRoles: Role[]) {
   return async (request: FastifyRequest, reply: FastifyReply) => {
     const userRole = request.user?.role as Role;

@@ -17,8 +17,6 @@ declare module '@fastify/jwt' {
   }
 }
 
-const userCache = new Map<string, { payload: TokenPayload; expiresAt: number }>();
-
 export async function authMiddleware(request: FastifyRequest, reply: FastifyReply) {
   try {
     const authHeader = request.headers.authorization;
@@ -33,11 +31,9 @@ export async function authMiddleware(request: FastifyRequest, reply: FastifyRepl
       throw new AppError('Formato de token inválido. Esperado Bearer <token>', 401, 'TOKEN_MALFORMED');
     }
 
-    const decoded = await request.jwtVerify<TokenPayload>();
-    const cached = userCache.get(decoded.sub);
-    if (cached && cached.expiresAt > Date.now()) {
-      request.user = cached.payload;
-      return;
+    const decoded = await request.jwtVerify<TokenPayload & { typ?: string }>();
+    if (!decoded.role || decoded.typ === 'refresh') {
+      throw new AppError('Token inválido ou expirado. Faça login novamente.', 401, 'TOKEN_INVALID');
     }
 
     const user = await prisma.user.findUnique({
@@ -56,7 +52,6 @@ export async function authMiddleware(request: FastifyRequest, reply: FastifyRepl
     });
 
     if (!user || user.deletedAt || !user.isActive) {
-      userCache.delete(decoded.sub);
       throw new AppError('Sessão encerrada. Faça login novamente.', 401, 'USER_INACTIVE');
     }
 
@@ -72,15 +67,16 @@ export async function authMiddleware(request: FastifyRequest, reply: FastifyRepl
       name: user.name,
       clientId: user.clientId,
     };
-    userCache.set(user.id, { payload, expiresAt: Date.now() + 20000 });
     request.user = payload;
 
     if (user.role === 'CLIENT') {
       const path = request.url.split('?')[0];
       const allowed =
         path === '/api/v1/auth/me' ||
+        path === '/api/v1/auth/whatsapp-code' ||
+        path === '/api/v1/auth/complete-profile' ||
         path === '/api/v1/users/me' ||
-        path.startsWith('/api/v1/me');
+        path.startsWith('/api/v1/me/');
       if (!allowed) {
         return reply.status(403).send({
           success: false,

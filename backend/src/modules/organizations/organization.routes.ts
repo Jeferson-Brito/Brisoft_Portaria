@@ -1,6 +1,26 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { prisma } from '../../lib/prisma.js';
 import { authMiddleware } from '../../middlewares/auth.middleware.js';
+import { requireRole } from '../../middlewares/rbac.middleware.js';
+
+function readSettings(raw?: string | null) {
+  if (!raw) return {};
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return {};
+  }
+}
+
+function publicProfile(settings: Record<string, any>, organizationName: string) {
+  return {
+    type: settings.type || 'RESIDENTIAL',
+    companyName: settings.companyName || organizationName,
+    unitLabel: settings.unitLabel || 'Apartamento / Unidade',
+    clientLabel: settings.clientLabel || 'Morador',
+    address: typeof settings.address === 'string' ? settings.address : '',
+  };
+}
 
 export async function organizationRoutes(app: FastifyInstance) {
   app.addHook('onRequest', authMiddleware);
@@ -25,31 +45,35 @@ export async function organizationRoutes(app: FastifyInstance) {
       return reply.status(404).send({ success: false, message: 'Organização não encontrada.' });
     }
 
-    let parsedSettings = {
-      type: 'RESIDENTIAL',
-      companyName: organization.name,
-      unitLabel: 'Apartamento / Unidade',
-      clientLabel: 'Morador',
-    };
-
-    if (organization.settings) {
-      try {
-        const current = JSON.parse(organization.settings);
-        parsedSettings = { ...parsedSettings, ...current };
-      } catch (e) {}
-    }
+    const settings = readSettings(organization.settings);
+    const role = (req as any).user?.role as string;
+    const isManager = role === 'ADMIN' || role === 'SUPER_ADMIN';
+    const profile = isManager
+      ? {
+          type: 'RESIDENTIAL',
+          companyName: organization.name,
+          unitLabel: 'Apartamento / Unidade',
+          clientLabel: 'Morador',
+          ...settings,
+        }
+      : publicProfile(settings, organization.name);
 
     return reply.send({
       success: true,
       data: {
-        ...organization,
-        profile: parsedSettings,
+        id: organization.id,
+        name: organization.name,
+        slug: organization.slug,
+        document: isManager ? organization.document : undefined,
+        createdAt: organization.createdAt,
+        ...(isManager ? { settings: organization.settings } : {}),
+        profile,
       },
     });
   });
 
   // Atualiza o tipo de empresa / estabelecimento e os rótulos de atendimento
-  app.patch('/current', async (req: FastifyRequest, reply: FastifyReply) => {
+  app.patch('/current', { preHandler: [requireRole(['ADMIN'])] }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { organizationId } = (req as any).user;
     const body = req.body as {
       name?: string;

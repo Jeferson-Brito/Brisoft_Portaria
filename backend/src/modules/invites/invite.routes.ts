@@ -22,7 +22,14 @@ function formatDate(value: Date) {
 }
 
 export async function invitePageRoutes(app: FastifyInstance) {
-  app.get('/convite/:token', async (request, reply) => {
+  app.get('/convite/:token', {
+    config: {
+      rateLimit: {
+        max: 20,
+        timeWindow: '1 minute',
+      },
+    },
+    handler: async (request, reply) => {
     const { token } = request.params as { token: string };
     const item = await prisma.preAuthorization.findFirst({
       where: { qrToken: token.trim().toUpperCase() },
@@ -81,6 +88,7 @@ export async function invitePageRoutes(app: FastifyInstance) {
       status,
       tone,
     }));
+    },
   });
 }
 

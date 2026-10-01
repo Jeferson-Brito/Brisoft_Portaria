@@ -27,7 +27,7 @@ import { colors } from '../../theme/colors';
 import { AppHeader } from '../../components/AppHeader';
 
 const FALLBACK_PAYMENT_LINK = 'https://buy.stripe.com/4gM3coh0P3IWdi6dGfg7e00';
-const SUPPORT_WHATSAPP = 'https://wa.me/5583993858515?text=Quero+assinar+o+Brisoft+Portaria';
+const SUPPORT_WHATSAPP = 'https://wa.me/5583981131352?text=Quero+assinar+o+Brisoft+Portaria';
 
 const FEATURES = [
   { icon: Building2, title: 'Unidades do local', desc: 'Blocos, apartamentos e destinos da portaria' },

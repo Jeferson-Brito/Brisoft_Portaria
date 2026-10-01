@@ -113,7 +113,7 @@ export class VisitorController {
         const data = await (request as any).file();
         if (data) {
           const buffer = await data.toBuffer();
-          const photoUrl = await visitorService.savePhoto(data.filename, buffer, data.mimetype);
+          const photoUrl = await visitorService.savePhoto(data.filename, buffer, data.mimetype, request.user.organizationId);
           return reply.status(201).send({
             success: true,
             data: { photoUrl },
@@ -127,7 +127,7 @@ export class VisitorController {
         const { base64, fileName, mimeType } = parseBase64.data;
         const cleanBase64 = base64.replace(/^data:image\/\w+;base64,/, '');
         const buffer = Buffer.from(cleanBase64, 'base64');
-        const photoUrl = await visitorService.savePhoto(fileName, buffer, mimeType);
+        const photoUrl = await visitorService.savePhoto(fileName, buffer, mimeType, request.user.organizationId);
 
         return reply.status(201).send({
           success: true,
@@ -157,7 +157,7 @@ export class VisitorController {
   async servePhoto(request: FastifyRequest<{ Params: { fileName: string } }>, reply: FastifyReply) {
     try {
       const { fileName } = request.params;
-      const fileData = await visitorService.getPhotoFile(fileName);
+      const fileData = await visitorService.getPhotoFile(fileName, request.user.organizationId);
 
       if (!fileData) {
         return reply.status(404).send({
@@ -166,7 +166,11 @@ export class VisitorController {
         });
       }
 
-      return reply.type(fileData.mimeType).send(fileData.buffer);
+      return reply
+        .header('Cache-Control', 'private, no-store')
+        .header('Content-Disposition', 'inline; filename="photo.jpg"')
+        .type(fileData.mimeType)
+        .send(fileData.buffer);
     } catch (err: any) {
       return reply.status(500).send({
         success: false,

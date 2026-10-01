@@ -475,6 +475,24 @@ export class WhatsAppService {
     return statuses;
   }
 
+  public async sendPlatformMessage(toPhone: string, text: string) {
+    const admin = await prisma.user.findFirst({
+      where: { role: 'SUPER_ADMIN', deletedAt: null, isActive: true },
+      select: { organizationId: true },
+    });
+    if (!admin) {
+      throw new Error('WhatsApp da plataforma indisponível.');
+    }
+
+    const provider = this.getProvider(admin.organizationId);
+    const status = await provider.getStatus(admin.organizationId);
+    if (status.status !== 'CONNECTED') {
+      throw new Error('O WhatsApp da plataforma não está conectado.');
+    }
+
+    await provider.sendMessage(toPhone, text);
+  }
+
   public async sendImageMessage(
     organizationId: string,
     toPhone: string,

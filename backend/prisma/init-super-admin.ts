@@ -10,11 +10,15 @@ import bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
 
-const SUPER_ADMIN_EMAIL = process.env.SUPER_ADMIN_EMAIL || 'superadmin@brisoftportaria.com.br';
-const SUPER_ADMIN_PASSWORD = process.env.SUPER_ADMIN_PASSWORD || 'SuperAdmin@2026!';
+const SUPER_ADMIN_EMAIL = process.env.SUPER_ADMIN_EMAIL;
+const SUPER_ADMIN_PASSWORD = process.env.SUPER_ADMIN_PASSWORD;
 const SUPER_ADMIN_NAME = process.env.SUPER_ADMIN_NAME || 'Administrador Brisoft Portaria';
 
 async function main() {
+  if (!SUPER_ADMIN_EMAIL || !SUPER_ADMIN_PASSWORD || SUPER_ADMIN_PASSWORD.length < 8) {
+    throw new Error('Defina SUPER_ADMIN_EMAIL e SUPER_ADMIN_PASSWORD (mínimo 8 caracteres) antes de executar este script.');
+  }
+
   console.log('🔧 Criando usuário SUPER_ADMIN...');
 
   // Cria (ou usa) uma organização "system" para abrigar o super admin
@@ -40,11 +44,18 @@ async function main() {
     },
   });
 
-  const passwordHash = await bcrypt.hash(SUPER_ADMIN_PASSWORD, 12);
+  const existing = await prisma.user.findUnique({ where: { email: SUPER_ADMIN_EMAIL } });
+  const passwordHash = existing && process.env.SUPER_ADMIN_RESET_PASSWORD !== 'true'
+    ? existing.passwordHash
+    : await bcrypt.hash(SUPER_ADMIN_PASSWORD, 12);
 
   const superAdmin = await prisma.user.upsert({
     where: { email: SUPER_ADMIN_EMAIL },
-    update: { passwordHash, role: 'SUPER_ADMIN', isActive: true },
+    update: {
+      role: 'SUPER_ADMIN',
+      isActive: true,
+      ...(process.env.SUPER_ADMIN_RESET_PASSWORD === 'true' || !existing ? { passwordHash } : {}),
+    },
     create: {
       organizationId: systemOrg.id,
       name: SUPER_ADMIN_NAME,
@@ -55,12 +66,11 @@ async function main() {
     },
   });
 
-  console.log(`\n✅ SUPER_ADMIN criado com sucesso!`);
+  console.log(`\n✅ SUPER_ADMIN pronto.`);
   console.log(`   E-mail  : ${superAdmin.email}`);
-  console.log(`   Senha   : ${SUPER_ADMIN_PASSWORD}`);
   console.log(`   Role    : ${superAdmin.role}`);
   console.log(`   Org ID  : ${systemOrg.id}`);
-  console.log(`\n⚠️  IMPORTANTE: Mude a senha após o primeiro login!`);
+  console.log(`\nA senha não é exibida. Para trocá-la, rode de novo com SUPER_ADMIN_RESET_PASSWORD=true.`);
 }
 
 main()

@@ -1,6 +1,31 @@
+import { createHmac } from 'crypto';
 import { FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
+import { env } from '../../config/env.js';
 import { AuthService } from './auth.service.js';
+import { verificationService } from '../../services/verification.service.js';
+
+function signRefreshToken(userId: string, organizationId: string) {
+  const header = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url');
+  const now = Math.floor(Date.now() / 1000);
+  const payload = Buffer.from(
+    JSON.stringify({
+      sub: userId,
+      organizationId,
+      typ: 'refresh',
+      iat: now,
+      exp: now + 7 * 24 * 60 * 60,
+    })
+  ).toString('base64url');
+  const signature = createHmac('sha256', env.JWT_REFRESH_SECRET).update(`${header}.${payload}`).digest('base64url');
+  return `${header}.${payload}.${signature}`;
+}
+
+const resetPasswordBodySchema = z.object({
+  email: z.string().email('E-mail em formato inválido'),
+  code: z.string().length(8, 'Informe o código de 8 caracteres.'),
+  newPassword: z.string().min(8, 'A nova senha deve ter no mínimo 8 caracteres'),
+});
 
 const loginBodySchema = z.object({
   email: z.string().email('E-mail em formato inválido'),
@@ -9,11 +34,12 @@ const loginBodySchema = z.object({
 
 const registerBodySchema = z.object({
   organizationName: z.string().min(2, 'Nome da empresa deve ter ao menos 2 caracteres'),
-  organizationDocument: z.string().optional(),
+  organizationDocument: z.string().min(14, 'Informe o CNPJ da empresa.'),
   adminName: z.string().min(2, 'Seu nome deve ter ao menos 2 caracteres'),
   adminEmail: z.string().email('E-mail em formato inválido'),
   adminPassword: z.string().min(8, 'A senha deve ter no mínimo 8 caracteres'),
-  adminPhone: z.string().optional(),
+  adminPhone: z.string().min(10, 'Informe o WhatsApp com DDD.'),
+  verificationCode: z.string().length(8, 'Informe o código de 8 caracteres enviado no WhatsApp.'),
 });
 
 const authService = new AuthService();
@@ -43,6 +69,7 @@ export class AuthController {
           role: result.admin.role,
           email: result.admin.email,
           name: result.admin.name,
+          typ: 'access',
         },
         {
           sign: {
@@ -94,6 +121,7 @@ export class AuthController {
           role: user.role,
           email: user.email,
           name: user.name,
+          typ: 'access',
         },
         {
           sign: {
@@ -103,18 +131,7 @@ export class AuthController {
         }
       );
 
-      // Gera refresh token
-      const refreshToken = await reply.jwtSign(
-        {
-          sub: user.id,
-          organizationId: user.organizationId,
-        },
-        {
-          sign: {
-            expiresIn: '7d',
-          },
-        }
-      );
+      const refreshToken = signRefreshToken(user.id, user.organizationId);
 
       return reply.status(200).send({
         success: true,
@@ -131,6 +148,155 @@ export class AuthController {
           code: err.code || 'INTERNAL_ERROR',
           message: err.message || 'Erro interno ao autenticar usuário.',
         },
+      });
+    }
+  }
+
+  async checkResetCode(request: FastifyRequest, reply: FastifyReply) {
+    const schema = z.object({
+      email: z.string().email('E-mail em formato inválido'),
+      code: z.string().length(8, 'Informe o código de 8 caracteres.'),
+    });
+    const parsed = schema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.status(400).send({
+        success: false,
+        error: { code: 'VALIDATION_ERROR', message: parsed.error.errors[0].message },
+      });
+    }
+    try {
+      await authService.checkResetCode(parsed.data.email, parsed.data.code);
+      return reply.send({ success: true });
+    } catch (err: any) {
+      return reply.status(err.statusCode || 500).send({
+        success: false,
+        error: { code: err.code || 'INTERNAL_ERROR', message: err.message || 'Código inválido.' },
+      });
+    }
+  }
+
+  async resetPassword(request: FastifyRequest, reply: FastifyReply) {
+    const parseResult = resetPasswordBodySchema.safeParse(request.body);
+
+    if (!parseResult.success) {
+      return reply.status(400).send({
+        success: false,
+        error: {
+          code: 'VALIDATION_ERROR',
+          message: parseResult.error.errors[0].message,
+        },
+      });
+    }
+
+    try {
+      await authService.resetPassword(parseResult.data.email, parseResult.data.code, parseResult.data.newPassword);
+      return reply.status(200).send({
+        success: true,
+        message: 'Senha redefinida. Entre com a nova senha.',
+      });
+    } catch (err: any) {
+      return reply.status(err.statusCode || 500).send({
+        success: false,
+        error: {
+          code: err.code || 'INTERNAL_ERROR',
+          message: err.message || 'Não foi possível redefinir a senha.',
+        },
+      });
+    }
+  }
+
+  async sendRegisterCode(request: FastifyRequest, reply: FastifyReply) {
+    const schema = z.object({
+      email: z.string().email('E-mail em formato inválido'),
+      phone: z.string().min(10, 'Informe o WhatsApp com DDD.'),
+    });
+    const parsed = schema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.status(400).send({
+        success: false,
+        error: { code: 'VALIDATION_ERROR', message: parsed.error.errors[0].message },
+      });
+    }
+    try {
+      await verificationService.send({
+        email: parsed.data.email,
+        phone: parsed.data.phone,
+        purpose: 'REGISTER',
+      });
+      return reply.send({ success: true, message: 'Código enviado no WhatsApp.' });
+    } catch (err: any) {
+      return reply.status(err.statusCode || 500).send({
+        success: false,
+        error: { code: err.code || 'INTERNAL_ERROR', message: err.message || 'Não foi possível enviar o código.' },
+      });
+    }
+  }
+
+  async forgotPassword(request: FastifyRequest, reply: FastifyReply) {
+    const schema = z.object({ email: z.string().email('E-mail em formato inválido') });
+    const parsed = schema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.status(400).send({
+        success: false,
+        error: { code: 'VALIDATION_ERROR', message: parsed.error.errors[0].message },
+      });
+    }
+    try {
+      await authService.requestPasswordReset(parsed.data.email);
+      return reply.send({ success: true, message: 'Código enviado para o WhatsApp confirmado desta conta.' });
+    } catch (err: any) {
+      return reply.status(err.statusCode || 500).send({
+        success: false,
+        error: { code: err.code || 'INTERNAL_ERROR', message: err.message || 'Não foi possível enviar o código.' },
+      });
+    }
+  }
+
+  async sendOwnWhatsappCode(request: FastifyRequest, reply: FastifyReply) {
+    const schema = z.object({ phone: z.string().min(10, 'Informe o WhatsApp com DDD.') });
+    const parsed = schema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.status(400).send({
+        success: false,
+        error: { code: 'VALIDATION_ERROR', message: parsed.error.errors[0].message },
+      });
+    }
+    try {
+      const data = await authService.sendWhatsappCode(request.user.sub, parsed.data.phone);
+      return reply.send({ success: true, data });
+    } catch (err: any) {
+      return reply.status(err.statusCode || 500).send({
+        success: false,
+        error: { code: err.code || 'INTERNAL_ERROR', message: err.message || 'Não foi possível enviar o código.' },
+      });
+    }
+  }
+
+  async completeProfile(request: FastifyRequest, reply: FastifyReply) {
+    const schema = z.object({
+      newPassword: z.string().min(8, 'A nova senha deve ter no mínimo 8 caracteres'),
+      phone: z.string().min(10, 'Informe o WhatsApp com DDD.'),
+      code: z.string().length(8, 'Informe o código de 8 caracteres.'),
+    });
+    const parsed = schema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.status(400).send({
+        success: false,
+        error: { code: 'VALIDATION_ERROR', message: parsed.error.errors[0].message },
+      });
+    }
+    try {
+      const user = await authService.completeProfile(
+        request.user.sub,
+        parsed.data.newPassword,
+        parsed.data.phone,
+        parsed.data.code
+      );
+      return reply.send({ success: true, data: { user } });
+    } catch (err: any) {
+      return reply.status(err.statusCode || 500).send({
+        success: false,
+        error: { code: err.code || 'INTERNAL_ERROR', message: err.message || 'Não foi possível concluir o cadastro.' },
       });
     }
   }

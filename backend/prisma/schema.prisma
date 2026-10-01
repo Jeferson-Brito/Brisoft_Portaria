@@ -52,6 +52,9 @@ model User {
   role           String    @default("CONCIERGE") // "ADMIN" | "SUPERVISOR" | "CONCIERGE"
   phone          String?
   clientId       String?
+  whatsappNumber String?
+  whatsappVerifiedAt DateTime?
+  mustCompleteProfile Boolean @default(false)
   isActive       Boolean   @default(true)
   lastLoginAt    DateTime?
   createdAt      DateTime  @default(now())
@@ -471,4 +474,28 @@ model AmenityBooking {
 
   @@index([organizationId, date])
   @@map("amenity_bookings")
+}
+
+model VerificationCode {
+  id        String   @id @default(uuid())
+  email     String
+  phone     String
+  purpose   String
+  codeHash  String
+  userId    String?
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([email, purpose])
+  @@map("verification_codes")
+}
+
+// Registro permanente do teste grátis. Não some quando a empresa é apagada.
+model TrialClaim {
+  id              String   @id @default(uuid())
+  documentDigits  String   @unique
+  emailNormalized String   @unique
+  createdAt       DateTime @default(now())
+
+  @@map("trial_claims")
 }

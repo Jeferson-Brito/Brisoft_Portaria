@@ -1,6 +1,6 @@
 import { prisma } from '../../lib/prisma.js';
 import { AppError } from '../../core/errors/app-error.js';
-import { getStorageService, compressPhoto } from '../../services/storage/storage.service.js';
+import { getStorageService, compressPhoto, photoBelongsToOrganization, safeImageMime } from '../../services/storage/storage.service.js';
 
 export interface VehicleData {
   model: string;
@@ -63,9 +63,10 @@ export class VisitorService {
         const cleanBase64 = photoUrl.replace(/^data:image\/\w+;base64,/, '');
         const raw = Buffer.from(cleanBase64, 'base64');
         const buffer = await compressPhoto(raw);
-        finalPhotoUrl = await this.storageService.upload('visitor_photo.jpg', buffer, 'image/jpeg');
+        finalPhotoUrl = await this.storageService.upload('visitor_photo.jpg', buffer, 'image/jpeg', organizationId);
       } catch (e) {
         console.warn('Erro ao salvar foto do visitante no Supabase Storage:', e);
+        throw new AppError('Não foi possível processar a foto do visitante. Envie uma imagem válida.', 400, 'INVALID_PHOTO');
       }
     }
 
@@ -206,11 +207,25 @@ export class VisitorService {
     };
   }
 
-  async savePhoto(fileName: string, buffer: Buffer, mimeType: string) {
-    return this.storageService.upload(fileName, buffer, mimeType);
+  async savePhoto(fileName: string, buffer: Buffer, mimeType: string, organizationId: string) {
+    const allowed = new Set(['image/jpeg', 'image/jpg', 'image/png', 'image/webp']);
+    if (!allowed.has((mimeType || '').toLowerCase())) {
+      throw new AppError('Envie uma imagem JPEG, PNG ou WebP.', 400, 'INVALID_PHOTO');
+    }
+    let compressed: Buffer;
+    try {
+      compressed = await compressPhoto(buffer);
+    } catch {
+      throw new AppError('O arquivo enviado não é uma imagem válida.', 400, 'INVALID_PHOTO');
+    }
+    return this.storageService.upload(fileName, compressed, 'image/jpeg', organizationId);
   }
 
-  async getPhotoFile(fileName: string) {
-    return this.storageService.getFile(fileName);
+  async getPhotoFile(fileName: string, organizationId: string) {
+    const allowed = await photoBelongsToOrganization(fileName, organizationId);
+    if (!allowed) return null;
+    const file = await this.storageService.getFile(fileName);
+    if (!file) return null;
+    return { buffer: file.buffer, mimeType: safeImageMime(file.mimeType) };
   }
 }

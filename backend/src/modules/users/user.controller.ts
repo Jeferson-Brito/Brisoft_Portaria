@@ -6,7 +6,7 @@ import { Role } from '../../middlewares/rbac.middleware.js';
 const createUserSchema = z.object({
   name: z.string().min(2, 'Nome deve ter no mínimo 2 caracteres'),
   email: z.string().email('E-mail inválido'),
-  password: z.string().min(6, 'Senha deve ter no mínimo 6 caracteres'),
+  password: z.string().min(8, 'Senha deve ter no mínimo 8 caracteres'),
   role: z.enum(['ADMIN', 'SUPERVISOR', 'CONCIERGE', 'CLIENT']),
   phone: z.string().optional(),
   clientId: z.string().optional(),
@@ -17,7 +17,7 @@ const updateUserSchema = z.object({
   email: z.string().email('E-mail inválido').optional(),
   phone: z.string().optional().nullable(),
   role: z.enum(['ADMIN', 'SUPERVISOR', 'CONCIERGE']).optional(),
-  newPassword: z.string().min(6, 'Senha deve ter no mínimo 6 caracteres').optional(),
+  newPassword: z.string().min(8, 'Senha deve ter no mínimo 8 caracteres').optional(),
 });
 
 const listUsersQuerySchema = z.object({
@@ -151,7 +151,8 @@ export class UserController {
         id,
         request.user.organizationId,
         request.user.role as Role,
-        parseResult.data
+        parseResult.data,
+        request.user.sub
       );
       return reply.status(200).send({ success: true, data: { user: updated } });
     } catch (err: any) {

@@ -8,10 +8,14 @@ async function main() {
 
   const orgName = process.env.INITIAL_ORG_NAME || 'Brisoft Portaria';
   const orgSlug = process.env.INITIAL_ORG_SLUG || 'brisoft-portaria';
-  const adminEmail = process.env.INITIAL_ADMIN_EMAIL || 'admin@brisoft.com.br';
-  const adminPasswordRaw = process.env.INITIAL_ADMIN_PASSWORD || 'Brisoft@2026';
-  const conciergeEmail = process.env.INITIAL_CONCIERGE_EMAIL || 'porteiro@brisoft.com.br';
-  const conciergePasswordRaw = process.env.INITIAL_CONCIERGE_PASSWORD || 'Porteiro@2026';
+  const adminEmail = process.env.INITIAL_ADMIN_EMAIL;
+  const adminPasswordRaw = process.env.INITIAL_ADMIN_PASSWORD;
+  const conciergeEmail = process.env.INITIAL_CONCIERGE_EMAIL;
+  const conciergePasswordRaw = process.env.INITIAL_CONCIERGE_PASSWORD;
+
+  if (!adminEmail || !adminPasswordRaw || adminPasswordRaw.length < 8 || !conciergeEmail || !conciergePasswordRaw || conciergePasswordRaw.length < 8) {
+    throw new Error('Defina INITIAL_ADMIN_EMAIL, INITIAL_ADMIN_PASSWORD, INITIAL_CONCIERGE_EMAIL e INITIAL_CONCIERGE_PASSWORD (mínimo 8 caracteres).');
+  }
 
   // 1. Organização Oficial
   const org = await prisma.organization.upsert({
@@ -69,12 +73,15 @@ async function main() {
   console.log('✅ Templates oficiais de WhatsApp configurados.');
 
   // 3. Usuário Administrador Real
-  const adminPasswordHash = await bcrypt.hash(adminPasswordRaw, 12);
+  const existingAdmin = await prisma.user.findUnique({ where: { email: adminEmail } });
+  const adminPasswordHash = existingAdmin && process.env.INITIAL_RESET_PASSWORD !== 'true'
+    ? existingAdmin.passwordHash
+    : await bcrypt.hash(adminPasswordRaw, 12);
   const admin = await prisma.user.upsert({
     where: { email: adminEmail },
     update: {
-      passwordHash: adminPasswordHash,
       role: 'ADMIN',
+      ...(process.env.INITIAL_RESET_PASSWORD === 'true' || !existingAdmin ? { passwordHash: adminPasswordHash } : {}),
     },
     create: {
       organizationId: org.id,
@@ -86,12 +93,15 @@ async function main() {
   });
 
   // 4. Usuário Porteiro Operacional Real
-  const conciergePasswordHash = await bcrypt.hash(conciergePasswordRaw, 12);
+  const existingConcierge = await prisma.user.findUnique({ where: { email: conciergeEmail } });
+  const conciergePasswordHash = existingConcierge && process.env.INITIAL_RESET_PASSWORD !== 'true'
+    ? existingConcierge.passwordHash
+    : await bcrypt.hash(conciergePasswordRaw, 12);
   const concierge = await prisma.user.upsert({
     where: { email: conciergeEmail },
     update: {
-      passwordHash: conciergePasswordHash,
       role: 'CONCIERGE',
+      ...(process.env.INITIAL_RESET_PASSWORD === 'true' || !existingConcierge ? { passwordHash: conciergePasswordHash } : {}),
     },
     create: {
       organizationId: org.id,
@@ -106,8 +116,9 @@ async function main() {
   console.log('🎉 BANCO DE DADOS INICIALIZADO COM SUCESSO (SEM MOCKS)');
   console.log('======================================================');
   console.log(`🏢 Organização: ${org.name}`);
-  console.log(`👤 Admin: ${admin.email} (Senha: ${adminPasswordRaw})`);
-  console.log(`🚪 Portaria: ${concierge.email} (Senha: ${conciergePasswordRaw})`);
+  console.log(`👤 Admin: ${admin.email}`);
+  console.log(`🚪 Portaria: ${concierge.email}`);
+  console.log('As senhas não são exibidas. Para redefini-las, rode de novo com INITIAL_RESET_PASSWORD=true.');
   console.log('📦 Encomendas, Visitantes e Destinos iniciam limpos para uso real.');
   console.log('======================================================\n');
 }

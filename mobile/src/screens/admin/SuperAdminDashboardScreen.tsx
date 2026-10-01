@@ -51,6 +51,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { api } from '../../config/api';
 import { colors } from '../../theme/colors';
 import { CustomConfirmModal } from '../../components/CustomConfirmModal';
+import { WhatsAppConfigScreen } from './WhatsAppConfigScreen';
 
 type SuperAdminTab = 'overview' | 'organizations' | 'users' | 'finance' | 'profile';
 
@@ -66,6 +67,7 @@ export const SuperAdminDashboardScreen: React.FC = () => {
   const insets = useSafeAreaInsets();
 
   const [activeTab, setActiveTab] = useState<SuperAdminTab>('overview');
+  const [showPlatformWhatsapp, setShowPlatformWhatsapp] = useState(false);
 
   useEffect(() => {
     const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
@@ -1267,6 +1269,20 @@ export const SuperAdminDashboardScreen: React.FC = () => {
 
         <TouchableOpacity
           style={[styles.profileMenuRow, { marginTop: 12 }]}
+          onPress={() => setShowPlatformWhatsapp(true)}
+        >
+          <View style={styles.profileMenuIcon}>
+            <Wifi size={20} color="#165337" />
+          </View>
+          <View style={{ flex: 1, marginLeft: 14 }}>
+            <Text style={styles.profileMenuTitle}>WhatsApp da plataforma</Text>
+            <Text style={styles.profileMenuDesc}>Leia o QR Code para o bot enviar os códigos</Text>
+          </View>
+          <ChevronRight size={18} color="#94A3B8" />
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.profileMenuRow, { marginTop: 12 }]}
           onPress={onRefresh}
         >
           <View style={styles.profileMenuIcon}>
@@ -1290,6 +1306,10 @@ export const SuperAdminDashboardScreen: React.FC = () => {
       </View>
     </ScrollView>
   );
+
+  if (showPlatformWhatsapp) {
+    return <WhatsAppConfigScreen onBack={() => setShowPlatformWhatsapp(false)} />;
+  }
 
   return (
     <View style={styles.mainContainer}>

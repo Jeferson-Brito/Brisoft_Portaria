@@ -1,3 +1,4 @@
+import { randomInt, timingSafeEqual } from 'crypto';
 import { prisma } from '../../lib/prisma.js';
 import { realtimeService } from '../../services/realtime/realtime.service.js';
 import { whatsappService } from '../../services/whatsapp/whatsapp.service.js';
@@ -33,9 +34,15 @@ export class PackagesService {
     return `ENC-${year}-${sequential}`;
   }
 
-  // Gera código numérico de 4 dígitos para retirada segura
   private generatePickupCode(): string {
-    return Math.floor(1000 + Math.random() * 9000).toString();
+    return randomInt(1000, 10000).toString();
+  }
+
+  private pickupCodeMatches(stored: string, provided: string) {
+    const left = Buffer.from(stored);
+    const right = Buffer.from(provided.trim());
+    if (left.length !== right.length) return false;
+    return timingSafeEqual(left, right);
   }
 
   async create(data: CreatePackageDTO) {
@@ -76,9 +83,10 @@ export class PackagesService {
         const cleanBase64 = data.photoUrl.replace(/^data:image\/\w+;base64,/, '');
         const raw = Buffer.from(cleanBase64, 'base64');
         const buffer = await compressPhoto(raw);
-        finalPhotoUrl = await storageService.upload('package_photo.jpg', buffer, 'image/jpeg');
+        finalPhotoUrl = await storageService.upload('package_photo.jpg', buffer, 'image/jpeg', data.organizationId);
       } catch (e) {
         console.warn('Erro ao salvar foto da encomenda no Supabase Storage:', e);
+        throw new Error('Não foi possível processar a foto da encomenda. Envie uma imagem válida.');
       }
     }
 
@@ -190,9 +198,8 @@ export class PackagesService {
       throw new Error(`Esta encomenda já está com status ${pkg.status}.`);
     }
 
-    // Se não for liberação direta pelo porteiro, valida código de 4 dígitos
-    if (!directPickup && pickupCode) {
-      if (pkg.pickupCode !== pickupCode.trim()) {
+    if (directPickup !== true) {
+      if (!pickupCode || !pkg.pickupCode || !this.pickupCodeMatches(pkg.pickupCode, pickupCode)) {
         throw new Error('Código de retirada incorreto! Solicite o código de 4 dígitos que o cliente recebeu no WhatsApp.');
       }
     }
@@ -215,6 +222,19 @@ export class PackagesService {
     realtimeService.emitToOrganization(organizationId, 'package:picked_up', {
       package: updated,
     });
+
+    if (directPickup === true) {
+      await prisma.auditLog.create({
+        data: {
+          organizationId,
+          userId: conciergeUserId,
+          action: 'PACKAGE_DIRECT_PICKUP',
+          entity: 'Package',
+          entityId: packageId,
+          payload: JSON.stringify({ pickedUpBy: updated.pickedUpBy }),
+        },
+      });
+    }
 
     // Notificação de confirmação no WhatsApp
     if (pkg.client?.whatsappNumber) {

@@ -1,7 +1,7 @@
 import axios from 'axios';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 import Constants from 'expo-constants';
+import { clearSessionSecrets, getSessionValue } from '../services/secure-session';
 
 // Detecta dinamicamente o IP da máquina que hospeda o servidor
 export const getHostIp = (): string => {
@@ -64,15 +64,12 @@ export function setMemoryToken(token: string | null) {
 api.interceptors.request.use(
   async (config) => {
     try {
-      const token =
-        memoryToken ||
-        (await AsyncStorage.getItem('@brisoft_portaria:token')) ||
-        (await AsyncStorage.getItem('@combate_portaria:token'));
+      const token = memoryToken || (await getSessionValue('token'));
       if (token) {
         config.headers.Authorization = `Bearer ${token}`;
       }
     } catch (e) {
-      console.warn('Erro ao ler token do AsyncStorage:', e);
+      console.warn('Erro ao ler token da sessão:', e);
     }
     return config;
   },
@@ -91,12 +88,7 @@ api.interceptors.response.use(
     if (error.response?.status === 401) {
       // Sessão expirada ou token inválido — limpa ambas as chaves (antiga e nova)
       try {
-        await AsyncStorage.removeItem('@brisoft_portaria:token');
-        await AsyncStorage.removeItem('@brisoft_portaria:refreshToken');
-        await AsyncStorage.removeItem('@brisoft_portaria:user');
-        await AsyncStorage.removeItem('@combate_portaria:token');
-        await AsyncStorage.removeItem('@combate_portaria:refreshToken');
-        await AsyncStorage.removeItem('@combate_portaria:user');
+        await clearSessionSecrets();
       } catch {}
       if (onUnauthorizedCallback) {
         onUnauthorizedCallback();

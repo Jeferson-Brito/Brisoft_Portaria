@@ -26,6 +26,7 @@ import {
 } from 'lucide-react-native';
 import { colors } from '../../theme/colors';
 import { useAuth } from '../../contexts/AuthContext';
+import { api } from '../../config/api';
 
 const { height } = Dimensions.get('window');
 
@@ -33,10 +34,16 @@ export const LoginScreen: React.FC<{ onRegisterPress?: () => void }> = ({ onRegi
   const { signIn } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [resetMode, setResetMode] = useState(false);
+  const [resetStep, setResetStep] = useState<'email' | 'code' | 'password'>('email');
+  const [resetCode, setResetCode] = useState('');
 
   useEffect(() => {
     AsyncStorage.getItem('@brisoft_portaria:rememberedEmail').then((saved) => {
@@ -46,6 +53,80 @@ export const LoginScreen: React.FC<{ onRegisterPress?: () => void }> = ({ onRegi
       if (saved === '0') setRememberMe(false);
     });
   }, []);
+
+  const sendResetCode = async () => {
+    if (!email.trim()) {
+      setErrorMessage('Informe o e-mail da conta.');
+      return;
+    }
+    try {
+      setIsLoading(true);
+      setErrorMessage(null);
+      await api.post('/auth/forgot-password', { email: email.trim() });
+      setResetCode('');
+      setResetStep('code');
+    } catch (err: any) {
+      setErrorMessage(err.response?.data?.error?.message || 'Não foi possível enviar o código.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const confirmResetCode = async () => {
+    if (resetCode.trim().length !== 8) {
+      setErrorMessage('Digite o código de 8 caracteres recebido no WhatsApp.');
+      return;
+    }
+    try {
+      setIsLoading(true);
+      setErrorMessage(null);
+      await api.post('/auth/forgot-password/check', { email: email.trim(), code: resetCode.trim() });
+      setResetStep('password');
+    } catch (err: any) {
+      setErrorMessage(err.response?.data?.error?.message || 'Código incorreto.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleResetPassword = async () => {
+    if (!email.trim() || !newPassword.trim() || !confirmPassword.trim()) {
+      setErrorMessage('Preencha o e-mail e a nova senha.');
+      return;
+    }
+    if (newPassword.length < 8) {
+      setErrorMessage('A nova senha deve ter no mínimo 8 caracteres.');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setErrorMessage('As senhas não coincidem.');
+      return;
+    }
+
+    try {
+      setIsLoading(true);
+      setErrorMessage(null);
+      await api.post('/auth/reset-password', {
+        email: email.trim(),
+        code: resetCode.trim(),
+        newPassword,
+      });
+      setPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+      setResetMode(false);
+      setErrorMessage(null);
+      await signIn(email.trim(), newPassword, rememberMe);
+    } catch (err: any) {
+      const message =
+        err.response?.data?.error?.message ||
+        err.message ||
+        'Não foi possível redefinir a senha.';
+      setErrorMessage(message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const handleLogin = async () => {
     if (!email.trim() || !password.trim()) {
@@ -93,7 +174,9 @@ export const LoginScreen: React.FC<{ onRegisterPress?: () => void }> = ({ onRegi
             </View>
             <Text style={styles.brandTitle}>Brisoft Portaria</Text>
             <Text style={styles.brandSubtitle}>
-              Faça login para acessar o sistema de controle de acesso.
+              {resetMode
+                ? 'Informe o e-mail da conta e escolha uma nova senha.'
+                : 'Faça login para acessar o sistema de controle de acesso.'}
             </Text>
           </View>
         </ImageBackground>
@@ -125,7 +208,7 @@ export const LoginScreen: React.FC<{ onRegisterPress?: () => void }> = ({ onRegi
             </View>
           </View>
 
-          {/* Campo Senha */}
+          {!resetMode ? (
           <View style={styles.inputBox}>
             <Lock size={18} color="#64748B" style={styles.inputIcon} />
             <View style={[styles.inputContent, { paddingRight: 40 }]}>
@@ -152,9 +235,71 @@ export const LoginScreen: React.FC<{ onRegisterPress?: () => void }> = ({ onRegi
               )}
             </TouchableOpacity>
           </View>
+          ) : resetStep === 'code' ? (
+          <View style={styles.inputBox}>
+            <Lock size={18} color="#64748B" style={styles.inputIcon} />
+            <View style={styles.inputContent}>
+              <Text style={styles.fieldLabel}>Código do WhatsApp</Text>
+              <TextInput
+                style={styles.textInput}
+                placeholder="8 caracteres"
+                placeholderTextColor="#94A3B8"
+                value={resetCode}
+                onChangeText={(value) => setResetCode(value.replace(/[^a-zA-Z0-9]/g, '').slice(0, 8).toUpperCase())}
+                autoCapitalize="characters"
+                autoCorrect={false}
+                editable={!isLoading}
+              />
+            </View>
+          </View>
+          ) : resetStep === 'password' ? (
+          <>
+          <View style={styles.inputBox}>
+            <Lock size={18} color="#64748B" style={styles.inputIcon} />
+            <View style={[styles.inputContent, { paddingRight: 40 }]}>
+              <Text style={styles.fieldLabel}>Nova senha</Text>
+              <TextInput
+                style={styles.textInput}
+                placeholder="Mínimo de 8 caracteres"
+                placeholderTextColor="#94A3B8"
+                value={newPassword}
+                onChangeText={setNewPassword}
+                secureTextEntry={!showNewPassword}
+                editable={!isLoading}
+              />
+            </View>
+            <TouchableOpacity
+              onPress={() => setShowNewPassword(!showNewPassword)}
+              style={styles.eyeBtn}
+              activeOpacity={0.7}
+            >
+              {showNewPassword ? (
+                <EyeOff size={18} color="#64748B" />
+              ) : (
+                <Eye size={18} color="#64748B" />
+              )}
+            </TouchableOpacity>
+          </View>
+          <View style={styles.inputBox}>
+            <Lock size={18} color="#64748B" style={styles.inputIcon} />
+            <View style={styles.inputContent}>
+              <Text style={styles.fieldLabel}>Confirmar nova senha</Text>
+              <TextInput
+                style={styles.textInput}
+                placeholder="Repita a nova senha"
+                placeholderTextColor="#94A3B8"
+                value={confirmPassword}
+                onChangeText={setConfirmPassword}
+                secureTextEntry={!showNewPassword}
+                editable={!isLoading}
+              />
+            </View>
+          </View>
+          </>
+          ) : null}
 
-          {/* Linha Lembrar de mim & Esqueceu a senha */}
           <View style={styles.optionsRow}>
+            {!resetMode ? (
             <TouchableOpacity
               style={styles.rememberMeRow}
               onPress={() => setRememberMe(!rememberMe)}
@@ -165,16 +310,31 @@ export const LoginScreen: React.FC<{ onRegisterPress?: () => void }> = ({ onRegi
               </View>
               <Text style={styles.rememberMeText}>Lembrar de mim</Text>
             </TouchableOpacity>
+            ) : <View />}
 
-            <TouchableOpacity activeOpacity={0.7}>
-              <Text style={styles.forgotPasswordText}>Esqueceu a senha?</Text>
+            <TouchableOpacity
+              activeOpacity={0.7}
+            onPress={() => {
+              setErrorMessage(null);
+              if (!resetMode) {
+                setResetStep('email');
+                setResetMode(true);
+                return;
+              }
+              if (resetStep === 'password') setResetStep('code');
+              else if (resetStep === 'code') setResetStep('email');
+              else setResetMode(false);
+            }}
+          >
+              <Text style={styles.forgotPasswordText}>
+                {resetMode ? 'Voltar ao login' : 'Esqueceu a senha?'}
+              </Text>
             </TouchableOpacity>
           </View>
 
-          {/* Botão Entrar no Sistema */}
           <TouchableOpacity
             style={styles.loginBtn}
-            onPress={handleLogin}
+            onPress={resetMode ? (resetStep === 'email' ? sendResetCode : resetStep === 'code' ? confirmResetCode : handleResetPassword) : handleLogin}
             disabled={isLoading}
             activeOpacity={0.88}
           >
@@ -182,7 +342,9 @@ export const LoginScreen: React.FC<{ onRegisterPress?: () => void }> = ({ onRegi
               <ActivityIndicator color="#FFFFFF" />
             ) : (
               <View style={styles.loginBtnContent}>
-                <Text style={styles.loginBtnText}>Entrar no Sistema</Text>
+                <Text style={styles.loginBtnText}>
+                  {resetMode ? (resetStep === 'email' ? 'Enviar código' : resetStep === 'code' ? 'Confirmar código' : 'Salvar nova senha') : 'Entrar no Sistema'}
+                </Text>
                 <ArrowRight size={18} color="#FFFFFF" style={{ marginLeft: 8 }} />
               </View>
             )}

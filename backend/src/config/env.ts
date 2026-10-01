@@ -13,6 +13,8 @@ const envSchema = z.object({
   JWT_EXPIRES_IN: z.string().default('1d'),
   JWT_REFRESH_SECRET: z.string().min(16).default('combate_portaria_refresh_secret_dev_local_123456'),
   JWT_REFRESH_EXPIRES_IN: z.string().default('7d'),
+  CORS_ORIGINS: z.string().optional(),
+  PUBLIC_WEB_URL: z.string().optional(),
   WHATSAPP_SESSION_PATH: z.string().default('./whatsapp_sessions'),
   WHATSAPP_AUTO_RECONNECT: z.coerce.boolean().default(true),
   SUPABASE_URL: z.string().optional(),
@@ -29,3 +31,21 @@ if (!_env.success) {
 }
 
 export const env = _env.data;
+
+const DEFAULT_SECRETS = new Set([
+  'combate_portaria_jwt_secret_dev_local_super_safe_key_123456',
+  'combate_portaria_refresh_secret_dev_local_123456',
+]);
+
+if (env.NODE_ENV === 'production') {
+  if (DEFAULT_SECRETS.has(env.JWT_SECRET) || env.JWT_SECRET.length < 32) {
+    throw new Error('JWT_SECRET padrão ou curto demais. Defina um segredo próprio com pelo menos 32 caracteres em produção.');
+  }
+  if (
+    DEFAULT_SECRETS.has(env.JWT_REFRESH_SECRET) ||
+    env.JWT_REFRESH_SECRET.length < 32 ||
+    env.JWT_REFRESH_SECRET === env.JWT_SECRET
+  ) {
+    throw new Error('JWT_REFRESH_SECRET deve ser próprio, ter pelo menos 32 caracteres e ser diferente do JWT_SECRET.');
+  }
+}

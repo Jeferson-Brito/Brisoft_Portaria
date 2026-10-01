@@ -72,6 +72,9 @@ model User {
   passwordHash   String
   role           String    @default("CONCIERGE") // "ADMIN" | "SUPERVISOR" | "CONCIERGE"
   phone          String?
+  whatsappNumber String?
+  whatsappVerifiedAt DateTime?
+  mustCompleteProfile Boolean @default(false)
   isActive       Boolean   @default(true)
   lastLoginAt    DateTime?
   createdAt      DateTime  @default(now())
@@ -395,4 +398,27 @@ model Package {
   @@index([code])
   @@index([pickupCode])
   @@map("packages")
+}
+
+model TrialClaim {
+  id              String   @id @default(uuid())
+  documentDigits  String   @unique
+  emailNormalized String   @unique
+  createdAt       DateTime @default(now())
+
+  @@map("trial_claims")
+}
+
+model VerificationCode {
+  id        String   @id @default(uuid())
+  email     String
+  phone     String
+  purpose   String
+  codeHash  String
+  userId    String?
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([email, purpose])
+  @@map("verification_codes")
 }

@@ -1,7 +1,12 @@
 import bcrypt from 'bcryptjs';
+import { Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma.js';
 import { AppError } from '../../core/errors/app-error.js';
 import { subscriptionService } from '../subscriptions/subscription.service.js';
+import { isValidCnpj, onlyDigits } from '../../utils/cnpj.js';
+import { isDisposableEmail, isGmailAddress, normalizeEmail } from '../../utils/email.js';
+import { verificationService } from '../../services/verification.service.js';
+import { formatWhatsAppNumber } from '../../utils/phone.util.js';
 
 export interface LoginParams {
   email: string;
@@ -17,22 +22,49 @@ export interface RegisterParams {
   adminEmail: string;
   adminPassword: string;
   adminPhone?: string;
+  verificationCode?: string;
 }
 
 export class AuthService {
-  // Registro público: cria empresa + admin + subscription trial (7 dias)
-  async register({ organizationName, organizationDocument, adminName, adminEmail, adminPassword, adminPhone }: RegisterParams) {
+  async register({ organizationName, organizationDocument, adminName, adminEmail, adminPassword, adminPhone, verificationCode }: RegisterParams) {
     if (adminPassword.length < 8) {
       throw new AppError('A senha deve ter no mínimo 8 caracteres.', 400, 'INVALID_PASSWORD');
     }
 
-    // Verifica e-mail único
-    const existingUser = await prisma.user.findFirst({
-      where: { email: adminEmail.trim().toLowerCase(), deletedAt: null },
-    });
-    if (existingUser) {
+    const documentDigits = onlyDigits(organizationDocument || '');
+    if (!isValidCnpj(documentDigits)) {
+      throw new AppError('Informe um CNPJ válido.', 400, 'INVALID_CNPJ');
+    }
+
+    const rawEmail = adminEmail.trim().toLowerCase();
+    const email = normalizeEmail(rawEmail);
+    if (isDisposableEmail(email)) {
+      throw new AppError('Use um e-mail permanente. Endereços temporários não podem criar conta.', 400, 'DISPOSABLE_EMAIL');
+    }
+
+    if (await this.emailAlreadyClaimed(rawEmail, email)) {
       throw new AppError('Este e-mail já está em uso. Faça login ou utilize outro e-mail.', 409, 'EMAIL_IN_USE');
     }
+
+    if (await this.documentAlreadyClaimed(documentDigits)) {
+      throw new AppError('Este CNPJ já utilizou o período de teste.', 409, 'CNPJ_ALREADY_USED');
+    }
+
+    let whatsappNumber = '';
+    try {
+      whatsappNumber = formatWhatsAppNumber(adminPhone || '');
+    } catch {
+      throw new AppError('Informe um WhatsApp válido com DDD.', 400, 'INVALID_PHONE');
+    }
+    if (!verificationCode || verificationCode.trim().length !== 8) {
+      throw new AppError('Confirme o código de 8 caracteres enviado no WhatsApp.', 400, 'CODE_REQUIRED');
+    }
+    await verificationService.consume({
+      email,
+      phone: whatsappNumber,
+      purpose: 'REGISTER',
+      code: verificationCode,
+    });
 
     // Gera slug único a partir do nome da empresa
     let slug = organizationName
@@ -55,98 +87,285 @@ export class AuthService {
     const trialEndsAt = new Date(now);
     trialEndsAt.setDate(trialEndsAt.getDate() + 7);
 
-    // Transação atômica: tudo ou nada
-    const result = await prisma.$transaction(async (tx) => {
-      // 1. Organização
-      const organization = await tx.organization.create({
-        data: {
-          name: organizationName.trim(),
-          slug,
-          document: organizationDocument?.trim() || null,
-          settings: JSON.stringify({
-            type: 'RESIDENTIAL',
-            companyName: organizationName.trim(),
-            unitLabel: 'Apartamento / Unidade',
-            clientLabel: 'Morador',
-          }),
-        },
-      });
-
-      // 2. Assinatura Trial removida
-
-      // 3. Templates de mensagem padrão
-      await tx.messageTemplate.createMany({
-        data: [
-          {
-            organizationId: organization.id,
-            type: 'APPROVAL_REQUEST',
-            title: 'Solicitação de Autorização',
-            content:
-              'Olá, {{cliente}}! Há um visitante aguardando sua autorização na portaria.\n\n👤 *Visitante:* {{visitante}}\n🏢 *Empresa:* {{empresa}}\n📋 *Motivo:* {{motivo}}\n⏰ *Chegada:* {{horario}}\n🚗 *Veículo:* {{veiculo}}\n\nPor favor, responda com:\n*1* para *AUTORIZAR*\n*2* para *RECUSAR*',
+    try {
+      const result = await prisma.$transaction(async (tx) => {
+        const organization = await tx.organization.create({
+          data: {
+            name: organizationName.trim(),
+            slug,
+            document: documentDigits,
+            settings: JSON.stringify({
+              type: 'RESIDENTIAL',
+              companyName: organizationName.trim(),
+              unitLabel: 'Apartamento / Unidade',
+              clientLabel: 'Morador',
+            }),
           },
-          {
+        });
+
+        await tx.messageTemplate.createMany({
+          data: [
+            {
+              organizationId: organization.id,
+              type: 'APPROVAL_REQUEST',
+              title: 'Solicitação de Autorização',
+              content:
+                'Olá, {{cliente}}! Há um visitante aguardando sua autorização na portaria.\n\n👤 *Visitante:* {{visitante}}\n🏢 *Empresa:* {{empresa}}\n📋 *Motivo:* {{motivo}}\n⏰ *Chegada:* {{horario}}\n🚗 *Veículo:* {{veiculo}}\n\nPor favor, responda com:\n*1* para *AUTORIZAR*\n*2* para *RECUSAR*',
+            },
+            {
+              organizationId: organization.id,
+              type: 'REMINDER',
+              title: 'Lembrete de Autorização',
+              content:
+                '⏳ Olá, {{cliente}}! O visitante *{{visitante}}* ainda aguarda sua liberação na portaria.\n\nPor favor, responda com *1* para *AUTORIZAR* ou *2* para *RECUSAR*.',
+            },
+          ],
+        });
+
+        const admin = await tx.user.create({
+          data: {
             organizationId: organization.id,
-            type: 'REMINDER',
-            title: 'Lembrete de Autorização',
-            content:
-              '⏳ Olá, {{cliente}}! O visitante *{{visitante}}* ainda aguarda sua liberação na portaria.\n\nPor favor, responda com *1* para *AUTORIZAR* ou *2* para *RECUSAR*.',
+            name: adminName.trim(),
+            email,
+            passwordHash,
+            role: 'ADMIN',
+            phone: whatsappNumber,
+            whatsappNumber,
+            whatsappVerifiedAt: new Date(),
+            mustCompleteProfile: false,
           },
-        ],
+        });
+
+        await tx.trialClaim.create({
+          data: {
+            documentDigits,
+            emailNormalized: email,
+          },
+        });
+
+        return { organization, admin };
       });
 
-      // 4. Usuário administrador (dono da assinatura)
-      const admin = await tx.user.create({
-        data: {
-          organizationId: organization.id,
-          name: adminName.trim(),
-          email: adminEmail.trim().toLowerCase(),
-          passwordHash,
-          role: 'ADMIN',
-          phone: adminPhone?.trim() || null,
+      return {
+        organization: {
+          id: result.organization.id,
+          name: result.organization.name,
+          slug: result.organization.slug,
         },
-      });
+        admin: {
+          id: result.admin.id,
+          name: result.admin.name,
+          email: result.admin.email,
+          role: result.admin.role,
+          organizationId: result.organization.id,
+          organizationName: result.organization.name,
+        },
+        subscription: {
+          plan: 'TRIAL',
+          status: 'TRIAL',
+          trialEndsAt: trialEndsAt.toISOString(),
+          daysRemaining: 7,
+        },
+      };
+    } catch (err) {
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+        const target = JSON.stringify(err.meta?.target || '');
+        if (target.includes('document')) {
+          throw new AppError('Este CNPJ já utilizou o período de teste.', 409, 'CNPJ_ALREADY_USED');
+        }
+        throw new AppError('Este e-mail já está em uso. Faça login ou utilize outro e-mail.', 409, 'EMAIL_IN_USE');
+      }
+      throw err;
+    }
+  }
 
-      return { organization, admin };
+  private async emailAlreadyClaimed(rawEmail: string, canonicalEmail: string) {
+    const direct = await prisma.user.findFirst({
+      where: { OR: [{ email: rawEmail }, { email: canonicalEmail }] },
+      select: { id: true },
+    });
+    if (direct) return true;
+
+    const claim = await prisma.trialClaim.findUnique({
+      where: { emailNormalized: canonicalEmail },
+      select: { id: true },
+    });
+    if (claim) return true;
+
+    if (!isGmailAddress(rawEmail)) return false;
+
+    const candidates = await prisma.user.findMany({
+      where: {
+        OR: [{ email: { endsWith: '@gmail.com' } }, { email: { endsWith: '@googlemail.com' } }],
+      },
+      select: { email: true },
+    });
+    return candidates.some((candidate) => normalizeEmail(candidate.email) === canonicalEmail);
+  }
+
+  private async documentAlreadyClaimed(documentDigits: string) {
+    const claim = await prisma.trialClaim.findUnique({
+      where: { documentDigits },
+      select: { id: true },
+    });
+    if (claim) return true;
+
+    const rows = await prisma.$queryRaw<Array<{ id: string }>>`
+      SELECT id FROM organizations
+      WHERE regexp_replace(coalesce(document, ''), '[^0-9]', '', 'g') = ${documentDigits}
+      LIMIT 1
+    `;
+    return rows.length > 0;
+  }
+
+  private async findUserByEmail(rawEmail: string, canonicalEmail: string) {
+    const include = {
+      organization: true,
+      client: {
+        include: {
+          destinations: { include: { destination: true } },
+        },
+      },
+    } as const;
+
+    const direct = await prisma.user.findFirst({
+      where: {
+        deletedAt: null,
+        OR: [{ email: rawEmail }, { email: canonicalEmail }],
+      },
+      include,
+    });
+    if (direct) return direct;
+    if (!isGmailAddress(rawEmail)) return null;
+
+    const candidates = await prisma.user.findMany({
+      where: {
+        deletedAt: null,
+        OR: [{ email: { endsWith: '@gmail.com' } }, { email: { endsWith: '@googlemail.com' } }],
+      },
+      select: { id: true, email: true },
+    });
+    const match = candidates.find((candidate) => normalizeEmail(candidate.email) === canonicalEmail);
+    if (!match) return null;
+
+    return prisma.user.findFirst({
+      where: { id: match.id, deletedAt: null },
+      include,
+    });
+  }
+
+  async requestPasswordReset(email: string) {
+    const rawEmail = email.trim().toLowerCase();
+    const canonicalEmail = normalizeEmail(rawEmail);
+    const user = await this.findUserByEmail(rawEmail, canonicalEmail);
+    if (!user || !user.whatsappVerifiedAt || !user.whatsappNumber) {
+      throw new AppError('Esta conta não tem um WhatsApp confirmado para receber o código.', 400, 'WHATSAPP_NOT_VERIFIED');
+    }
+    await verificationService.send({
+      email: user.email,
+      phone: user.whatsappNumber,
+      purpose: 'PASSWORD_RESET',
+      userId: user.id,
+    });
+  }
+
+  async checkResetCode(email: string, code: string) {
+    const rawEmail = email.trim().toLowerCase();
+    const user = await this.findUserByEmail(rawEmail, normalizeEmail(rawEmail));
+    if (!user) {
+      throw new AppError('Não encontramos uma conta com esse e-mail.', 404, 'USER_NOT_FOUND');
+    }
+    await verificationService.matches({
+      email: user.email,
+      purpose: 'PASSWORD_RESET',
+      code,
+    });
+  }
+
+  async resetPassword(email: string, code: string, newPassword: string) {
+    if (newPassword.length < 8) {
+      throw new AppError('A nova senha deve ter no mínimo 8 caracteres.', 400, 'INVALID_PASSWORD');
+    }
+
+    const rawEmail = email.trim().toLowerCase();
+    const canonicalEmail = normalizeEmail(rawEmail);
+    const user = await this.findUserByEmail(rawEmail, canonicalEmail);
+    if (!user) {
+      throw new AppError('Não encontramos uma conta com esse e-mail.', 404, 'USER_NOT_FOUND');
+    }
+
+    await verificationService.consume({
+      email: user.email,
+      purpose: 'PASSWORD_RESET',
+      code,
     });
 
-    return {
-      organization: {
-        id: result.organization.id,
-        name: result.organization.name,
-        slug: result.organization.slug,
+    const passwordHash = await bcrypt.hash(newPassword, 12);
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { passwordHash, mustCompleteProfile: false },
+    });
+
+    await prisma.auditLog.create({
+      data: {
+        organizationId: user.organizationId,
+        userId: user.id,
+        action: 'PASSWORD_RESET',
+        entity: 'User',
+        entityId: user.id,
+        payload: JSON.stringify({ email: user.email }),
       },
-      admin: {
-        id: result.admin.id,
-        name: result.admin.name,
-        email: result.admin.email,
-        role: result.admin.role,
-        organizationId: result.organization.id,
-        organizationName: result.organization.name,
+    });
+  }
+
+  async sendWhatsappCode(userId: string, phone: string) {
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user || user.deletedAt) {
+      throw new AppError('Usuário não encontrado.', 404, 'USER_NOT_FOUND');
+    }
+    const whatsappNumber = formatWhatsAppNumber(phone);
+    await verificationService.send({
+      email: user.email,
+      phone: whatsappNumber,
+      purpose: 'WHATSAPP_CONFIRM',
+      userId: user.id,
+    });
+    return { phone: whatsappNumber };
+  }
+
+  async completeProfile(userId: string, newPassword: string, phone: string, code: string) {
+    if (newPassword.length < 8) {
+      throw new AppError('A nova senha deve ter no mínimo 8 caracteres.', 400, 'INVALID_PASSWORD');
+    }
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user || user.deletedAt) {
+      throw new AppError('Usuário não encontrado.', 404, 'USER_NOT_FOUND');
+    }
+    const whatsappNumber = formatWhatsAppNumber(phone);
+    await verificationService.consume({
+      email: user.email,
+      phone: whatsappNumber,
+      purpose: 'WHATSAPP_CONFIRM',
+      code,
+    });
+    const passwordHash = await bcrypt.hash(newPassword, 12);
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        passwordHash,
+        phone: whatsappNumber,
+        whatsappNumber,
+        whatsappVerifiedAt: new Date(),
+        mustCompleteProfile: false,
       },
-      subscription: {
-        plan: 'TRIAL',
-        status: 'TRIAL',
-        trialEndsAt: trialEndsAt.toISOString(),
-        daysRemaining: 7,
-      },
-    };
+    });
+    return this.getProfile(user.id);
   }
 
   async authenticate({ email, password }: LoginParams) {
-    const user = await prisma.user.findFirst({
-      where: {
-        email: email.trim().toLowerCase(),
-        deletedAt: null,
-      },
-      include: {
-        organization: true,
-        client: {
-          include: {
-            destinations: { include: { destination: true } },
-          },
-        },
-      },
-    });
+    const rawEmail = email.trim().toLowerCase();
+    const canonicalEmail = normalizeEmail(rawEmail);
+    const user = await this.findUserByEmail(rawEmail, canonicalEmail);
 
     if (!user) {
       throw new AppError('E-mail ou senha incorretos.', 401, 'INVALID_CREDENTIALS');
@@ -198,6 +417,8 @@ export class AuthService {
         organizationName: user.organization.name,
         subscription: subscriptionInfo,
         clientId: user.clientId,
+        mustCompleteProfile: user.mustCompleteProfile,
+        whatsappVerified: Boolean(user.whatsappVerifiedAt),
         resident: user.client
           ? {
               id: user.client.id,
@@ -247,6 +468,8 @@ export class AuthService {
       role: user.role,
       phone: user.phone,
       clientId: user.clientId,
+      mustCompleteProfile: user.mustCompleteProfile,
+      whatsappVerified: Boolean(user.whatsappVerifiedAt),
       resident: user.client
         ? {
             id: user.client.id,

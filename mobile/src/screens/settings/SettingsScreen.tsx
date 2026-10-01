@@ -203,11 +203,15 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
         <View style={styles.statusRow}>
           <TouchableOpacity style={styles.statusCard} onPress={() => onNavigate('whatsapp')} activeOpacity={0.8}>
             {whatsappStatus === 'CONNECTED' ? <Wifi size={16} color="#16A34A" /> : <WifiOff size={16} color="#DC2626" />}
-            <Text style={styles.statusCardTitle}>WhatsApp</Text>
+            <Text style={styles.statusCardTitle}>{isSuperAdmin ? 'WhatsApp da plataforma' : 'WhatsApp'}</Text>
             <Text style={[styles.statusCardSubtitle, { color: whatsappStatus === 'CONNECTED' ? '#15803D' : '#B91C1C' }]} numberOfLines={1}>
               {whatsappStatus === 'CONNECTED'
                 ? connectedPhone || 'Conectado'
-                : whatsappStatus === 'LOADING' ? 'Verificando...' : 'Desconectado'}
+                : whatsappStatus === 'LOADING'
+                  ? 'Verificando...'
+                  : isSuperAdmin
+                    ? 'Ler QR Code'
+                    : 'Desconectado'}
             </Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.statusCard} onPress={() => onNavigate('subscription')} activeOpacity={0.8}>
@@ -294,7 +298,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
             icon={<MessageSquare size={18} color="#15803D" />}
             iconBg="#DCFCE7"
             title="Suporte"
-            onPress={() => Linking.openURL('https://wa.me/5511999999999?text=Ol%C3%A1%2C%20preciso%20de%20ajuda%20no%20Brisoft%20Portaria')}
+            onPress={() => Linking.openURL('https://wa.me/5583981131352?text=Ol%C3%A1%2C%20preciso%20de%20ajuda%20no%20Brisoft%20Portaria')}
             last
           />
         </View>

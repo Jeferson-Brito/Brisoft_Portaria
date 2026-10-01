@@ -23,6 +23,19 @@ import { restrictionRoutes } from './modules/restrictions/restriction.routes.js'
 import { amenityRoutes } from './modules/amenities/amenity.routes.js';
 import { invitePageRoutes } from './modules/invites/invite.routes.js';
 
+function resolveCorsOrigin(): true | string[] {
+  if (env.NODE_ENV !== 'production') return true;
+
+  const configured = (env.CORS_ORIGINS || '')
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean);
+  const defaults = [env.API_URL, env.PUBLIC_WEB_URL || '', 'https://portaria.brisoft.com.br'].filter((item) =>
+    item.startsWith('http')
+  );
+  return [...new Set([...defaults, ...configured])];
+}
+
 export function buildApp() {
   const app = fastify({
     bodyLimit: 15 * 1024 * 1024,
@@ -42,8 +55,20 @@ export function buildApp() {
 
   // Plugins
   app.register(cors, {
-    origin: true,
+    origin: resolveCorsOrigin(),
     credentials: true,
+  });
+
+  app.addHook('onSend', async (_request, reply, payload) => {
+    reply.header('X-Content-Type-Options', 'nosniff');
+    reply.header('X-Frame-Options', 'DENY');
+    reply.header('Referrer-Policy', 'no-referrer');
+    reply.header('X-DNS-Prefetch-Control', 'off');
+    reply.header('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+    if (env.NODE_ENV === 'production') {
+      reply.header('Strict-Transport-Security', 'max-age=15552000; includeSubDomains');
+    }
+    return payload;
   });
 
   app.register(rateLimit, {
@@ -65,10 +90,7 @@ export function buildApp() {
   app.get('/health', async () => {
     return {
       status: 'ok',
-      service: 'combate-portaria-backend',
       timestamp: new Date().toISOString(),
-      environment: env.NODE_ENV,
-      database: 'sqlite (prepared for supabase)',
     };
   });
 

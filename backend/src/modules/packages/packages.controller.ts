@@ -46,13 +46,19 @@ export class PackagesController {
     const organizationId = (req as any).user?.organizationId;
     const { id } = req.params as { id: string };
     const { pickupCode, pickedUpBy, directPickup } = (req.body as any) || {};
+    const role = (req as any).user?.role as string;
+    const allowDirect = directPickup === true;
 
-    if (!pickupCode && !directPickup) {
+    if (!pickupCode && !allowDirect) {
       return reply.status(400).send({ success: false, message: 'Informe o código de retirada ou confirme a liberação direta.' });
     }
 
+    if (allowDirect && !['SUPER_ADMIN', 'ADMIN', 'SUPERVISOR', 'CONCIERGE'].includes(role)) {
+      return reply.status(403).send({ success: false, message: 'Você não possui permissão para liberar a encomenda sem o código.' });
+    }
+
     try {
-      const updated = await packagesService.pickup(id, organizationId, conciergeUserId, pickupCode, pickedUpBy, directPickup);
+      const updated = await packagesService.pickup(id, organizationId, conciergeUserId, pickupCode, pickedUpBy, allowDirect);
       return reply.send({ success: true, data: updated, message: 'Encomenda entregue com sucesso!' });
     } catch (err: any) {
       return reply.status(400).send({ success: false, message: err.message });

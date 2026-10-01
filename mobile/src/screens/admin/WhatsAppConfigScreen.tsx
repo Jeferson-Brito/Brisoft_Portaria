@@ -26,6 +26,7 @@ import {
 } from 'lucide-react-native';
 import { colors } from '../../theme/colors';
 import { api } from '../../config/api';
+import { useAuth } from '../../contexts/AuthContext';
 import { AppHeader } from '../../components/AppHeader';
 
 interface WhatsAppStatusData {
@@ -49,6 +50,7 @@ interface WhatsAppConfigScreenProps {
 }
 
 export const WhatsAppConfigScreen: React.FC<WhatsAppConfigScreenProps> = ({ onBack }) => {
+  const { user } = useAuth();
   const [statusData, setStatusData] = useState<WhatsAppStatusData>({
     status: 'DISCONNECTED',
   });
@@ -224,8 +226,8 @@ export const WhatsAppConfigScreen: React.FC<WhatsAppConfigScreenProps> = ({ onBa
   return (
     <View style={{ flex: 1, backgroundColor: '#F8FAFC' }}>
       <AppHeader
-        title="Conexão WhatsApp"
-        subtitle="Aparelhos conectados, QR Code ao vivo e status"
+        title={user?.role === 'SUPER_ADMIN' ? 'WhatsApp da plataforma' : 'Conexão WhatsApp'}
+        subtitle={user?.role === 'SUPER_ADMIN' ? 'Leia o QR Code para o bot enviar os códigos' : 'Aparelhos conectados, QR Code ao vivo e status'}
         onBack={onBack}
       />
       <ScrollView contentContainerStyle={styles.container}>

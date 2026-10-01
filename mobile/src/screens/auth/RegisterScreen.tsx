@@ -29,10 +29,20 @@ import {
   Sparkles,
 } from 'lucide-react-native';
 import { useAuth, RegisterData } from '../../contexts/AuthContext';
+import { api } from '../../config/api';
 import { colors } from '../../theme/colors';
 
 interface RegisterScreenProps {
   onLoginPress: () => void;
+}
+
+function maskCnpj(value: string) {
+  const digits = value.replace(/\D/g, '').slice(0, 14);
+  if (digits.length <= 2) return digits;
+  if (digits.length <= 5) return `${digits.slice(0, 2)}.${digits.slice(2)}`;
+  if (digits.length <= 8) return `${digits.slice(0, 2)}.${digits.slice(2, 5)}.${digits.slice(5)}`;
+  if (digits.length <= 12) return `${digits.slice(0, 2)}.${digits.slice(2, 5)}.${digits.slice(5, 8)}/${digits.slice(8)}`;
+  return `${digits.slice(0, 2)}.${digits.slice(2, 5)}.${digits.slice(5, 8)}/${digits.slice(8, 12)}-${digits.slice(12)}`;
 }
 
 export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onLoginPress }) => {
@@ -52,6 +62,8 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onLoginPress }) 
   // Campos Empresa
   const [orgName, setOrgName] = useState('');
   const [orgDocument, setOrgDocument] = useState('');
+  const [whatsappCode, setWhatsappCode] = useState('');
+  const [codeSent, setCodeSent] = useState(false);
 
   const handleNextFromStep1 = () => {
     if (!adminName.trim()) {
@@ -70,6 +82,10 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onLoginPress }) 
       Alert.alert('Atenção', 'As senhas não coincidem.');
       return;
     }
+    if (adminPhone.replace(/\D/g, '').length < 10) {
+      Alert.alert('Atenção', 'Informe o WhatsApp com DDD. Ele recebe o código de confirmação.');
+      return;
+    }
     setStep(2);
   };
 
@@ -78,19 +94,44 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onLoginPress }) 
       Alert.alert('Atenção', 'Informe o nome do condomínio ou empresa.');
       return;
     }
+    if (orgDocument.replace(/\D/g, '').length !== 14) {
+      Alert.alert('Atenção', 'Informe o CNPJ da empresa com 14 dígitos.');
+      return;
+    }
     setStep(3);
   };
 
+  const sendWhatsappCode = async () => {
+    try {
+      setIsLoading(true);
+      await api.post('/auth/register/whatsapp-code', {
+        email: adminEmail.trim(),
+        phone: adminPhone.trim(),
+      });
+      setCodeSent(true);
+      Alert.alert('Código enviado', 'Olhe o WhatsApp informado e digite o código de 8 caracteres.');
+    } catch (err: any) {
+      Alert.alert('Não foi possível enviar', err.response?.data?.error?.message || 'O WhatsApp da plataforma precisa estar conectado.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handleFinalRegister = async () => {
+    if (whatsappCode.trim().length !== 8) {
+      Alert.alert('Atenção', 'Digite o código de 8 caracteres recebido no WhatsApp.');
+      return;
+    }
     setIsLoading(true);
     try {
       const data: RegisterData = {
         organizationName: orgName.trim(),
-        organizationDocument: orgDocument.trim() || undefined,
+        organizationDocument: orgDocument.trim(),
         adminName: adminName.trim(),
         adminEmail: adminEmail.trim(),
         adminPassword,
-        adminPhone: adminPhone.trim() || undefined,
+        adminPhone: adminPhone.trim(),
+        verificationCode: whatsappCode.trim(),
       };
       await register(data);
     } catch (err: any) {
@@ -108,15 +149,10 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onLoginPress }) 
       <View style={styles.topRightWave} />
 
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={{ flex: 1 }}
       >
-        <ScrollView
-          contentContainerStyle={styles.scrollContent}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
-        >
-          {/* Header Superior: Botão Voltar */}
+        <View style={styles.header}>
           <View style={styles.topBar}>
             <TouchableOpacity
               onPress={() => {
@@ -131,20 +167,16 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onLoginPress }) 
             </TouchableOpacity>
           </View>
 
-          {/* Logo / Badge Central Oficial */}
-          <View style={styles.logoBadgeContainer}>
+          <View style={styles.titleRow}>
             <View style={styles.logoBadge}>
-              <ShieldCheck size={38} color="#FFFFFF" strokeWidth={2.2} />
+              <ShieldCheck size={22} color="#FFFFFF" strokeWidth={2.2} />
             </View>
+            <Text style={styles.title}>Criar sua conta</Text>
+            <Text style={styles.subtitle}>
+              {step === 1 ? 'Seus dados de acesso' : step === 2 ? 'Dados da empresa' : 'Confira e conclua'}
+            </Text>
           </View>
 
-          {/* Títulos */}
-          <Text style={styles.title}>Criar sua conta</Text>
-          <Text style={styles.subtitle}>
-            Preencha os dados abaixo para começar a usar o sistema.
-          </Text>
-
-          {/* Stepper com 3 Passos */}
           <View style={styles.stepperContainer}>
             {/* Passo 1: Dados Pessoais */}
             <View style={styles.stepItem}>
@@ -182,7 +214,14 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onLoginPress }) 
               </Text>
             </View>
           </View>
+        </View>
 
+        <ScrollView
+          style={styles.formScroll}
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
           {/* CONTEÚDO DE CADA PASSO */}
 
           {/* PASSO 1: DADOS PESSOAIS */}
@@ -225,7 +264,7 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onLoginPress }) 
               <View style={styles.inputBox}>
                 <Phone size={18} color="#64748B" style={styles.inputIcon} />
                 <View style={styles.inputContent}>
-                  <Text style={styles.fieldLabel}>Telefone / WhatsApp</Text>
+                  <Text style={styles.fieldLabel}>WhatsApp</Text>
                   <TextInput
                     style={styles.textInput}
                     placeholder="(00) 00000-0000"
@@ -281,23 +320,6 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onLoginPress }) 
                 </TouchableOpacity>
               </View>
 
-              {/* Card de Aviso / Segurança */}
-              <View style={styles.securityAlertCard}>
-                <ShieldCheck size={20} color="#165337" style={{ marginRight: 10 }} />
-                <Text style={styles.securityAlertText}>
-                  Sua conta será aprovada pela administração do condomínio.
-                </Text>
-              </View>
-
-              {/* Botão Continuar */}
-              <TouchableOpacity
-                style={styles.primaryBtn}
-                onPress={handleNextFromStep1}
-                activeOpacity={0.88}
-              >
-                <Text style={styles.primaryBtnText}>Continuar</Text>
-                <ArrowRight size={18} color="#FFFFFF" style={{ marginLeft: 8 }} />
-              </TouchableOpacity>
             </View>
           )}
 
@@ -324,13 +346,13 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onLoginPress }) 
               <View style={styles.inputBox}>
                 <FileText size={18} color="#64748B" style={styles.inputIcon} />
                 <View style={styles.inputContent}>
-                  <Text style={styles.fieldLabel}>CNPJ (opcional)</Text>
+                  <Text style={styles.fieldLabel}>CNPJ</Text>
                   <TextInput
                     style={styles.textInput}
                     placeholder="00.000.000/0001-00"
                     placeholderTextColor="#94A3B8"
                     value={orgDocument}
-                    onChangeText={setOrgDocument}
+                    onChangeText={(value) => setOrgDocument(maskCnpj(value))}
                     keyboardType="numeric"
                   />
                 </View>
@@ -344,22 +366,6 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onLoginPress }) 
                 </Text>
               </View>
 
-              {/* Botão Continuar */}
-              <TouchableOpacity
-                style={styles.primaryBtn}
-                onPress={handleNextFromStep2}
-                activeOpacity={0.88}
-              >
-                <Text style={styles.primaryBtnText}>Continuar</Text>
-                <ArrowRight size={18} color="#FFFFFF" style={{ marginLeft: 8 }} />
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.secondaryBackBtn}
-                onPress={() => setStep(1)}
-              >
-                <Text style={styles.secondaryBackBtnText}>← Voltar aos dados pessoais</Text>
-              </TouchableOpacity>
             </View>
           )}
 
@@ -397,41 +403,59 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onLoginPress }) 
                 </View>
               </View>
 
-              {/* Botão Finalizar */}
-              <TouchableOpacity
-                style={[styles.primaryBtn, isLoading && { opacity: 0.7 }]}
-                onPress={handleFinalRegister}
-                disabled={isLoading}
-                activeOpacity={0.88}
-              >
-                {isLoading ? (
-                  <ActivityIndicator color="#FFFFFF" />
-                ) : (
-                  <>
-                    <Text style={styles.primaryBtnText}>Finalizar e Criar Conta</Text>
-                    <CheckCircle2 size={18} color="#FFFFFF" style={{ marginLeft: 8 }} />
-                  </>
-                )}
+              <TouchableOpacity style={styles.primaryBtn} onPress={sendWhatsappCode} disabled={isLoading} activeOpacity={0.88}>
+                <Text style={styles.primaryBtnText}>{codeSent ? 'Reenviar código' : 'Enviar código no WhatsApp'}</Text>
               </TouchableOpacity>
 
-              <TouchableOpacity
-                style={styles.secondaryBackBtn}
-                onPress={() => setStep(2)}
-                disabled={isLoading}
-              >
-                <Text style={styles.secondaryBackBtnText}>← Voltar</Text>
-              </TouchableOpacity>
+              <View style={[styles.inputBox, { marginTop: 12 }]}>
+                <FileText size={18} color="#64748B" style={styles.inputIcon} />
+                <View style={styles.inputContent}>
+                  <Text style={styles.fieldLabel}>Código do WhatsApp</Text>
+                  <TextInput
+                    style={styles.textInput}
+                    placeholder="8 caracteres"
+                    placeholderTextColor="#94A3B8"
+                    value={whatsappCode}
+                    onChangeText={(value) => setWhatsappCode(value.replace(/[^a-zA-Z0-9]/g, '').slice(0, 8).toUpperCase())}
+                    autoCapitalize="characters"
+                    autoCorrect={false}
+                  />
+                </View>
+              </View>
             </View>
           )}
+        </ScrollView>
 
-          {/* Link para Fazer Login */}
+        <View style={styles.footer}>
+          <TouchableOpacity
+            style={[styles.primaryBtn, isLoading && { opacity: 0.7 }]}
+            onPress={step === 1 ? handleNextFromStep1 : step === 2 ? handleNextFromStep2 : handleFinalRegister}
+            disabled={isLoading}
+            activeOpacity={0.88}
+          >
+            {isLoading ? (
+              <ActivityIndicator color="#FFFFFF" />
+            ) : (
+              <>
+                <Text style={styles.primaryBtnText}>
+                  {step === 3 ? 'Finalizar e criar conta' : 'Continuar'}
+                </Text>
+                {step === 3 ? (
+                  <CheckCircle2 size={18} color="#FFFFFF" style={{ marginLeft: 8 }} />
+                ) : (
+                  <ArrowRight size={18} color="#FFFFFF" style={{ marginLeft: 8 }} />
+                )}
+              </>
+            )}
+          </TouchableOpacity>
+
           <View style={styles.footerLinkRow}>
             <Text style={styles.footerText}>Já tem uma conta? </Text>
-            <TouchableOpacity onPress={onLoginPress}>
+            <TouchableOpacity onPress={onLoginPress} disabled={isLoading}>
               <Text style={styles.loginLinkHighlight}>Fazer login</Text>
             </TouchableOpacity>
           </View>
-        </ScrollView>
+        </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -451,14 +475,21 @@ const styles = StyleSheet.create({
     borderRadius: 100,
     backgroundColor: 'rgba(180, 222, 196, 0.25)',
   },
+  header: {
+    paddingHorizontal: 24,
+  },
+  formScroll: {
+    flex: 1,
+  },
   scrollContent: {
     flexGrow: 1,
     paddingHorizontal: 24,
-    paddingBottom: 40,
+    paddingTop: 4,
+    paddingBottom: 12,
   },
   topBar: {
-    marginTop: 8,
-    marginBottom: 8,
+    marginTop: 4,
+    marginBottom: 4,
   },
   backButton: {
     width: 40,
@@ -470,43 +501,40 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#E2E8F0',
   },
-  logoBadgeContainer: {
+  titleRow: {
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 14,
   },
   logoBadge: {
-    width: 72,
-    height: 72,
-    borderRadius: 22,
+    width: 44,
+    height: 44,
+    borderRadius: 14,
     backgroundColor: '#165337',
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#165337',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.25,
-    shadowRadius: 10,
-    elevation: 6,
+    marginBottom: 10,
   },
   title: {
-    fontSize: 24,
+    fontSize: 22,
+    lineHeight: 26,
     fontWeight: '800',
     color: '#0F172A',
     textAlign: 'center',
-    marginBottom: 6,
+    includeFontPadding: false,
   },
   subtitle: {
-    fontSize: 14,
+    fontSize: 13,
+    lineHeight: 18,
     color: '#64748B',
     textAlign: 'center',
-    paddingHorizontal: 20,
-    marginBottom: 26,
-    lineHeight: 20,
+    marginTop: 2,
+    includeFontPadding: false,
   },
   stepperContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 28,
+    marginBottom: 8,
   },
   stepItem: {
     alignItems: 'center',
@@ -624,15 +652,16 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '700',
   },
-  secondaryBackBtn: {
-    alignItems: 'center',
-    paddingVertical: 12,
-    marginTop: 6,
+  footer: {
+    paddingHorizontal: 24,
+    paddingTop: 8,
+    paddingBottom: 4,
   },
-  secondaryBackBtnText: {
-    fontSize: 13,
-    color: '#64748B',
-    fontWeight: '600',
+  footerLinkRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 12,
   },
   summaryCard: {
     backgroundColor: '#FFFFFF',
@@ -668,12 +697,6 @@ const styles = StyleSheet.create({
     color: '#0F172A',
     maxWidth: '60%',
     textAlign: 'right',
-  },
-  footerLinkRow: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginTop: 24,
   },
   footerText: {
     fontSize: 14,

@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { api, setOnUnauthorizedCallback, setMemoryToken } from '../config/api';
 import { registerForPushNotificationsAsync } from '../services/notifications.service';
+import { clearSessionSecrets, getSessionValue, setSessionValue } from '../services/secure-session';
 import { setPhotoAccessToken } from '../utils/photo';
 
 export interface Subscription {
@@ -20,7 +21,9 @@ export interface User {
   organizationId: string;
   organizationName: string;
   clientId?: string | null;
-  resident?: { id: string; name: string; units: Array<{ id: string; name: string; block?: string | null; isPrimary?: boolean }> } | null;
+    mustCompleteProfile?: boolean;
+    whatsappVerified?: boolean;
+    resident?: { id: string; name: string; units: Array<{ id: string; name: string; block?: string | null; isPrimary?: boolean }> } | null;
   subscription?: Subscription | null;
 }
 
@@ -32,16 +35,18 @@ interface AuthContextData {
   signIn: (email: string, password: string, remember?: boolean) => Promise<void>;
   signOut: () => Promise<void>;
   register: (data: RegisterData) => Promise<void>;
-  refreshSubscription: () => Promise<void>;
+  refreshSubscription: () => Promise<any>;
+  patchUser: (partial: Partial<User>) => Promise<void>;
 }
 
 export interface RegisterData {
   organizationName: string;
-  organizationDocument?: string;
+  organizationDocument: string;
   adminName: string;
   adminEmail: string;
   adminPassword: string;
-  adminPhone?: string;
+  adminPhone: string;
+  verificationCode: string;
 }
 
 const AuthContext = createContext<AuthContextData>({} as AuthContextData);
@@ -68,12 +73,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           return;
         }
 
-        const storedToken =
-          (await AsyncStorage.getItem('@brisoft_portaria:token')) ||
-          (await AsyncStorage.getItem('@combate_portaria:token'));
-        const storedUser =
-          (await AsyncStorage.getItem('@brisoft_portaria:user')) ||
-          (await AsyncStorage.getItem('@combate_portaria:user'));
+        const storedToken = await getSessionValue('token');
+        const storedUser = await getSessionValue('user');
 
         if (storedToken && storedUser) {
           setMemoryToken(storedToken);
@@ -111,17 +112,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (remember) {
         await AsyncStorage.setItem('@brisoft_portaria:remember', '1');
         await AsyncStorage.setItem('@brisoft_portaria:rememberedEmail', email.trim());
-        await AsyncStorage.setItem('@brisoft_portaria:token', authToken);
-        await AsyncStorage.setItem('@brisoft_portaria:refreshToken', refreshToken);
-        await AsyncStorage.setItem('@brisoft_portaria:user', JSON.stringify(loggedUser));
+        await setSessionValue('token', authToken);
+        await setSessionValue('refreshToken', refreshToken);
+        await setSessionValue('user', JSON.stringify(loggedUser));
       } else {
         await AsyncStorage.setItem('@brisoft_portaria:remember', '0');
         await AsyncStorage.removeItem('@brisoft_portaria:rememberedEmail');
-        await AsyncStorage.removeItem('@brisoft_portaria:token');
-        await AsyncStorage.removeItem('@brisoft_portaria:refreshToken');
-        await AsyncStorage.removeItem('@brisoft_portaria:user');
-        await AsyncStorage.removeItem('@combate_portaria:token');
-        await AsyncStorage.removeItem('@combate_portaria:user');
+        await clearSessionSecrets();
       }
 
       setTimeout(() => {
@@ -150,8 +147,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setUser(loggedUser);
       setToken(authToken);
 
-      await AsyncStorage.setItem('@combate_portaria:token', authToken);
-      await AsyncStorage.setItem('@combate_portaria:user', JSON.stringify(loggedUser));
+      await setSessionValue('token', authToken);
+      await setSessionValue('user', JSON.stringify(loggedUser));
     } catch (err: any) {
       const errorMsg =
         err.response?.data?.error?.message ||
@@ -185,22 +182,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const remember = await AsyncStorage.getItem('@brisoft_portaria:remember');
       if (remember !== '0') {
         const stored = JSON.stringify(nextUser);
-        await AsyncStorage.setItem('@brisoft_portaria:user', stored);
-        await AsyncStorage.setItem('@combate_portaria:user', stored);
+        await setSessionValue('user', stored);
       }
     }
 
     return nextUser?.subscription ?? null;
   };
 
+  const patchUser = async (partial: Partial<User>) => {
+    let next: User | null = null;
+    setUser((current) => {
+      if (!current) return current;
+      next = { ...current, ...partial };
+      return next;
+    });
+    if (next) await setSessionValue('user', JSON.stringify(next));
+  };
+
   const signOut = async () => {
     try {
-      await AsyncStorage.removeItem('@brisoft_portaria:token');
-      await AsyncStorage.removeItem('@brisoft_portaria:refreshToken');
-      await AsyncStorage.removeItem('@brisoft_portaria:user');
-      await AsyncStorage.removeItem('@combate_portaria:token');
-      await AsyncStorage.removeItem('@combate_portaria:refreshToken');
-      await AsyncStorage.removeItem('@combate_portaria:user');
+      await clearSessionSecrets();
     } finally {
       setMemoryToken(null);
       setUser(null);
@@ -211,7 +212,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   setPhotoAccessToken(token);
 
   return (
-    <AuthContext.Provider value={{ user, token, isLoading, isSubscriptionBlocked, signIn, signOut, register, refreshSubscription }}>
+    <AuthContext.Provider value={{ user, token, isLoading, isSubscriptionBlocked, signIn, signOut, register, refreshSubscription, patchUser }}>
       {children}
     </AuthContext.Provider>
   );

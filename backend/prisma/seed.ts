@@ -119,10 +119,7 @@ async function main() {
     },
   });
 
-  console.log(`👤 Usuários criados:
-    - Admin: admin@example.com (admin123456)
-    - Supervisor: supervisor@example.com (supervisor123456)
-    - Porteiro: porteiro@example.com (porteiro123456)`);
+  console.log(`👤 Usuários de desenvolvimento criados: admin@example.com, supervisor@example.com, porteiro@example.com`);
 
   // 4. Cria Destinos (Apartamentos / Unidades)
   const dest1 = await prisma.destination.create({
