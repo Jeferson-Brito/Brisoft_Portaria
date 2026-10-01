@@ -71,8 +71,8 @@ export class AuthService {
     if (await this.whatsappAlreadyUsed(whatsappNumber)) {
       throw new AppError('Este número de WhatsApp já está cadastrado.', 409, 'PHONE_IN_USE');
     }
-    if (!verificationCode || verificationCode.trim().length !== 8) {
-      throw new AppError('Confirme o código de 8 números enviado no WhatsApp.', 400, 'CODE_REQUIRED');
+    if (!verificationCode || !/^\d{6}$/.test(verificationCode.trim())) {
+      throw new AppError('Confirme o código de 6 números enviado no WhatsApp.', 400, 'CODE_REQUIRED');
     }
     await verificationService.consume({
       email,

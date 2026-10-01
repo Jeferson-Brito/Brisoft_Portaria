@@ -16,6 +16,7 @@ import { AppHeader } from '../../components/AppHeader';
 import { useAuth } from '../../contexts/AuthContext';
 import { api } from '../../config/api';
 import { colors } from '../../theme/colors';
+import { PasswordField, PasswordStrength } from '../../components/PasswordField';
 
 interface ProfileScreenProps {
   onBack: () => void;
@@ -148,33 +149,28 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onBack }) => {
             </Text>
 
             <Text style={styles.fieldLabel}>Senha Atual (se for alterar)</Text>
-            <TextInput
-              style={styles.input}
+            <PasswordField
+              containerStyle={styles.input}
               value={currentPassword}
               onChangeText={setCurrentPassword}
               placeholder="Digite a senha atual"
-              placeholderTextColor="#94A3B8"
-              secureTextEntry
             />
 
             <Text style={styles.fieldLabel}>Nova Senha (mínimo 6 dígitos)</Text>
-            <TextInput
-              style={styles.input}
+            <PasswordField
+              containerStyle={styles.input}
               value={newPassword}
               onChangeText={setNewPassword}
               placeholder="Digite a nova senha"
-              placeholderTextColor="#94A3B8"
-              secureTextEntry
             />
+            <PasswordStrength value={newPassword} />
 
             <Text style={styles.fieldLabel}>Confirmar Nova Senha</Text>
-            <TextInput
-              style={styles.input}
+            <PasswordField
+              containerStyle={styles.input}
               value={confirmPassword}
               onChangeText={setConfirmPassword}
               placeholder="Confirme a nova senha"
-              placeholderTextColor="#94A3B8"
-              secureTextEntry
             />
           </View>
 

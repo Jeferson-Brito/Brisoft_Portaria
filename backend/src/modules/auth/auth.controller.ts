@@ -23,7 +23,7 @@ function signRefreshToken(userId: string, organizationId: string) {
 
 const resetPasswordBodySchema = z.object({
   email: z.string().email('E-mail em formato inválido'),
-  code: z.string().regex(/^\d{8}$/, 'Informe o código de 8 números.'),
+  code: z.string().regex(/^\d{6}$/, 'Informe o código de 6 números.'),
   newPassword: z.string().min(8, 'A nova senha deve ter no mínimo 8 caracteres'),
 });
 
@@ -40,7 +40,7 @@ const registerBodySchema = z.object({
   adminEmail: z.string().email('E-mail em formato inválido'),
   adminPassword: z.string().min(8, 'A senha deve ter no mínimo 8 caracteres'),
   adminPhone: z.string().min(10, 'Informe o WhatsApp com DDD.'),
-  verificationCode: z.string().regex(/^\d{8}$/, 'Informe o código de 8 números enviado no WhatsApp.'),
+  verificationCode: z.string().regex(/^\d{6}$/, 'Informe o código de 6 números enviado no WhatsApp.'),
 });
 
 const authService = new AuthService();
@@ -156,7 +156,7 @@ export class AuthController {
   async checkResetCode(request: FastifyRequest, reply: FastifyReply) {
     const schema = z.object({
       email: z.string().email('E-mail em formato inválido'),
-      code: z.string().regex(/^\d{8}$/, 'Informe o código de 8 números.'),
+      code: z.string().regex(/^\d{6}$/, 'Informe o código de 6 números.'),
     });
     const parsed = schema.safeParse(request.body);
     if (!parsed.success) {
@@ -208,7 +208,10 @@ export class AuthController {
 
   async sendRegisterCode(request: FastifyRequest, reply: FastifyReply) {
     const schema = z.object({
-      email: z.string().email('E-mail em formato inválido'),
+      email: z.preprocess(
+        (value) => (value == null || value === '' ? undefined : value),
+        z.string().email('E-mail em formato inválido').optional()
+      ),
       phone: z.string().min(10, 'Informe o WhatsApp com DDD.'),
     });
     const parsed = schema.safeParse(request.body);
@@ -226,7 +229,7 @@ export class AuthController {
         });
       }
       await verificationService.send({
-        email: parsed.data.email,
+        email: parsed.data.email || undefined,
         phone: parsed.data.phone,
         purpose: 'REGISTER',
       });
@@ -241,9 +244,12 @@ export class AuthController {
 
   async confirmRegisterCode(request: FastifyRequest, reply: FastifyReply) {
     const schema = z.object({
-      email: z.string().email('E-mail em formato inválido'),
+      email: z.preprocess(
+        (value) => (value == null || value === '' ? undefined : value),
+        z.string().email('E-mail em formato inválido').optional()
+      ),
       phone: z.string().min(10, 'Informe o WhatsApp com DDD.'),
-      code: z.string().regex(/^\d{8}$/, 'Informe o código de 8 números.'),
+      code: z.string().regex(/^\d{6}$/, 'Informe o código de 6 números.'),
     });
     const parsed = schema.safeParse(request.body);
     if (!parsed.success) {
@@ -254,7 +260,7 @@ export class AuthController {
     }
     try {
       await verificationService.matches({
-        email: parsed.data.email,
+        email: parsed.data.email || undefined,
         phone: parsed.data.phone,
         code: parsed.data.code,
         purpose: 'REGISTER',
@@ -334,7 +340,7 @@ export class AuthController {
   async confirmOwnWhatsappCode(request: FastifyRequest, reply: FastifyReply) {
     const schema = z.object({
       phone: z.string().min(10, 'Informe o WhatsApp com DDD.'),
-      code: z.string().regex(/^\d{8}$/, 'Informe o código de 8 números.'),
+      code: z.string().regex(/^\d{6}$/, 'Informe o código de 6 números.'),
     });
     const parsed = schema.safeParse(request.body);
     if (!parsed.success) {
@@ -358,7 +364,7 @@ export class AuthController {
     const schema = z.object({
       newPassword: z.string().min(8, 'A nova senha deve ter no mínimo 8 caracteres'),
       phone: z.string().min(10, 'Informe o WhatsApp com DDD.'),
-      code: z.string().regex(/^\d{8}$/, 'Informe o código de 8 números.'),
+      code: z.string().regex(/^\d{6}$/, 'Informe o código de 6 números.'),
     });
     const parsed = schema.safeParse(request.body);
     if (!parsed.success) {

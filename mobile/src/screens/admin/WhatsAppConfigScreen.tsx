@@ -8,7 +8,6 @@ import {
   Image,
   ActivityIndicator,
   Alert,
-  TextInput,
 } from 'react-native';
 import {
   QrCode,
@@ -16,13 +15,7 @@ import {
   Wifi,
   WifiOff,
   RefreshCw,
-  Send,
-  CircleCheck,
-  CircleX,
-  MessageSquare,
-  HelpCircle,
   Power,
-  ArrowLeft,
 } from 'lucide-react-native';
 import { colors } from '../../theme/colors';
 import { api } from '../../config/api';
@@ -36,15 +29,6 @@ interface WhatsAppStatusData {
   lastConnectedAt?: string;
 }
 
-interface PendingRequestOption {
-  id: string;
-  code: string;
-  visitorName: string;
-  clientName: string;
-  clientPhone: string;
-  destinationName: string;
-}
-
 interface WhatsAppConfigScreenProps {
   onBack?: () => void;
 }
@@ -56,11 +40,6 @@ export const WhatsAppConfigScreen: React.FC<WhatsAppConfigScreenProps> = ({ onBa
   });
   const [isLoading, setIsLoading] = useState(false);
   const [isActionLoading, setIsActionLoading] = useState(false);
-  const [pendingRequests, setPendingRequests] = useState<PendingRequestOption[]>([]);
-  const [selectedRequest, setSelectedRequest] = useState<PendingRequestOption | null>(null);
-  const [customReply, setCustomReply] = useState('');
-  const [isSimulating, setIsSimulating] = useState(false);
-  const [showSimulator, setShowSimulator] = useState(false);
 
   // Busca status do WhatsApp
   const fetchStatus = async () => {
@@ -77,32 +56,8 @@ export const WhatsAppConfigScreen: React.FC<WhatsAppConfigScreenProps> = ({ onBa
     }
   };
 
-  // Busca solicitações pendentes para o simulador
-  const fetchPendingRequests = async () => {
-    try {
-      const res = await api.get('/visit-requests/pending?limit=5');
-      if (res.data.success) {
-        const mapped = (res.data.data.items || []).map((item: any) => ({
-          id: item.id,
-          code: item.code,
-          visitorName: item.visitor.name,
-          clientName: item.client.name,
-          clientPhone: item.client.whatsappNumber,
-          destinationName: item.destination.name,
-        }));
-        setPendingRequests(mapped);
-        if (mapped.length > 0 && !selectedRequest) {
-          setSelectedRequest(mapped[0]);
-        }
-      }
-    } catch (err) {
-      console.warn('Erro ao carregar pendências para simulador:', err);
-    }
-  };
-
   useEffect(() => {
     fetchStatus();
-    fetchPendingRequests();
 
     // Polling regular se estiver aguardando QR Code ou conectando
     const interval = setInterval(() => {
@@ -151,35 +106,6 @@ export const WhatsAppConfigScreen: React.FC<WhatsAppConfigScreenProps> = ({ onBa
         },
       ]
     );
-  };
-
-  // Disparar simulação de resposta do morador
-  const handleSimulateResponse = async (textToSend: string) => {
-    if (!selectedRequest) {
-      Alert.alert('Atenção', 'Selecione uma solicitação pendente para simular');
-      return;
-    }
-
-    try {
-      setIsSimulating(true);
-      const res = await api.post('/whatsapp/simulate-incoming', {
-        fromPhone: selectedRequest.clientPhone,
-        text: textToSend,
-      });
-
-      if (res.data.success) {
-        Alert.alert(
-          'Sucesso!',
-          `Simulação executada!\nMorador: ${selectedRequest.clientName}\nResposta: "${textToSend}"`
-        );
-        setCustomReply('');
-        fetchPendingRequests();
-      }
-    } catch (err: any) {
-      Alert.alert('Erro', err.response?.data?.error?.message || 'Falha ao simular resposta');
-    } finally {
-      setIsSimulating(false);
-    }
   };
 
   const renderStatusBadge = () => {
@@ -310,128 +236,6 @@ export const WhatsAppConfigScreen: React.FC<WhatsAppConfigScreenProps> = ({ onBa
           </View>
         )}
       </View>
-
-      {/* Botão para alternar ferramentas de teste/simulador */}
-      <TouchableOpacity
-        style={{
-          marginTop: 18,
-          paddingVertical: 12,
-          alignItems: 'center',
-          justifyContent: 'center',
-          backgroundColor: colors.surfaceElevated,
-          borderRadius: 10,
-          borderWidth: 1,
-          borderColor: colors.border,
-        }}
-        onPress={() => setShowSimulator(!showSimulator)}
-        activeOpacity={0.7}
-      >
-        <Text style={{ fontSize: 13, fontWeight: '600', color: colors.textSecondary }}>
-          {showSimulator ? '▲ Ocultar Ferramentas de Teste' : '▼ Ferramentas Avançadas de Teste'}
-        </Text>
-      </TouchableOpacity>
-
-      {/* Simulador de Respostas do Morador (Opcional para testes) */}
-      {showSimulator && (
-        <View style={[styles.card, { marginTop: 12 }]}>
-          <View style={styles.cardHeader}>
-            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-              <MessageSquare size={20} color={colors.primaryLight} style={{ marginRight: 8 }} />
-              <Text style={styles.cardTitle}>Simulador de Resposta do Morador</Text>
-            </View>
-            <TouchableOpacity onPress={fetchPendingRequests} style={styles.iconButton}>
-              <RefreshCw size={18} color={colors.textSecondary} />
-            </TouchableOpacity>
-          </View>
-
-        <Text style={styles.simulatorDescription}>
-          Utilize esta ferramenta para testar o fluxo de autorização sem precisar de um WhatsApp conectado no modo local.
-        </Text>
-
-        {pendingRequests.length === 0 ? (
-          <View style={styles.emptyPendingBox}>
-            <HelpCircle size={24} color={colors.textSecondary} style={{ marginBottom: 6 }} />
-            <Text style={styles.emptyPendingText}>
-              Nenhuma solicitação pendente no momento. Registre um visitante na aba "Visão Geral" para testar a resposta do morador.
-            </Text>
-          </View>
-        ) : (
-          <>
-            <Text style={styles.inputLabel}>1. Selecione a Solicitação Pendente:</Text>
-            <View style={styles.requestOptionsContainer}>
-              {pendingRequests.map((req) => {
-                const isSelected = selectedRequest?.id === req.id;
-                return (
-                  <TouchableOpacity
-                    key={req.id}
-                    style={[
-                      styles.requestOptionCard,
-                      isSelected && styles.requestOptionCardSelected,
-                    ]}
-                    onPress={() => setSelectedRequest(req)}
-                  >
-                    <View style={styles.requestOptionHeader}>
-                      <Text style={styles.requestOptionCode}>{req.code}</Text>
-                      <Text style={styles.requestOptionDest}>{req.destinationName}</Text>
-                    </View>
-                    <Text style={styles.requestOptionVisitor}>
-                      Visitante: <Text style={{ color: colors.white }}>{req.visitorName}</Text>
-                    </Text>
-                    <Text style={styles.requestOptionClient}>
-                      Morador: {req.clientName} ({req.clientPhone})
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-
-            <Text style={[styles.inputLabel, { marginTop: 14 }]}>
-              2. Simule a Ação que o Morador Enviaria:
-            </Text>
-
-            <View style={styles.simulationButtonsRow}>
-              {/* Botão 1 - Autorizar */}
-              <TouchableOpacity
-                style={[styles.simButton, styles.simButtonAuthorize]}
-                onPress={() => handleSimulateResponse('1')}
-                disabled={isSimulating}
-              >
-                <CircleCheck size={18} color={colors.white} style={{ marginRight: 6 }} />
-                <Text style={styles.simButtonText}>Enviar "1" (Autorizar)</Text>
-              </TouchableOpacity>
-
-              {/* Botão 2 - Recusar */}
-              <TouchableOpacity
-                style={[styles.simButton, styles.simButtonDeny]}
-                onPress={() => handleSimulateResponse('2')}
-                disabled={isSimulating}
-              >
-                <CircleX size={18} color={colors.white} style={{ marginRight: 6 }} />
-                <Text style={styles.simButtonText}>Enviar "2" (Recusar)</Text>
-              </TouchableOpacity>
-            </View>
-
-            {/* Resposta personalizada */}
-            <View style={styles.customReplyContainer}>
-              <TextInput
-                style={styles.customReplyInput}
-                placeholder="Ou digite: 'SIM', 'NAO', 'Liberado'..."
-                placeholderTextColor={colors.textSecondary}
-                value={customReply}
-                onChangeText={setCustomReply}
-              />
-              <TouchableOpacity
-                style={styles.customReplyButton}
-                onPress={() => handleSimulateResponse(customReply)}
-                disabled={isSimulating || !customReply.trim()}
-              >
-                <Send size={18} color={colors.white} />
-              </TouchableOpacity>
-            </View>
-          </>
-        )}
-      </View>
-      )}
     </ScrollView>
     </View>
   );
@@ -573,115 +377,5 @@ const styles = StyleSheet.create({
     color: colors.white,
     fontWeight: '700',
     fontSize: 15,
-  },
-  simulatorDescription: {
-    fontSize: 12,
-    color: colors.textSecondary,
-    lineHeight: 18,
-    marginBottom: 14,
-  },
-  emptyPendingBox: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 20,
-    backgroundColor: colors.surfaceElevated,
-    borderRadius: 10,
-    paddingHorizontal: 16,
-  },
-  emptyPendingText: {
-    fontSize: 12,
-    color: colors.textSecondary,
-    textAlign: 'center',
-    lineHeight: 18,
-  },
-  inputLabel: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: colors.textPrimary,
-    marginBottom: 8,
-  },
-  requestOptionsContainer: {
-    gap: 8,
-    marginBottom: 8,
-  },
-  requestOptionCard: {
-    backgroundColor: colors.surfaceElevated,
-    borderRadius: 8,
-    padding: 10,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  requestOptionCardSelected: {
-    borderColor: colors.primaryLight,
-    backgroundColor: 'rgba(30, 64, 175, 0.15)',
-  },
-  requestOptionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 4,
-  },
-  requestOptionCode: {
-    fontSize: 13,
-    fontWeight: '800',
-    color: colors.primaryLight,
-  },
-  requestOptionDest: {
-    fontSize: 12,
-    color: colors.textSecondary,
-  },
-  requestOptionVisitor: {
-    fontSize: 12,
-    color: colors.textSecondary,
-  },
-  requestOptionClient: {
-    fontSize: 11,
-    color: colors.textSecondary,
-    marginTop: 2,
-  },
-  simulationButtonsRow: {
-    flexDirection: 'row',
-    gap: 10,
-    marginBottom: 12,
-  },
-  simButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 12,
-    borderRadius: 8,
-  },
-  simButtonAuthorize: {
-    backgroundColor: colors.statusAuthorized,
-  },
-  simButtonDeny: {
-    backgroundColor: colors.statusDenied,
-  },
-  simButtonText: {
-    color: colors.white,
-    fontWeight: '700',
-    fontSize: 12,
-  },
-  customReplyContainer: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  customReplyInput: {
-    flex: 1,
-    backgroundColor: colors.surfaceElevated,
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    color: colors.textPrimary,
-    fontSize: 13,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  customReplyButton: {
-    backgroundColor: colors.primary,
-    borderRadius: 8,
-    width: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
 });

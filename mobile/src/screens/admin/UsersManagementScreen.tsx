@@ -36,6 +36,7 @@ import {
 import { colors } from '../../theme/colors';
 import { api } from '../../config/api';
 import { useAuth } from '../../contexts/AuthContext';
+import { PasswordField } from '../../components/PasswordField';
 
 interface UsersManagementScreenProps {
   onBack?: () => void;
@@ -488,13 +489,12 @@ export const UsersManagementScreen: React.FC<UsersManagementScreenProps> = ({ on
 
               <View style={styles.formGroup}>
                 <Text style={styles.inputLabel}>Senha de Acesso * (Mínimo 6 caracteres)</Text>
-                <TextInput
-                  style={styles.input}
+                <PasswordField
+                  containerStyle={styles.input}
                   placeholder="Digite a senha provisória"
-                  placeholderTextColor="#94A3B8"
                   value={password}
                   onChangeText={setPassword}
-                  secureTextEntry
+                  showStrength
                 />
               </View>
 
@@ -711,13 +711,12 @@ export const UsersManagementScreen: React.FC<UsersManagementScreenProps> = ({ on
 
             <View style={styles.formGroup}>
               <Text style={styles.inputLabel}>Nova Senha * (Mínimo 6 caracteres)</Text>
-              <TextInput
-                style={styles.input}
+              <PasswordField
+                containerStyle={styles.input}
                 placeholder="Digite a nova senha"
-                placeholderTextColor="#94A3B8"
                 value={newPassword}
                 onChangeText={setNewPassword}
-                secureTextEntry
+                showStrength
                 autoFocus
               />
             </View>

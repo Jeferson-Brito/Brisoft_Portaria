@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -7,9 +7,11 @@ import {
   TextInput,
   TouchableOpacity,
   KeyboardAvoidingView,
+  Keyboard,
   Platform,
   ActivityIndicator,
   Alert,
+  Modal,
   StatusBar,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -31,6 +33,7 @@ import {
 import { useAuth, RegisterData } from '../../contexts/AuthContext';
 import { api } from '../../config/api';
 import { colors } from '../../theme/colors';
+import { PasswordStrength } from '../../components/PasswordField';
 
 interface RegisterScreenProps {
   onLoginPress: () => void;
@@ -105,6 +108,9 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onLoginPress }) 
   const [whatsappCode, setWhatsappCode] = useState('');
   const [codeSent, setCodeSent] = useState(false);
   const [phoneVerified, setPhoneVerified] = useState(false);
+  const [phoneModalOpen, setPhoneModalOpen] = useState(false);
+  const [isCodeBusy, setIsCodeBusy] = useState(false);
+  const phonePromptArmed = useRef(true);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   const clearError = (field: string) => {
@@ -117,12 +123,6 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onLoginPress }) 
   };
 
   const phoneDigits = adminPhone.replace(/\D/g, '');
-  const documentDigits = orgDocument.replace(/\D/g, '');
-  const step1Filled = Boolean(
-    adminName.trim() && adminEmail.trim() && adminPassword && adminConfirmPassword && phoneDigits.length === 11
-  );
-  const step2Filled = Boolean(orgName.trim() && documentDigits.length === (documentType === 'CPF' ? 11 : 14));
-  const canContinue = step === 1 ? step1Filled && phoneVerified : step === 2 ? step2Filled : Boolean(whatsappCode.trim());
 
   const handleNextFromStep1 = () => {
     const next: Record<string, string> = {};
@@ -165,52 +165,53 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onLoginPress }) 
     }
   };
 
+  const closePhoneModal = () => {
+    setPhoneModalOpen(false);
+  };
+
   const sendWhatsappCode = async () => {
     if (phoneDigits.length !== 11 || phoneDigits[2] !== '9') {
       setFieldErrors((current) => ({ ...current, phone: 'Informe o DDD e o número de celular com o 9.' }));
       return;
     }
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(adminEmail.trim())) {
-      setFieldErrors((current) => ({ ...current, email: 'Informe um e-mail válido antes de verificar o WhatsApp.' }));
-      return;
-    }
+    const emailReady = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(adminEmail.trim());
     try {
-      setIsLoading(true);
+      setIsCodeBusy(true);
       await api.post('/auth/register/whatsapp-code', {
-        email: adminEmail.trim(),
+        ...(emailReady ? { email: adminEmail.trim() } : {}),
         phone: adminPhone.trim(),
       });
       setCodeSent(true);
       setWhatsappCode('');
       setPhoneVerified(false);
       clearError('phone');
-      Alert.alert(
-        'Código enviado',
-        `Enviamos um código pelo WhatsApp para ${adminPhone}. Digite os 8 números no campo abaixo.`
-      );
     } catch (err: any) {
       setFieldErrors((current) => ({
         ...current,
-        phone: err.response?.data?.error?.message || 'Não foi possível enviar o código.',
+        phone: err.response?.data?.error?.message === 'Required'
+          ? 'Não foi possível enviar o código para esse número. Tente novamente.'
+          : err.response?.data?.error?.message || 'Não foi possível enviar o código.',
       }));
     } finally {
-      setIsLoading(false);
+      setIsCodeBusy(false);
     }
   };
 
   const confirmWhatsappCode = async () => {
-    if (!/^\d{8}$/.test(whatsappCode.trim())) {
-      setFieldErrors((current) => ({ ...current, code: 'Informe o código de 8 números.' }));
+    if (!/^\d{6}$/.test(whatsappCode.trim())) {
+      setFieldErrors((current) => ({ ...current, code: 'Informe o código de 6 números.' }));
       return;
     }
+    const emailReady = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(adminEmail.trim());
     try {
-      setIsLoading(true);
+      setIsCodeBusy(true);
       await api.post('/auth/register/confirm-whatsapp', {
-        email: adminEmail.trim(),
+        ...(emailReady ? { email: adminEmail.trim() } : {}),
         phone: adminPhone.trim(),
         code: whatsappCode.trim(),
       });
       setPhoneVerified(true);
+      closePhoneModal();
       clearError('code');
       clearError('phone');
     } catch (err: any) {
@@ -220,13 +221,13 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onLoginPress }) 
         code: err.response?.data?.error?.message || 'Código incorreto.',
       }));
     } finally {
-      setIsLoading(false);
+      setIsCodeBusy(false);
     }
   };
 
   const handleFinalRegister = async () => {
-    if (whatsappCode.trim().length !== 8) {
-      Alert.alert('Atenção', 'Digite o código de 8 números recebido no WhatsApp.');
+    if (!/^\d{6}$/.test(whatsappCode.trim())) {
+      Alert.alert('Atenção', 'Digite o código de 6 números recebido no WhatsApp.');
       return;
     }
     setIsLoading(true);
@@ -270,7 +271,7 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onLoginPress }) 
       <View style={styles.topRightWave} />
 
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={{ flex: 1 }}
       >
         <View style={styles.header}>
@@ -392,48 +393,27 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onLoginPress }) 
                     placeholderTextColor="#94A3B8"
                     value={adminPhone}
                     onChangeText={(value) => {
-                      setAdminPhone(maskPhone(value));
+                      const masked = maskPhone(value);
+                      const digits = masked.replace(/\D/g, '');
+                      setAdminPhone(masked);
                       setPhoneVerified(false);
                       setCodeSent(false);
                       setWhatsappCode('');
                       clearError('phone');
+                      if (digits.length < 11) {
+                        phonePromptArmed.current = true;
+                        setPhoneModalOpen(false);
+                      } else if (phonePromptArmed.current) {
+                        phonePromptArmed.current = false;
+                        setPhoneModalOpen(true);
+                      }
                     }}
                     keyboardType="phone-pad"
                   />
                 </View>
               </View>
               {fieldErrors.phone ? <Text style={styles.fieldError}>{fieldErrors.phone}</Text> : null}
-              {phoneVerified ? (
-                <Text style={styles.verifiedText}>WhatsApp confirmado</Text>
-              ) : phoneDigits.length === 11 ? (
-                <TouchableOpacity onPress={sendWhatsappCode} disabled={isLoading} style={styles.verifyLink}>
-                  <Text style={styles.verifyLinkText}>{codeSent ? 'Reenviar código' : 'Verificar número'}</Text>
-                </TouchableOpacity>
-              ) : null}
-              {codeSent && !phoneVerified ? (
-                <>
-                  <View style={[styles.inputBox, fieldErrors.code && styles.inputBoxError]}>
-                    <View style={styles.inputContent}>
-                      <Text style={styles.fieldLabel}>Código do WhatsApp</Text>
-                      <TextInput
-                        style={styles.textInput}
-                        placeholder="8 números"
-                        placeholderTextColor="#94A3B8"
-                        value={whatsappCode}
-                        onChangeText={(value) => {
-                          setWhatsappCode(value.replace(/\D/g, '').slice(0, 8));
-                          clearError('code');
-                        }}
-                        keyboardType="number-pad"
-                      />
-                    </View>
-                  </View>
-                  {fieldErrors.code ? <Text style={styles.fieldError}>{fieldErrors.code}</Text> : null}
-                  <TouchableOpacity onPress={confirmWhatsappCode} disabled={isLoading || whatsappCode.length !== 8} style={styles.verifyLink}>
-                    <Text style={styles.verifyLinkText}>Confirmar código</Text>
-                  </TouchableOpacity>
-                </>
-              ) : null}
+              {phoneVerified ? <Text style={styles.verifiedText}>WhatsApp confirmado</Text> : null}
 
               <View style={[styles.inputBox, fieldErrors.password && styles.inputBoxError]}>
                 <Lock size={18} color="#64748B" style={styles.inputIcon} />
@@ -455,6 +435,7 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onLoginPress }) 
                   {showPassword ? <EyeOff size={18} color="#64748B" /> : <Eye size={18} color="#64748B" />}
                 </TouchableOpacity>
               </View>
+              <PasswordStrength value={adminPassword} />
               {fieldErrors.password ? <Text style={styles.fieldError}>{fieldErrors.password}</Text> : null}
 
               <View style={[styles.inputBox, fieldErrors.confirmPassword && styles.inputBoxError]}>
@@ -573,6 +554,11 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onLoginPress }) 
                   <Text style={styles.summaryValue}>{orgName}</Text>
                 </View>
 
+                <View style={styles.summaryRow}>
+                  <Text style={styles.summaryLabel}>{documentType === 'CPF' ? 'CPF:' : 'CNPJ:'}</Text>
+                  <Text style={styles.summaryValue}>{orgDocument}</Text>
+                </View>
+
                 <View style={[styles.summaryRow, { borderBottomWidth: 0 }]}>
                   <Text style={styles.summaryLabel}>Período de Teste:</Text>
                   <Text style={[styles.summaryValue, { color: '#165337', fontWeight: '700' }]}>
@@ -586,9 +572,9 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onLoginPress }) 
 
         <View style={styles.footer}>
           <TouchableOpacity
-            style={[styles.primaryBtn, (!canContinue || isLoading) && styles.primaryBtnDisabled]}
+            style={[styles.primaryBtn, isLoading && styles.primaryBtnDisabled]}
             onPress={step === 1 ? handleNextFromStep1 : step === 2 ? handleNextFromStep2 : handleFinalRegister}
-            disabled={!canContinue || isLoading}
+            disabled={isLoading}
             activeOpacity={0.88}
           >
             {isLoading ? (
@@ -615,6 +601,60 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onLoginPress }) 
           </View>
         </View>
       </KeyboardAvoidingView>
+
+      <Modal visible={phoneModalOpen} transparent animationType="fade" onRequestClose={closePhoneModal} onShow={() => Keyboard.dismiss()}>
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Confirmar WhatsApp</Text>
+            <Text style={styles.modalText}>
+              {`Enviaremos um código para ${adminPhone}. Toque em Verificar para receber e digite os 6 números abaixo.`}
+            </Text>
+            <TouchableOpacity style={styles.modalPrimary} onPress={sendWhatsappCode} disabled={isCodeBusy}>
+              {isCodeBusy && !codeSent ? (
+                <ActivityIndicator color="#FFFFFF" />
+              ) : (
+                <Text style={styles.modalPrimaryText}>{codeSent ? 'Reenviar código' : 'Verificar'}</Text>
+              )}
+            </TouchableOpacity>
+            <TouchableOpacity onPress={closePhoneModal} style={styles.modalSecondary}>
+              <Text style={styles.modalSecondaryText}>Editar número</Text>
+            </TouchableOpacity>
+            {codeSent ? (
+              <>
+                <View style={[styles.inputBox, fieldErrors.code && styles.inputBoxError, { marginTop: 14 }]}>
+                  <View style={styles.inputContent}>
+                    <Text style={styles.fieldLabel}>Código do WhatsApp</Text>
+                    <TextInput
+                      style={styles.textInput}
+                      placeholder="6 números"
+                      placeholderTextColor="#94A3B8"
+                      value={whatsappCode}
+                      onChangeText={(value) => {
+                        setWhatsappCode(value.replace(/\D/g, '').slice(0, 6));
+                        clearError('code');
+                      }}
+                      keyboardType="number-pad"
+                    />
+                  </View>
+                </View>
+                {fieldErrors.code ? <Text style={styles.fieldError}>{fieldErrors.code}</Text> : null}
+                <TouchableOpacity
+                  style={[styles.modalPrimary, { marginTop: 8 }]}
+                  onPress={confirmWhatsappCode}
+                  disabled={isCodeBusy}
+                >
+                  <Text style={styles.modalPrimaryText}>Confirmar código</Text>
+                </TouchableOpacity>
+              </>
+            ) : null}
+            {fieldErrors.email ? <Text style={styles.fieldError}>{fieldErrors.email}</Text> : null}
+            {fieldErrors.phone ? <Text style={styles.fieldError}>{fieldErrors.phone}</Text> : null}
+            <TouchableOpacity onPress={closePhoneModal} style={styles.modalClose}>
+              <Text style={styles.modalCloseText}>Fechar</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -809,9 +849,64 @@ const styles = StyleSheet.create({
     color: '#165337',
   },
   primaryBtnDisabled: {
-    backgroundColor: '#94A3B8',
-    shadowOpacity: 0,
-    elevation: 0,
+    opacity: 0.7,
+  },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.45)',
+    justifyContent: 'center',
+    padding: 24,
+  },
+  modalCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    padding: 20,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#0F172A',
+    marginBottom: 8,
+  },
+  modalText: {
+    fontSize: 14,
+    lineHeight: 20,
+    color: '#475569',
+    marginBottom: 16,
+  },
+  modalPrimary: {
+    backgroundColor: '#165337',
+    minHeight: 48,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalPrimaryText: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+    fontSize: 15,
+  },
+  modalSecondary: {
+    marginTop: 10,
+    minHeight: 48,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalSecondaryText: {
+    color: '#0F172A',
+    fontWeight: '700',
+    fontSize: 15,
+  },
+  modalClose: {
+    alignItems: 'center',
+    paddingTop: 14,
+  },
+  modalCloseText: {
+    color: '#64748B',
+    fontWeight: '700',
   },
   inputIcon: {
     marginRight: 12,

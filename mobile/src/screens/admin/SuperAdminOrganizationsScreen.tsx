@@ -34,6 +34,7 @@ import {
   CreditCard,
 } from 'lucide-react-native';
 import { api } from '../../config/api';
+import { PasswordField, PasswordStrength } from '../../components/PasswordField';
 import { AppHeader } from '../../components/AppHeader';
 import { ScrollToTopButton } from '../../components/ScrollToTopButton';
 
@@ -536,14 +537,16 @@ export const SuperAdminOrganizationsScreen: React.FC<SuperAdminOrganizationsScre
               <Text style={styles.inputLabel}>Senha Provisória (Mínimo 8 dígitos) *</Text>
               <View style={styles.inputBox}>
                 <Lock size={16} color="#64748B" style={{ marginRight: 8 }} />
-                <TextInput
-                  style={styles.input}
+                <PasswordField
+                  containerStyle={{ flex: 1 }}
+                  inputStyle={styles.input}
                   placeholder="Senha forte para login inicial"
                   value={adminPassword}
                   onChangeText={setAdminPassword}
-                  secureTextEntry
+                  showStrength={false}
                 />
               </View>
+              <PasswordStrength value={adminPassword} />
 
               <Text style={styles.inputLabel}>Telefone / WhatsApp (Opcional)</Text>
               <View style={styles.inputBox}>

@@ -26,6 +26,7 @@ import {
 } from 'lucide-react-native';
 import { colors } from '../../theme/colors';
 import { useAuth } from '../../contexts/AuthContext';
+import { PasswordStrength } from '../../components/PasswordField';
 import { api } from '../../config/api';
 
 const { height } = Dimensions.get('window');
@@ -38,6 +39,7 @@ export const LoginScreen: React.FC<{ onRegisterPress?: () => void }> = ({ onRegi
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmReset, setShowConfirmReset] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -73,8 +75,8 @@ export const LoginScreen: React.FC<{ onRegisterPress?: () => void }> = ({ onRegi
   };
 
   const confirmResetCode = async () => {
-    if (resetCode.trim().length !== 8) {
-      setErrorMessage('Digite o código de 8 números recebido no WhatsApp.');
+    if (!/^\d{6}$/.test(resetCode.trim())) {
+      setErrorMessage('Digite o código de 6 números recebido no WhatsApp.');
       return;
     }
     try {
@@ -242,10 +244,10 @@ export const LoginScreen: React.FC<{ onRegisterPress?: () => void }> = ({ onRegi
               <Text style={styles.fieldLabel}>Código do WhatsApp</Text>
               <TextInput
                 style={styles.textInput}
-                placeholder="8 números"
+                placeholder="6 números"
                 placeholderTextColor="#94A3B8"
                 value={resetCode}
-                onChangeText={(value) => setResetCode(value.replace(/\D/g, '').slice(0, 8))}
+                onChangeText={(value) => setResetCode(value.replace(/\D/g, '').slice(0, 6))}
                 keyboardType="number-pad"
                 autoCorrect={false}
                 editable={!isLoading}
@@ -280,9 +282,10 @@ export const LoginScreen: React.FC<{ onRegisterPress?: () => void }> = ({ onRegi
               )}
             </TouchableOpacity>
           </View>
+          <PasswordStrength value={newPassword} />
           <View style={styles.inputBox}>
             <Lock size={18} color="#64748B" style={styles.inputIcon} />
-            <View style={styles.inputContent}>
+            <View style={[styles.inputContent, { paddingRight: 40 }]}>
               <Text style={styles.fieldLabel}>Confirmar nova senha</Text>
               <TextInput
                 style={styles.textInput}
@@ -290,10 +293,21 @@ export const LoginScreen: React.FC<{ onRegisterPress?: () => void }> = ({ onRegi
                 placeholderTextColor="#94A3B8"
                 value={confirmPassword}
                 onChangeText={setConfirmPassword}
-                secureTextEntry={!showNewPassword}
+                secureTextEntry={!showConfirmReset}
                 editable={!isLoading}
               />
             </View>
+            <TouchableOpacity
+              onPress={() => setShowConfirmReset(!showConfirmReset)}
+              style={styles.eyeBtn}
+              activeOpacity={0.7}
+            >
+              {showConfirmReset ? (
+                <EyeOff size={18} color="#64748B" />
+              ) : (
+                <Eye size={18} color="#64748B" />
+              )}
+            </TouchableOpacity>
           </View>
           </>
           ) : null}

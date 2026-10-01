@@ -15,6 +15,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Lock, Phone } from 'lucide-react-native';
 import { api } from '../../config/api';
 import { useAuth } from '../../contexts/AuthContext';
+import { PasswordField, PasswordStrength } from '../../components/PasswordField';
 
 export const CompleteProfileScreen: React.FC = () => {
   const { patchUser, signOut } = useAuth();
@@ -44,7 +45,7 @@ export const CompleteProfileScreen: React.FC = () => {
       setErrors((current) => ({ ...current, phone: '' }));
       Alert.alert(
         'Código enviado',
-        `Enviamos um código pelo WhatsApp para ${phone}. Digite os 8 números no campo abaixo.`
+        `Enviamos um código pelo WhatsApp para ${phone}. Digite os 6 números no campo abaixo.`
       );
     } catch (err: any) {
       setErrors((current) => ({
@@ -57,8 +58,8 @@ export const CompleteProfileScreen: React.FC = () => {
   };
 
   const confirmCode = async () => {
-    if (!/^\d{8}$/.test(code.trim())) {
-      setErrors((current) => ({ ...current, code: 'Informe o código de 8 números.' }));
+    if (!/^\d{6}$/.test(code.trim())) {
+      setErrors((current) => ({ ...current, code: 'Informe o código de 6 números.' }));
       return;
     }
     try {
@@ -119,11 +120,10 @@ export const CompleteProfileScreen: React.FC = () => {
           <Text style={styles.label}>Nova senha</Text>
           <View style={[styles.box, errors.password ? styles.boxError : null]}>
             <Lock size={18} color={errors.password ? '#DC2626' : '#64748B'} />
-            <TextInput
-              style={styles.input}
+            <PasswordField
+              containerStyle={{ flex: 1 }}
+              inputStyle={styles.input}
               placeholder="Mínimo de 8 caracteres"
-              placeholderTextColor="#94A3B8"
-              secureTextEntry
               value={password}
               onChangeText={(value) => {
                 setPassword(value);
@@ -131,16 +131,16 @@ export const CompleteProfileScreen: React.FC = () => {
               }}
             />
           </View>
+          <PasswordStrength value={password} />
           {errors.password ? <Text style={styles.error}>{errors.password}</Text> : null}
 
           <Text style={styles.label}>Confirmar senha</Text>
           <View style={[styles.box, errors.confirmPassword ? styles.boxError : null]}>
             <Lock size={18} color={errors.confirmPassword ? '#DC2626' : '#64748B'} />
-            <TextInput
-              style={styles.input}
+            <PasswordField
+              containerStyle={{ flex: 1 }}
+              inputStyle={styles.input}
               placeholder="Repita a nova senha"
-              placeholderTextColor="#94A3B8"
-              secureTextEntry
               value={confirmPassword}
               onChangeText={(value) => {
                 setConfirmPassword(value);
@@ -189,18 +189,18 @@ export const CompleteProfileScreen: React.FC = () => {
               <View style={[styles.box, errors.code ? styles.boxError : null]}>
                 <TextInput
                   style={styles.input}
-                  placeholder="8 números"
+                  placeholder="6 números"
                   placeholderTextColor="#94A3B8"
                   keyboardType="number-pad"
                   value={code}
                   onChangeText={(value) => {
-                    setCode(value.replace(/\D/g, '').slice(0, 8));
+                    setCode(value.replace(/\D/g, '').slice(0, 6));
                     setErrors((current) => ({ ...current, code: '' }));
                   }}
                 />
               </View>
               {errors.code ? <Text style={styles.error}>{errors.code}</Text> : null}
-              <TouchableOpacity style={styles.secondary} onPress={confirmCode} disabled={isLoading || code.length !== 8}>
+              <TouchableOpacity style={styles.secondary} onPress={confirmCode} disabled={isLoading || code.length !== 6}>
                 <Text style={styles.secondaryText}>Confirmar código</Text>
               </TouchableOpacity>
             </>

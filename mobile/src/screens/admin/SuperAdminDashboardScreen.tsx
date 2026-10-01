@@ -50,6 +50,7 @@ import {
 import { useAuth } from '../../contexts/AuthContext';
 import { api } from '../../config/api';
 import { colors } from '../../theme/colors';
+import { PasswordField } from '../../components/PasswordField';
 import { CustomConfirmModal } from '../../components/CustomConfirmModal';
 import { WhatsAppConfigScreen } from './WhatsAppConfigScreen';
 
@@ -1557,13 +1558,12 @@ export const SuperAdminDashboardScreen: React.FC = () => {
               />
 
               <Text style={styles.inputLabel}>Senha Provisória *</Text>
-              <TextInput
-                style={styles.modalInput}
+              <PasswordField
+                containerStyle={styles.modalInput}
                 placeholder="Mínimo 6 caracteres"
-                placeholderTextColor="#94A3B8"
-                secureTextEntry
                 value={orgForm.adminPassword}
                 onChangeText={(t) => setOrgForm((prev) => ({ ...prev, adminPassword: t }))}
+                showStrength
               />
 
               <Text style={styles.inputLabel}>WhatsApp / Telefone (Opcional)</Text>
@@ -1754,13 +1754,12 @@ export const SuperAdminDashboardScreen: React.FC = () => {
               />
 
               <Text style={styles.inputLabel}>Senha Inicial *</Text>
-              <TextInput
-                style={styles.modalInput}
+              <PasswordField
+                containerStyle={styles.modalInput}
                 placeholder="Mínimo 6 caracteres"
-                placeholderTextColor="#94A3B8"
-                secureTextEntry
                 value={userForm.password}
                 onChangeText={(t) => setUserForm((prev) => ({ ...prev, password: t }))}
+                showStrength
               />
 
               <Text style={styles.inputLabel}>Telefone / WhatsApp (Opcional)</Text>
@@ -1944,13 +1943,12 @@ export const SuperAdminDashboardScreen: React.FC = () => {
             </View>
 
             <Text style={styles.inputLabel}>Digite a Nova Senha *</Text>
-            <TextInput
-              style={styles.modalInput}
+            <PasswordField
+              containerStyle={styles.modalInput}
               placeholder="Mínimo 6 caracteres"
-              placeholderTextColor="#94A3B8"
-              secureTextEntry
               value={newPasswordInput}
               onChangeText={setNewPasswordInput}
+              showStrength
             />
 
             <TouchableOpacity

@@ -10,7 +10,7 @@ export type VerificationPurpose = 'REGISTER' | 'PASSWORD_RESET' | 'WHATSAPP_CONF
 
 function createCode() {
   let code = '';
-  for (let index = 0; index < 8; index += 1) {
+  for (let index = 0; index < 6; index += 1) {
     code += String(randomInt(0, 10));
   }
   return code;
@@ -25,14 +25,16 @@ function verificationMessage(purpose: VerificationPurpose, code: string) {
 }
 
 export class VerificationService {
-  async send(params: { email: string; phone: string; purpose: VerificationPurpose; userId?: string }) {
-    const email = normalizeEmail(params.email);
+  async send(params: { email?: string; phone: string; purpose: VerificationPurpose; userId?: string }) {
     const phone = formatWhatsAppNumber(params.phone);
+    const email = params.email?.trim() ? normalizeEmail(params.email) : `wa-${phone}@pending.local`;
     const code = createCode();
     const codeHash = await bcrypt.hash(code, 10);
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
 
-    await prisma.verificationCode.deleteMany({ where: { email, purpose: params.purpose } });
+    await prisma.verificationCode.deleteMany({
+      where: { purpose: params.purpose, OR: [{ phone }, { email }] },
+    });
     const record = await prisma.verificationCode.create({
       data: {
         email,
@@ -59,16 +61,19 @@ export class VerificationService {
     }
   }
 
-  async matches(params: { email: string; code: string; purpose: VerificationPurpose; phone?: string }) {
-    const email = normalizeEmail(params.email);
+  async matches(params: { email?: string; code: string; purpose: VerificationPurpose; phone?: string }) {
+    const phone = params.phone ? formatWhatsAppNumber(params.phone) : undefined;
     const record = await prisma.verificationCode.findFirst({
-      where: { email, purpose: params.purpose, expiresAt: { gt: new Date() } },
+      where:
+        params.purpose === 'REGISTER' && phone
+          ? { phone, purpose: params.purpose, expiresAt: { gt: new Date() } }
+          : { email: normalizeEmail(params.email || ''), purpose: params.purpose, expiresAt: { gt: new Date() } },
       orderBy: { createdAt: 'desc' },
     });
     if (!record) {
       throw new AppError('Código expirado ou inexistente. Peça um novo código.', 400, 'CODE_EXPIRED');
     }
-    if (params.phone && formatWhatsAppNumber(params.phone) !== record.phone) {
+    if (params.phone && params.purpose !== 'REGISTER' && formatWhatsAppNumber(params.phone) !== record.phone) {
       throw new AppError('O WhatsApp informado não é o mesmo que recebeu o código.', 400, 'PHONE_MISMATCH');
     }
     const ok = await bcrypt.compare(params.code.trim(), record.codeHash);
@@ -78,7 +83,7 @@ export class VerificationService {
     return record;
   }
 
-  async consume(params: { email: string; code: string; purpose: VerificationPurpose; phone?: string }) {
+  async consume(params: { email?: string; code: string; purpose: VerificationPurpose; phone?: string }) {
     const record = await this.matches(params);
     await prisma.verificationCode.delete({ where: { id: record.id } });
     return record;
