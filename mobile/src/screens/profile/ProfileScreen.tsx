@@ -10,16 +10,22 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
+  Modal,
 } from 'react-native';
-import { User, Phone, Mail, ShieldCheck, Check } from 'lucide-react-native';
+import { User, Phone, Mail, Check, AlertTriangle, KeyRound, X } from 'lucide-react-native';
 import { AppHeader } from '../../components/AppHeader';
 import { useAuth } from '../../contexts/AuthContext';
 import { api } from '../../config/api';
-import { colors } from '../../theme/colors';
 import { PasswordField, PasswordStrength } from '../../components/PasswordField';
 
 interface ProfileScreenProps {
-  onBack: () => void;
+  onBack?: () => void;
+  /** Quando true, não renderiza o AppHeader (útil na aba Perfil do SuperAdmin). */
+  embedded?: boolean;
+  /** Blocos exclusivos (ex.: WhatsApp da plataforma no SuperAdmin). */
+  extraSections?: React.ReactNode;
+  onLogout?: () => void;
+  logoutLabel?: string;
 }
 
 function maskPhone(raw: string) {
@@ -36,12 +42,30 @@ function displayWhatsApp(raw?: string | null) {
   return maskPhone(raw);
 }
 
-export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onBack }) => {
-  const { user, patchUser, refreshSubscription } = useAuth();
+function roleLabelFor(role?: string) {
+  switch (role) {
+    case 'ADMIN':
+      return 'Administrador';
+    case 'SUPERVISOR':
+      return 'Supervisor';
+    case 'SUPER_ADMIN':
+      return 'Superadministrador';
+    case 'CLIENT':
+      return 'Morador';
+    default:
+      return 'Porteiro';
+  }
+}
+
+export const ProfileScreen: React.FC<ProfileScreenProps> = ({
+  onBack,
+  embedded = false,
+  extraSections,
+  onLogout,
+  logoutLabel = 'Sair da conta',
+}) => {
+  const { user, patchUser, refreshSubscription, signOut } = useAuth();
   const [name, setName] = useState(user?.name || '');
-  const [currentPassword, setCurrentPassword] = useState('');
-  const [newPassword, setNewPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
@@ -53,10 +77,19 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onBack }) => {
   const [phoneError, setPhoneError] = useState('');
   const [codeError, setCodeError] = useState('');
 
+  const [passwordModalOpen, setPasswordModalOpen] = useState(false);
+  const [passwordStep, setPasswordStep] = useState<'form' | 'code'>('form');
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [passwordCode, setPasswordCode] = useState('');
+  const [isPasswordBusy, setIsPasswordBusy] = useState(false);
+
   const phoneDigits = whatsapp.replace(/\D/g, '');
   const savedDigits = (user?.whatsappNumber || user?.phone || '').replace(/\D/g, '').slice(-11);
   const numberChanged = phoneDigits !== savedDigits;
-  const needsVerification = !whatsappVerified || numberChanged;
+  const isConfirmed = whatsappVerified && !numberChanged;
+  const needsVerification = !isConfirmed;
 
   useEffect(() => {
     let active = true;
@@ -127,7 +160,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onBack }) => {
         phone: phoneDigits.length === 11 ? `55${phoneDigits}` : phoneDigits,
       });
       await refreshSubscription().catch(() => undefined);
-      Alert.alert('WhatsApp confirmado', 'Este número será usado para recuperar a senha.');
+      Alert.alert('WhatsApp confirmado', 'Número atualizado com sucesso.');
     } catch (err: any) {
       setWhatsappVerified(false);
       setCodeError(err.response?.data?.error?.message || 'Código incorreto.');
@@ -136,49 +169,100 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onBack }) => {
     }
   };
 
+  const openPasswordModal = () => {
+    if (!isConfirmed) {
+      Alert.alert('Confirme o WhatsApp', 'Confirme seu WhatsApp antes de alterar a senha.');
+      return;
+    }
+    setPasswordStep('form');
+    setCurrentPassword('');
+    setNewPassword('');
+    setConfirmPassword('');
+    setPasswordCode('');
+    setPasswordModalOpen(true);
+  };
+
+  const closePasswordModal = () => {
+    if (isPasswordBusy) return;
+    setPasswordModalOpen(false);
+    setPasswordStep('form');
+    setCurrentPassword('');
+    setNewPassword('');
+    setConfirmPassword('');
+    setPasswordCode('');
+  };
+
+  const requestPasswordChange = async () => {
+    if (!currentPassword.trim()) {
+      Alert.alert('Atenção', 'Informe a senha atual.');
+      return;
+    }
+    if (newPassword.length < 8) {
+      Alert.alert('Atenção', 'A nova senha deve ter pelo menos 8 caracteres.');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      Alert.alert('Atenção', 'A confirmação não confere com a nova senha.');
+      return;
+    }
+    try {
+      setIsPasswordBusy(true);
+      await api.post('/auth/change-password/request', {
+        currentPassword,
+        newPassword,
+      });
+      setPasswordStep('code');
+      setPasswordCode('');
+      Alert.alert('Código enviado', 'Enviamos um código de redefinição para o seu WhatsApp.');
+    } catch (err: any) {
+      Alert.alert('Erro', err.response?.data?.error?.message || 'Não foi possível enviar o código.');
+    } finally {
+      setIsPasswordBusy(false);
+    }
+  };
+
+  const confirmPasswordChange = async () => {
+    if (!/^\d{6}$/.test(passwordCode.trim())) {
+      Alert.alert('Atenção', 'Informe o código de 6 números.');
+      return;
+    }
+    try {
+      setIsPasswordBusy(true);
+      await api.post('/auth/change-password/confirm', {
+        code: passwordCode.trim(),
+        newPassword,
+      });
+      setPasswordModalOpen(false);
+      setPasswordStep('form');
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+      setPasswordCode('');
+      Alert.alert('Senha alterada', 'Sua senha foi atualizada com sucesso.');
+    } catch (err: any) {
+      Alert.alert('Erro', err.response?.data?.error?.message || 'Não foi possível alterar a senha.');
+    } finally {
+      setIsPasswordBusy(false);
+    }
+  };
+
   const handleSave = async () => {
     if (!name.trim()) {
       Alert.alert('Atenção', 'O nome não pode ficar em branco.');
       return;
     }
-
     if (needsVerification) {
-      Alert.alert(
-        'Confirme o WhatsApp',
-        'O WhatsApp é obrigatório para recuperação de senha. Envie o código, confirme o número e depois salve o perfil.'
-      );
+      Alert.alert('Confirme o WhatsApp', 'Confirme seu número de WhatsApp antes de salvar o perfil.');
       return;
-    }
-
-    if (newPassword) {
-      if (newPassword.length < 8) {
-        Alert.alert('Atenção', 'A nova senha deve ter pelo menos 8 caracteres.');
-        return;
-      }
-      if (newPassword !== confirmPassword) {
-        Alert.alert('Atenção', 'A confirmação de senha não confere com a nova senha.');
-        return;
-      }
     }
 
     try {
       setIsSaving(true);
       setSuccessMessage(null);
-
-      const payload: any = { name: name.trim() };
-      if (newPassword) {
-        payload.currentPassword = currentPassword;
-        payload.newPassword = newPassword;
-      }
-
-      const res = await api.patch('/users/me', payload);
-
+      const res = await api.patch('/users/me', { name: name.trim() });
       if (res.data?.success) {
         await patchUser({ name: name.trim() });
         setSuccessMessage('Perfil atualizado com sucesso!');
-        setCurrentPassword('');
-        setNewPassword('');
-        setConfirmPassword('');
         setTimeout(() => setSuccessMessage(null), 4000);
       }
     } catch (err: any) {
@@ -188,22 +272,16 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onBack }) => {
     }
   };
 
-  const roleLabel =
-    user?.role === 'ADMIN'
-      ? 'Administrador Geral'
-      : user?.role === 'SUPERVISOR'
-      ? 'Supervisor de Posto'
-      : user?.role === 'SUPER_ADMIN'
-      ? 'Superadministrador'
-      : 'Porteiro Operador';
+  const handleLogout = () => {
+    if (onLogout) onLogout();
+    else signOut();
+  };
 
   return (
     <View style={styles.container}>
-      <AppHeader
-        title="Meu Perfil"
-        subtitle="Gerencie seus dados, WhatsApp e senha"
-        onBack={onBack}
-      />
+      {!embedded && onBack ? (
+        <AppHeader title="Meu Perfil" subtitle="Dados, WhatsApp e senha" onBack={onBack} />
+      ) : null}
 
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -211,7 +289,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onBack }) => {
       >
         <ScrollView
           style={styles.content}
-          contentContainerStyle={styles.scrollContent}
+          contentContainerStyle={[styles.scrollContent, embedded && { paddingTop: 8 }]}
           keyboardShouldPersistTaps="handled"
         >
           <View style={styles.profileBadgeCard}>
@@ -220,13 +298,15 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onBack }) => {
             </View>
             <View style={{ marginLeft: 16, flex: 1 }}>
               <Text style={styles.profileName}>{user?.name || 'Operador'}</Text>
-              <View style={styles.roleTag}>
-                <ShieldCheck size={13} color="#2563EB" style={{ marginRight: 4 }} />
-                <Text style={styles.roleTagText}>{roleLabel}</Text>
-              </View>
+              <Text style={styles.roleText}>{roleLabelFor(user?.role)}</Text>
               <Text style={styles.profileOrg}>{user?.organizationName || 'Brisoft Portaria'}</Text>
             </View>
           </View>
+
+          <TouchableOpacity style={styles.changePasswordTopBtn} onPress={openPasswordModal} activeOpacity={0.85}>
+            <KeyRound size={18} color="#165337" style={{ marginRight: 8 }} />
+            <Text style={styles.changePasswordTopBtnText}>Alterar senha</Text>
+          </TouchableOpacity>
 
           {successMessage ? (
             <View style={styles.successBanner}>
@@ -236,9 +316,9 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onBack }) => {
           ) : null}
 
           <View style={styles.sectionCard}>
-            <Text style={styles.sectionTitle}>Dados Pessoais</Text>
+            <Text style={styles.sectionTitle}>Dados pessoais</Text>
 
-            <Text style={styles.fieldLabel}>Nome Completo</Text>
+            <Text style={styles.fieldLabel}>Nome completo</Text>
             <TextInput
               style={styles.input}
               value={name}
@@ -247,35 +327,21 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onBack }) => {
               placeholderTextColor="#94A3B8"
             />
 
-            <Text style={styles.fieldLabel}>E-mail de Login</Text>
+            <Text style={styles.fieldLabel}>E-mail de login</Text>
             <View style={styles.disabledInputBox}>
               <Mail size={16} color="#94A3B8" style={{ marginRight: 8 }} />
               <Text style={styles.disabledInputText}>{user?.email || 'email@exemplo.com'}</Text>
             </View>
-            <Text style={styles.helperText}>O e-mail de acesso é fixo e definido pela administração.</Text>
           </View>
 
           <View style={styles.sectionCard}>
-            <Text style={styles.sectionTitle}>WhatsApp de recuperação</Text>
+            <Text style={styles.sectionTitle}>WhatsApp</Text>
             <Text style={styles.sectionDesc}>
-              Este número recebe o código quando você esquecer a senha. Ele é obrigatório e precisa estar confirmado.
+              Usado para avisos, contato da plataforma, recuperação de senha e confirmações importantes.
             </Text>
 
-            <View
-              style={[
-                styles.statusBox,
-                whatsappVerified && !numberChanged ? styles.statusOk : styles.statusWarn,
-              ]}
-            >
-              <Text style={styles.statusText}>
-                {whatsappVerified && !numberChanged
-                  ? 'WhatsApp confirmado e pronto para recuperação de senha'
-                  : 'Confirme o WhatsApp para poder recuperar a senha'}
-              </Text>
-            </View>
-
-            <Text style={styles.fieldLabel}>Número do WhatsApp</Text>
-            <View style={styles.phoneRow}>
+            <Text style={styles.fieldLabel}>Número</Text>
+            <View style={[styles.phoneRow, !isConfirmed && styles.phoneRowWarn]}>
               <Phone size={16} color="#64748B" style={{ marginRight: 8 }} />
               <TextInput
                 style={styles.phoneInput}
@@ -285,6 +351,13 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onBack }) => {
                 placeholderTextColor="#94A3B8"
                 keyboardType="phone-pad"
               />
+              <View style={styles.statusIconWrap}>
+                {isConfirmed ? (
+                  <Check size={18} color="#16A34A" strokeWidth={2.8} />
+                ) : (
+                  <AlertTriangle size={18} color="#D97706" strokeWidth={2.4} />
+                )}
+              </View>
             </View>
             {phoneError ? <Text style={styles.fieldError}>{phoneError}</Text> : null}
 
@@ -339,37 +412,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onBack }) => {
             ) : null}
           </View>
 
-          <View style={styles.sectionCard}>
-            <Text style={styles.sectionTitle}>Alterar Senha de Acesso</Text>
-            <Text style={styles.sectionDesc}>
-              Deixe os campos em branco se não desejar alterar sua senha.
-            </Text>
-
-            <Text style={styles.fieldLabel}>Senha Atual (se for alterar)</Text>
-            <PasswordField
-              containerStyle={styles.input}
-              value={currentPassword}
-              onChangeText={setCurrentPassword}
-              placeholder="Digite a senha atual"
-            />
-
-            <Text style={styles.fieldLabel}>Nova Senha (mínimo 8 caracteres)</Text>
-            <PasswordField
-              containerStyle={styles.input}
-              value={newPassword}
-              onChangeText={setNewPassword}
-              placeholder="Digite a nova senha"
-            />
-            <PasswordStrength value={newPassword} />
-
-            <Text style={styles.fieldLabel}>Confirmar Nova Senha</Text>
-            <PasswordField
-              containerStyle={styles.input}
-              value={confirmPassword}
-              onChangeText={setConfirmPassword}
-              placeholder="Confirme a nova senha"
-            />
-          </View>
+          {extraSections}
 
           <TouchableOpacity
             style={[styles.saveBtn, isSaving && { opacity: 0.7 }]}
@@ -382,12 +425,111 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onBack }) => {
             ) : (
               <>
                 <Check size={18} color="#FFFFFF" style={{ marginRight: 8 }} />
-                <Text style={styles.saveBtnText}>Salvar Alterações</Text>
+                <Text style={styles.saveBtnText}>Salvar alterações</Text>
               </>
             )}
           </TouchableOpacity>
+
+          {embedded ? (
+            <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout} activeOpacity={0.85}>
+              <Text style={styles.logoutBtnText}>{logoutLabel}</Text>
+            </TouchableOpacity>
+          ) : null}
         </ScrollView>
       </KeyboardAvoidingView>
+
+      <Modal visible={passwordModalOpen} transparent animationType="fade" onRequestClose={closePasswordModal}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={styles.modalOverlay}
+        >
+          <View style={styles.modalCard}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>
+                {passwordStep === 'form' ? 'Alterar senha' : 'Código do WhatsApp'}
+              </Text>
+              <TouchableOpacity onPress={closePasswordModal} disabled={isPasswordBusy}>
+                <X size={22} color="#64748B" />
+              </TouchableOpacity>
+            </View>
+
+            {passwordStep === 'form' ? (
+              <>
+                <Text style={styles.modalHint}>
+                  Informe a senha atual e a nova senha. Em seguida enviaremos um código no WhatsApp.
+                </Text>
+                <Text style={styles.fieldLabel}>Senha atual</Text>
+                <PasswordField
+                  containerStyle={styles.input}
+                  value={currentPassword}
+                  onChangeText={setCurrentPassword}
+                  placeholder="Senha atual"
+                />
+                <Text style={styles.fieldLabel}>Nova senha</Text>
+                <PasswordField
+                  containerStyle={styles.input}
+                  value={newPassword}
+                  onChangeText={setNewPassword}
+                  placeholder="Mínimo 8 caracteres"
+                />
+                <PasswordStrength value={newPassword} />
+                <Text style={styles.fieldLabel}>Confirmar nova senha</Text>
+                <PasswordField
+                  containerStyle={styles.input}
+                  value={confirmPassword}
+                  onChangeText={setConfirmPassword}
+                  placeholder="Repita a nova senha"
+                />
+                <TouchableOpacity
+                  style={[styles.confirmBtn, { marginTop: 16 }, isPasswordBusy && { opacity: 0.7 }]}
+                  onPress={requestPasswordChange}
+                  disabled={isPasswordBusy}
+                >
+                  {isPasswordBusy ? (
+                    <ActivityIndicator color="#FFFFFF" />
+                  ) : (
+                    <Text style={styles.confirmBtnText}>Enviar código no WhatsApp</Text>
+                  )}
+                </TouchableOpacity>
+              </>
+            ) : (
+              <>
+                <Text style={styles.modalHint}>
+                  Digite o código de 6 números enviado para o seu WhatsApp para concluir a alteração.
+                </Text>
+                <Text style={styles.fieldLabel}>Código</Text>
+                <TextInput
+                  style={styles.input}
+                  value={passwordCode}
+                  onChangeText={(value) => setPasswordCode(value.replace(/\D/g, '').slice(0, 6))}
+                  placeholder="000000"
+                  placeholderTextColor="#94A3B8"
+                  keyboardType="number-pad"
+                  maxLength={6}
+                />
+                <TouchableOpacity
+                  style={[styles.confirmBtn, { marginTop: 16 }, isPasswordBusy && { opacity: 0.7 }]}
+                  onPress={confirmPasswordChange}
+                  disabled={isPasswordBusy}
+                >
+                  {isPasswordBusy ? (
+                    <ActivityIndicator color="#FFFFFF" />
+                  ) : (
+                    <Text style={styles.confirmBtnText}>Confirmar e alterar senha</Text>
+                  )}
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.secondaryBtn}
+                  onPress={requestPasswordChange}
+                  disabled={isPasswordBusy}
+                >
+                  <Text style={styles.secondaryBtnText}>Reenviar código</Text>
+                </TouchableOpacity>
+              </>
+            )}
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </View>
   );
 };
@@ -410,7 +552,7 @@ const styles = StyleSheet.create({
     padding: 16,
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 14,
+    marginBottom: 12,
     borderWidth: 1,
     borderColor: '#E2E8F0',
   },
@@ -427,21 +569,33 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: '#0F172A',
   },
-  roleTag: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 4,
-  },
-  roleTagText: {
-    fontSize: 12,
+  roleText: {
+    marginTop: 3,
+    fontSize: 13,
     fontWeight: '700',
-    color: '#2563EB',
+    color: '#64748B',
   },
   profileOrg: {
     marginTop: 2,
     fontSize: 12,
-    color: '#64748B',
+    color: '#94A3B8',
     fontWeight: '600',
+  },
+  changePasswordTopBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.5,
+    borderColor: '#165337',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    minHeight: 46,
+    marginBottom: 14,
+  },
+  changePasswordTopBtnText: {
+    color: '#165337',
+    fontWeight: '800',
+    fontSize: 14,
   },
   successBanner: {
     backgroundColor: 'rgba(22, 163, 74, 0.1)',
@@ -474,7 +628,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#64748B',
     lineHeight: 18,
-    marginBottom: 12,
+    marginBottom: 10,
   },
   fieldLabel: {
     fontSize: 12,
@@ -508,28 +662,6 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '600',
   },
-  helperText: {
-    marginTop: 6,
-    fontSize: 12,
-    color: '#94A3B8',
-  },
-  statusBox: {
-    borderRadius: 10,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    marginBottom: 8,
-  },
-  statusOk: {
-    backgroundColor: 'rgba(22, 163, 74, 0.12)',
-  },
-  statusWarn: {
-    backgroundColor: 'rgba(245, 158, 11, 0.14)',
-  },
-  statusText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#0F172A',
-  },
   phoneRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -540,10 +672,20 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     minHeight: 48,
   },
+  phoneRowWarn: {
+    borderColor: '#F59E0B',
+  },
   phoneInput: {
     flex: 1,
     color: '#0F172A',
     fontSize: 15,
+  },
+  statusIconWrap: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   fieldError: {
     marginTop: 6,
@@ -592,5 +734,48 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontWeight: '800',
     fontSize: 15,
+  },
+  logoutBtn: {
+    marginTop: 16,
+    borderRadius: 12,
+    minHeight: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#FECACA',
+    backgroundColor: '#FEF2F2',
+  },
+  logoutBtnText: {
+    color: '#DC2626',
+    fontWeight: '800',
+    fontSize: 14,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.45)',
+    justifyContent: 'center',
+    padding: 20,
+  },
+  modalCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    padding: 18,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  modalHint: {
+    fontSize: 13,
+    color: '#64748B',
+    lineHeight: 18,
+    marginBottom: 8,
   },
 });

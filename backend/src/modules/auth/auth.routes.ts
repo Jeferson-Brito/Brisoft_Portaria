@@ -74,6 +74,18 @@ export async function authRoutes(app: FastifyInstance) {
     handler: authController.completeProfile.bind(authController),
   });
 
+  app.post('/change-password/request', {
+    preHandler: [authMiddleware],
+    config: { rateLimit: { max: 5, timeWindow: '15 minutes' } },
+    handler: authController.requestPasswordChange.bind(authController),
+  });
+
+  app.post('/change-password/confirm', {
+    preHandler: [authMiddleware],
+    config: { rateLimit: { max: 8, timeWindow: '15 minutes' } },
+    handler: authController.confirmPasswordChange.bind(authController),
+  });
+
   // Rota privada de perfil (retorna info da assinatura)
   app.get('/me', {
     preHandler: [authMiddleware],

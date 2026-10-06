@@ -400,6 +400,64 @@ export class AuthController {
     }
   }
 
+  async requestPasswordChange(request: FastifyRequest, reply: FastifyReply) {
+    const schema = z.object({
+      currentPassword: z.string().min(1, 'Informe a senha atual.'),
+      newPassword: z.string().min(8, 'A nova senha deve ter no mínimo 8 caracteres.'),
+    });
+    const parsed = schema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.status(400).send({
+        success: false,
+        error: { code: 'VALIDATION_ERROR', message: parsed.error.errors[0].message },
+      });
+    }
+    try {
+      const data = await authService.requestPasswordChange(
+        request.user.sub,
+        parsed.data.currentPassword,
+        parsed.data.newPassword
+      );
+      return reply.send({
+        success: true,
+        message: 'Código enviado para o WhatsApp confirmado.',
+        data,
+      });
+    } catch (err: any) {
+      return reply.status(err.statusCode || 500).send({
+        success: false,
+        error: { code: err.code || 'INTERNAL_ERROR', message: err.message || 'Não foi possível enviar o código.' },
+      });
+    }
+  }
+
+  async confirmPasswordChange(request: FastifyRequest, reply: FastifyReply) {
+    const schema = z.object({
+      code: z.string().regex(/^\d{6}$/, 'Informe o código de 6 números.'),
+      newPassword: z.string().min(8, 'A nova senha deve ter no mínimo 8 caracteres.'),
+    });
+    const parsed = schema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.status(400).send({
+        success: false,
+        error: { code: 'VALIDATION_ERROR', message: parsed.error.errors[0].message },
+      });
+    }
+    try {
+      await authService.confirmPasswordChange(
+        request.user.sub,
+        parsed.data.code,
+        parsed.data.newPassword
+      );
+      return reply.send({ success: true, message: 'Senha alterada com sucesso.' });
+    } catch (err: any) {
+      return reply.status(err.statusCode || 500).send({
+        success: false,
+        error: { code: err.code || 'INTERNAL_ERROR', message: err.message || 'Não foi possível alterar a senha.' },
+      });
+    }
+  }
+
   async me(request: FastifyRequest, reply: FastifyReply) {
     try {
       const userId = request.user.sub;

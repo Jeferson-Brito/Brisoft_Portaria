@@ -53,6 +53,7 @@ import { colors } from '../../theme/colors';
 import { PasswordField } from '../../components/PasswordField';
 import { CustomConfirmModal } from '../../components/CustomConfirmModal';
 import { WhatsAppConfigScreen } from '../admin/WhatsAppConfigScreen';
+import { ProfileScreen } from '../profile/ProfileScreen';
 
 type SuperAdminTab = 'overview' | 'organizations' | 'users' | 'finance' | 'profile';
 
@@ -1243,77 +1244,44 @@ export const SuperAdminDashboardScreen: React.FC = () => {
 
   // 5. ABA PERFIL DO SUPER ADMIN
   const renderProfileTab = () => (
-    <ScrollView style={styles.tabScroll} contentContainerStyle={{ paddingBottom: bottomInset + 80 }}>
-      <View style={styles.profileMasterCard}>
-        <View style={styles.masterAvatarCircle}>
-          <ShieldCheck size={40} color="#FFFFFF" />
+    <ProfileScreen
+      embedded
+      logoutLabel="Sair da Conta Mestre"
+      onLogout={signOut}
+      extraSections={
+        <View style={styles.sectionContainer}>
+          <Text style={styles.sectionHeaderTitle}>FUNÇÕES EXCLUSIVAS</Text>
+
+          <TouchableOpacity
+            style={styles.profileMenuRow}
+            onPress={() => setShowPlatformWhatsapp(true)}
+          >
+            <View style={styles.profileMenuIcon}>
+              <Wifi size={20} color="#165337" />
+            </View>
+            <View style={{ flex: 1, marginLeft: 14 }}>
+              <Text style={styles.profileMenuTitle}>WhatsApp da plataforma</Text>
+              <Text style={styles.profileMenuDesc}>Bot do sistema para códigos e notificações</Text>
+            </View>
+            <ChevronRight size={18} color="#94A3B8" />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.profileMenuRow, { marginTop: 12 }]}
+            onPress={onRefresh}
+          >
+            <View style={styles.profileMenuIcon}>
+              <RefreshCw size={20} color="#10B981" />
+            </View>
+            <View style={{ flex: 1, marginLeft: 14 }}>
+              <Text style={styles.profileMenuTitle}>Sincronizar banco de dados</Text>
+              <Text style={styles.profileMenuDesc}>Recarregar métricas em tempo real</Text>
+            </View>
+            <ChevronRight size={18} color="#94A3B8" />
+          </TouchableOpacity>
         </View>
-        <Text style={styles.masterName}>{user?.name || 'Jefferson Brito'}</Text>
-        <Text style={styles.masterEmail}>{user?.email}</Text>
-        <View style={styles.superAdminTag}>
-          <Text style={styles.superAdminTagText}>SUPER ADMINISTRADOR (DONO DO SAAS)</Text>
-        </View>
-      </View>
-
-      <View style={styles.sectionContainer}>
-        <Text style={styles.sectionHeaderTitle}>SEGURANÇA DA CONTA</Text>
-
-        <TouchableOpacity
-          style={styles.profileMenuRow}
-          onPress={() => {
-            setTargetUserForPassword(user);
-            setNewPasswordInput('');
-            setIsChangePasswordModalOpen(true);
-          }}
-        >
-          <View style={styles.profileMenuIcon}>
-            <Key size={20} color="#2563EB" />
-          </View>
-          <View style={{ flex: 1, marginLeft: 14 }}>
-            <Text style={styles.profileMenuTitle}>Alterar Minha Senha</Text>
-            <Text style={styles.profileMenuDesc}>Redefina a senha de acesso mestre do SaaS</Text>
-          </View>
-          <ChevronRight size={18} color="#94A3B8" />
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.profileMenuRow, { marginTop: 12 }]}
-          onPress={() => setShowPlatformWhatsapp(true)}
-        >
-          <View style={styles.profileMenuIcon}>
-            <Wifi size={20} color="#165337" />
-          </View>
-          <View style={{ flex: 1, marginLeft: 14 }}>
-            <Text style={styles.profileMenuTitle}>WhatsApp da plataforma</Text>
-            <Text style={styles.profileMenuDesc}>Leia o QR Code para o bot enviar os códigos</Text>
-          </View>
-          <ChevronRight size={18} color="#94A3B8" />
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.profileMenuRow, { marginTop: 12 }]}
-          onPress={onRefresh}
-        >
-          <View style={styles.profileMenuIcon}>
-            <RefreshCw size={20} color="#10B981" />
-          </View>
-          <View style={{ flex: 1, marginLeft: 14 }}>
-            <Text style={styles.profileMenuTitle}>Sincronizar Banco de Dados</Text>
-            <Text style={styles.profileMenuDesc}>Recarregar métricas em tempo real</Text>
-          </View>
-          <ChevronRight size={18} color="#94A3B8" />
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.logoutBtn, { marginTop: 24 }]}
-          onPress={signOut}
-          activeOpacity={0.85}
-        >
-          <LogOut size={20} color="#EF4444" style={{ marginRight: 8 }} />
-          <Text style={styles.logoutBtnText}>Sair da Conta Mestre</Text>
-        </TouchableOpacity>
-      </View>
-    </ScrollView>
+      }
+    />
   );
 
   if (showPlatformWhatsapp) {

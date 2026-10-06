@@ -512,6 +512,74 @@ export class AuthService {
     return this.getProfile(user.id);
   }
 
+  async requestPasswordChange(userId: string, currentPassword: string, newPassword: string) {
+    if (newPassword.length < 8) {
+      throw new AppError('A nova senha deve ter no mínimo 8 caracteres.', 400, 'INVALID_PASSWORD');
+    }
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user || user.deletedAt) {
+      throw new AppError('Usuário não encontrado.', 404, 'USER_NOT_FOUND');
+    }
+    const matches = await bcrypt.compare(currentPassword, user.passwordHash);
+    if (!matches) {
+      throw new AppError('Senha atual incorreta.', 400, 'INVALID_CREDENTIALS');
+    }
+    if (!user.whatsappNumber || !user.whatsappVerifiedAt) {
+      throw new AppError(
+        'Confirme seu WhatsApp em Meu Perfil antes de alterar a senha.',
+        400,
+        'WHATSAPP_NOT_VERIFIED'
+      );
+    }
+    await verificationService.send({
+      email: user.email,
+      phone: user.whatsappNumber,
+      purpose: 'PASSWORD_RESET',
+      userId: user.id,
+      organizationId: user.organizationId,
+    });
+    return { phone: user.whatsappNumber };
+  }
+
+  async confirmPasswordChange(userId: string, code: string, newPassword: string) {
+    if (newPassword.length < 8) {
+      throw new AppError('A nova senha deve ter no mínimo 8 caracteres.', 400, 'INVALID_PASSWORD');
+    }
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user || user.deletedAt) {
+      throw new AppError('Usuário não encontrado.', 404, 'USER_NOT_FOUND');
+    }
+    if (!user.whatsappNumber || !user.whatsappVerifiedAt) {
+      throw new AppError(
+        'Confirme seu WhatsApp em Meu Perfil antes de alterar a senha.',
+        400,
+        'WHATSAPP_NOT_VERIFIED'
+      );
+    }
+    await verificationService.consume({
+      email: user.email,
+      phone: user.whatsappNumber,
+      purpose: 'PASSWORD_RESET',
+      code,
+    });
+    const passwordHash = await bcrypt.hash(newPassword, 12);
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { passwordHash },
+    });
+    invalidateAuthCache(user.id);
+    await prisma.auditLog.create({
+      data: {
+        organizationId: user.organizationId,
+        userId: user.id,
+        action: 'PASSWORD_CHANGE',
+        entity: 'User',
+        entityId: user.id,
+        payload: JSON.stringify({ email: user.email }),
+      },
+    });
+  }
+
   async authenticate({ email, password }: LoginParams) {
     const rawEmail = email.trim().toLowerCase();
     const canonicalEmail = normalizeEmail(rawEmail);
