@@ -13,6 +13,7 @@ import {
   Modal,
 } from 'react-native';
 import { User, Phone, Mail, Check, AlertTriangle, KeyRound, X } from 'lucide-react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppHeader } from '../../components/AppHeader';
 import { useAuth } from '../../contexts/AuthContext';
 import { api } from '../../config/api';
@@ -65,6 +66,8 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   logoutLabel = 'Sair da conta',
 }) => {
   const { user, patchUser, refreshSubscription, signOut } = useAuth();
+  const insets = useSafeAreaInsets();
+  const bottomPad = (insets.bottom > 0 ? insets.bottom : Platform.OS === 'android' ? 8 : 6) + (embedded ? 88 : 96);
   const [name, setName] = useState(user?.name || '');
   const [isSaving, setIsSaving] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -289,7 +292,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
       >
         <ScrollView
           style={styles.content}
-          contentContainerStyle={[styles.scrollContent, embedded && { paddingTop: 8 }]}
+          contentContainerStyle={[styles.scrollContent, { paddingBottom: bottomPad }, embedded && { paddingTop: 8 }]}
           keyboardShouldPersistTaps="handled"
         >
           <View style={styles.profileBadgeCard}>
@@ -544,7 +547,6 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: 16,
-    paddingBottom: 40,
   },
   profileBadgeCard: {
     backgroundColor: '#FFFFFF',
