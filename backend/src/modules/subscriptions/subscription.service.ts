@@ -26,8 +26,9 @@ export async function loadGlobalPlanPrice() {
 
 export interface SubscriptionInfo {
   plan: string;
-  status: 'TRIAL' | 'ACTIVE' | 'SUSPENDED' | 'CANCELLED' | 'EXPIRED';
+  status: 'TRIAL' | 'ACTIVE' | 'LATE' | 'SUSPENDED' | 'CANCELLED' | 'EXPIRED';
   daysRemaining: number;
+  daysPastDue: number;
   trialEndsAt: string | null;
   currentPeriodEnd: string | null;
   isBlocked: boolean;
@@ -35,6 +36,12 @@ export interface SubscriptionInfo {
   paymentLink: string;
   paymentHistory: PaymentHistoryItem[];
 }
+
+/** Dias de carência após o vencimento antes da suspensão automática. */
+export const SUBSCRIPTION_GRACE_DAYS = 2;
+
+/** Dias antes do fim do trial em que enviamos lembretes (3 e 1). */
+export const TRIAL_REMINDER_DAYS = [3, 1] as const;
 
 export interface PaymentHistoryItem {
   id: string;
@@ -62,6 +69,7 @@ export class SubscriptionService {
         plan: 'ENTERPRISE',
         status: 'ACTIVE',
         daysRemaining: 9999,
+        daysPastDue: 0,
         trialEndsAt: null,
         currentPeriodEnd: null,
         isBlocked: false,
@@ -87,7 +95,9 @@ export class SubscriptionService {
     const monthlyPrice = currentPlanPrice();
     const paymentHistory = Array.isArray(settings.paymentHistory) ? settings.paymentHistory : [];
 
-    let paymentStatus: 'TRIAL' | 'ACTIVE' | 'SUSPENDED' | 'CANCELLED' | 'EXPIRED' = settings.paymentStatus;
+    let paymentStatus: 'TRIAL' | 'ACTIVE' | 'LATE' | 'SUSPENDED' | 'CANCELLED' | 'EXPIRED' =
+      settings.paymentStatus;
+    let daysPastDue = 0;
 
     // Se desativada manualmente pelo superadmin
     if (!org.isActive) {
@@ -103,8 +113,9 @@ export class SubscriptionService {
       }
     }
 
+    // PENDING legado: trata como atraso se ainda houver período de referência
     if ((settings.paymentStatus as string) === 'PENDING') {
-      paymentStatus = 'EXPIRED';
+      paymentStatus = 'LATE';
     }
 
     // Se estiver em TRIAL mas a data de término já passou
@@ -112,11 +123,27 @@ export class SubscriptionService {
       paymentStatus = 'EXPIRED';
     }
 
-    // Se estiver ACTIVE, verifica se o período contratado terminou
-    if (paymentStatus === 'ACTIVE' && settings.currentPeriodEnd) {
+    // Ciclo pago: ACTIVE → LATE (carência) → SUSPENDED (após GRACE_DAYS)
+    // Também reconcilia EXPIRED recente de clientes que já pagaram (migração da regra antiga).
+    if (
+      (paymentStatus === 'ACTIVE' ||
+        paymentStatus === 'LATE' ||
+        (paymentStatus === 'EXPIRED' &&
+          paymentHistory.some((item: PaymentHistoryItem) => item.source !== 'COMPLIMENTARY' && item.amount > 0))) &&
+      settings.currentPeriodEnd &&
+      org.isActive
+    ) {
       const periodEndTime = new Date(settings.currentPeriodEnd).getTime();
       if (now >= periodEndTime) {
-        paymentStatus = 'EXPIRED';
+        daysPastDue = Math.max(
+          0,
+          Math.floor((now - periodEndTime) / (1000 * 60 * 60 * 24))
+        );
+        if (daysPastDue >= SUBSCRIPTION_GRACE_DAYS) {
+          paymentStatus = 'SUSPENDED';
+        } else {
+          paymentStatus = 'LATE';
+        }
       }
     }
 
@@ -130,8 +157,11 @@ export class SubscriptionService {
       } else {
         daysRemaining = 30;
       }
+    } else if (paymentStatus === 'LATE') {
+      daysRemaining = Math.max(0, SUBSCRIPTION_GRACE_DAYS - daysPastDue);
     }
 
+    // LATE ainda permite uso (carência). Bloqueio em EXPIRED / SUSPENDED / CANCELLED.
     const isBlocked =
       !org.isActive ||
       paymentStatus === 'EXPIRED' ||
@@ -142,6 +172,7 @@ export class SubscriptionService {
       plan,
       status: paymentStatus,
       daysRemaining,
+      daysPastDue,
       trialEndsAt: trialEndsAt.toISOString(),
       currentPeriodEnd: settings.currentPeriodEnd || null,
       isBlocked,
@@ -243,7 +274,12 @@ export class SubscriptionService {
     }
 
     const now = new Date();
-    const currentPeriodEnd = new Date(now.getTime() + periodDays * 24 * 60 * 60 * 1000);
+    const existingPeriodEnd = settings.currentPeriodEnd ? new Date(settings.currentPeriodEnd) : null;
+    const baseDate =
+      existingPeriodEnd && !Number.isNaN(existingPeriodEnd.getTime()) && existingPeriodEnd.getTime() > now.getTime()
+        ? existingPeriodEnd
+        : now;
+    const currentPeriodEnd = new Date(baseDate.getTime() + periodDays * 24 * 60 * 60 * 1000);
     const chargedAmount = currentPlanPrice();
     const label = source === 'COMPLIMENTARY'
       ? 'Cortesia'

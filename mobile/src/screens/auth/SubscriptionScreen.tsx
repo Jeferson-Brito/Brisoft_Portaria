@@ -54,6 +54,7 @@ export const SubscriptionScreen: React.FC<{ onBack?: () => void }> = ({ onBack }
 
   const isActive = sub?.status === 'ACTIVE';
   const isTrialActive = sub?.status === 'TRIAL' && (sub?.daysRemaining ?? 0) > 0;
+  const isLate = sub?.status === 'LATE';
   const paymentDue = !isActive && !isTrialActive;
 
   const isSuspended = sub?.status === 'SUSPENDED';
@@ -63,6 +64,8 @@ export const SubscriptionScreen: React.FC<{ onBack?: () => void }> = ({ onBack }
     ? 'Plano ativo'
     : isTrialActive
     ? 'Teste grátis'
+    : isLate
+    ? 'Em atraso'
     : isSuspended
     ? 'Suspensa'
     : isCancelled
@@ -71,10 +74,16 @@ export const SubscriptionScreen: React.FC<{ onBack?: () => void }> = ({ onBack }
 
   const statusHint = isActive
     ? sub?.currentPeriodEnd
-      ? `Válido até ${formatDate(sub.currentPeriodEnd)}`
+      ? sub?.daysRemaining === 1
+        ? `Vence amanhã (${formatDate(sub.currentPeriodEnd)}). Renove para liberar mais 30 dias.`
+        : `Válido até ${formatDate(sub.currentPeriodEnd)}`
       : 'Pagamento confirmado'
     : isTrialActive
-    ? `Restam ${sub?.daysRemaining ?? 0} dias`
+    ? `Restam ${sub?.daysRemaining ?? 0} dias — antecipe o pagamento para não perder o acesso`
+    : isLate
+    ? `Venceu. Você tem ${sub?.daysRemaining ?? 0} dia(s) de carência antes da suspensão`
+    : isSuspended
+    ? 'Acesso suspenso após 2 dias sem pagamento. Regularize para reativar'
     : 'A portaria fica bloqueada para novas ações até o pagamento';
 
   const companyName = user?.organizationName || 'Sua empresa';
@@ -140,8 +149,8 @@ export const SubscriptionScreen: React.FC<{ onBack?: () => void }> = ({ onBack }
       <AppHeader title="Assinatura" subtitle={companyName} onBack={onBack} />
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         <View style={styles.statusCard}>
-          <View style={[styles.statusPill, isActive ? styles.pillActive : isTrialActive ? styles.pillTrial : styles.pillBlocked]}>
-            <Text style={[styles.statusPillText, isActive ? styles.pillTextActive : isTrialActive ? styles.pillTextTrial : styles.pillTextBlocked]}>
+          <View style={[styles.statusPill, isActive ? styles.pillActive : isTrialActive ? styles.pillTrial : isLate ? styles.pillLate : styles.pillBlocked]}>
+            <Text style={[styles.statusPillText, isActive ? styles.pillTextActive : isTrialActive ? styles.pillTextTrial : isLate ? styles.pillTextLate : styles.pillTextBlocked]}>
               {statusLabel}
             </Text>
           </View>
@@ -267,10 +276,12 @@ const styles = StyleSheet.create({
   },
   pillActive: { backgroundColor: '#DCFCE7' },
   pillTrial: { backgroundColor: '#FEF3C7' },
+  pillLate: { backgroundColor: '#FFEDD5' },
   pillBlocked: { backgroundColor: '#FEE2E2' },
   statusPillText: { fontSize: 12, fontWeight: '700' },
   pillTextActive: { color: '#166534' },
   pillTextTrial: { color: '#92400E' },
+  pillTextLate: { color: '#9A3412' },
   pillTextBlocked: { color: '#991B1B' },
   price: {
     color: '#FFFFFF',

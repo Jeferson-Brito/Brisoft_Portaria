@@ -76,6 +76,9 @@ async function bootstrap() {
     const { adminNotificationJob } = await import('./services/admin-notification.job.js');
     adminNotificationJob.start();
 
+    const { subscriptionLifecycleJob } = await import('./services/subscription-lifecycle.job.js');
+    subscriptionLifecycleJob.start();
+
     // Restaura automaticamente sessões salvas do WhatsApp Baileys (apenas em produção para evitar conflito com Render)
     if (env.NODE_ENV === 'production' || process.env.ENABLE_LOCAL_WHATSAPP === 'true') {
       await whatsappService.autoRestoreSessions();

@@ -46,6 +46,7 @@ import {
   CreditCard,
   ExternalLink,
   AlertCircle,
+  AlertTriangle,
   Sparkles,
 } from 'lucide-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -656,10 +657,16 @@ export const DashboardScreen: React.FC = () => {
                   </View>
                   <View style={{ flex: 1, marginLeft: 12 }}>
                     <Text style={styles.subscriptionBannerTitleBlocked}>
-                      Período de Teste Expirado
+                      {user?.subscription?.status === 'SUSPENDED'
+                        ? 'Assinatura suspensa'
+                        : user?.subscription?.status === 'EXPIRED'
+                          ? 'Período de teste expirado'
+                          : 'Acesso bloqueado'}
                     </Text>
                     <Text style={styles.subscriptionBannerDescBlocked}>
-                      O teste gratuito de 7 dias desta empresa foi encerrado. Todas as ações do sistema foram bloqueadas até a regularização do pagamento.
+                      {user?.subscription?.status === 'SUSPENDED'
+                        ? 'O pagamento não foi regularizado após o vencimento. O acesso permanece suspenso até a confirmação do pagamento.'
+                        : 'O teste gratuito desta empresa foi encerrado. Todas as ações do sistema foram bloqueadas até a regularização do pagamento.'}
                     </Text>
                   </View>
                 </View>
@@ -675,8 +682,73 @@ export const DashboardScreen: React.FC = () => {
               </View>
             ) : null}
 
+            {/* Assinatura em atraso (carência de 2 dias — ainda liberada) */}
+            {!isSubscriptionBlocked && user?.subscription?.status === 'LATE' ? (
+              <View style={styles.subscriptionBannerLate}>
+                <View style={styles.subscriptionBannerHeader}>
+                  <View style={[styles.subscriptionLockIcon, { backgroundColor: '#EA580C' }]}>
+                    <AlertTriangle size={18} color="#FFFFFF" strokeWidth={2.4} />
+                  </View>
+                  <View style={{ flex: 1, marginLeft: 12 }}>
+                    <Text style={styles.subscriptionBannerTitleLate}>Pagamento em atraso</Text>
+                    <Text style={styles.subscriptionBannerDescLate}>
+                      {(user.subscription.daysRemaining ?? 0) > 0
+                        ? `Sua assinatura venceu. Regularize em até ${user.subscription.daysRemaining} dia(s) para evitar a suspensão automática do acesso.`
+                        : 'Sua assinatura venceu. Regularize agora para evitar a suspensão automática do acesso.'}
+                    </Text>
+                  </View>
+                </View>
+                <TouchableOpacity
+                  style={styles.subscriptionPayBtnLate}
+                  onPress={handleOpenStripe}
+                  activeOpacity={0.88}
+                >
+                  <CreditCard size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
+                  <Text style={styles.subscriptionPayBtnText}>Regularizar pagamento</Text>
+                  <ExternalLink size={14} color="#FFFFFF" style={{ marginLeft: 6 }} />
+                </TouchableOpacity>
+              </View>
+            ) : null}
+
+            {/* Alerta de vencimento no último dia do plano ativo */}
+            {!isSubscriptionBlocked &&
+            user?.subscription?.status === 'ACTIVE' &&
+            user?.subscription?.daysRemaining === 1 ? (
+              <TouchableOpacity
+                style={styles.subscriptionBannerDue}
+                onPress={handleOpenStripe}
+                activeOpacity={0.88}
+              >
+                <AlertTriangle size={16} color="#B45309" style={{ marginRight: 8 }} />
+                <Text style={styles.subscriptionBannerDueText}>
+                  Sua assinatura vence amanhã. Renove agora para liberar mais 30 dias e evitar atraso.
+                </Text>
+                <ChevronRight size={16} color="#B45309" />
+              </TouchableOpacity>
+            ) : null}
+
+            {/* Lembrete de fim de teste (3 dias ou menos) */}
+            {!isSubscriptionBlocked &&
+            user?.subscription?.status === 'TRIAL' &&
+            (user.subscription.daysRemaining ?? 99) <= 3 &&
+            (user.subscription.daysRemaining ?? 0) > 0 ? (
+              <TouchableOpacity
+                style={styles.subscriptionBannerDue}
+                onPress={handleOpenStripe}
+                activeOpacity={0.88}
+              >
+                <Clock size={16} color="#B45309" style={{ marginRight: 8 }} />
+                <Text style={styles.subscriptionBannerDueText}>
+                  Seu teste acaba em {user.subscription.daysRemaining} dia(s). Antecipe o pagamento para não perder o acesso.
+                </Text>
+                <ChevronRight size={16} color="#B45309" />
+              </TouchableOpacity>
+            ) : null}
+
             {/* Balão Discreto e Elegante de Teste Gratuito */}
-            {!isSubscriptionBlocked && (user?.subscription?.status === 'TRIAL' || user?.subscription?.plan === 'TRIAL') ? (
+            {!isSubscriptionBlocked &&
+            user?.subscription?.status === 'TRIAL' &&
+            (user.subscription.daysRemaining ?? 0) > 3 ? (
               <TouchableOpacity
                 style={styles.trialBalloonBadge}
                 onPress={() => setIsTrialModalOpen(true)}
@@ -1989,6 +2061,52 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     padding: 14,
     marginBottom: 16,
+  },
+  subscriptionBannerLate: {
+    backgroundColor: '#FFF7ED',
+    borderColor: '#FDBA74',
+    borderWidth: 1.5,
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 16,
+  },
+  subscriptionBannerTitleLate: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#9A3412',
+  },
+  subscriptionBannerDescLate: {
+    fontSize: 12,
+    color: '#C2410C',
+    marginTop: 3,
+    lineHeight: 17,
+  },
+  subscriptionPayBtnLate: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#EA580C',
+    borderRadius: 10,
+    paddingVertical: 11,
+    marginTop: 12,
+  },
+  subscriptionBannerDue: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFBEB',
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    marginBottom: 14,
+  },
+  subscriptionBannerDueText: {
+    flex: 1,
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#92400E',
+    lineHeight: 17,
   },
   // Balão Discreto de Teste
   trialBalloonBadge: {

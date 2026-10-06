@@ -296,9 +296,11 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
                 ? 'Regularizar'
                 : isPro
                   ? 'Plano ativo'
-                  : isTrial
-                    ? `${trialDays} dias`
-                    : 'Regularizar'}
+                  : sub?.status === 'LATE'
+                    ? 'Em atraso'
+                    : isTrial
+                      ? `${trialDays} dias`
+                      : 'Regularizar'}
             </Text>
           </TouchableOpacity>
         </View>

@@ -8,10 +8,11 @@ import { clearScreenCache } from '../utils/screenCache';
 
 export interface Subscription {
   plan: 'TRIAL' | 'BASIC' | 'ENTERPRISE';
-  status: 'TRIAL' | 'ACTIVE' | 'SUSPENDED' | 'CANCELLED' | 'EXPIRED' | 'PENDING';
+  status: 'TRIAL' | 'ACTIVE' | 'LATE' | 'SUSPENDED' | 'CANCELLED' | 'EXPIRED' | 'PENDING';
   trialEndsAt: string | null;
   currentPeriodEnd?: string | null;
   daysRemaining: number | null;
+  daysPastDue?: number;
   isBlocked?: boolean;
 }
 

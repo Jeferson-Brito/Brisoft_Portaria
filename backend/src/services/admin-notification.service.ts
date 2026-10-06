@@ -8,7 +8,12 @@ export type AdminNotificationType =
   | 'NEW_ORGANIZATION'
   | 'NEW_USER'
   | 'TRIAL_ENDED'
-  | 'SUBSCRIPTION_PENDING';
+  | 'TRIAL_ENDING'
+  | 'SUBSCRIPTION_PENDING'
+  | 'SUBSCRIPTION_DUE'
+  | 'SUBSCRIPTION_LATE'
+  | 'SUBSCRIPTION_SUSPENDED'
+  | 'TRIAL_ENDED_CUSTOMER';
 
 const KEY_PHONE = 'admin_notifications_phone';
 const KEY_ENABLED = 'admin_notifications_enabled';
@@ -246,6 +251,58 @@ export class AdminNotificationService {
       relatedEntityId: params.organizationId,
       payload: params,
     });
+  }
+
+  /**
+   * Envia WhatsApp ao cliente (admin da empresa) com dedupe próprio.
+   * Usa o número WhatsApp da plataforma.
+   */
+  async dispatchCustomerWhatsApp(params: {
+    type: string;
+    dedupeKey: string;
+    phone: string;
+    message: string;
+    relatedEntity?: string;
+    relatedEntityId?: string;
+    payload?: unknown;
+  }) {
+    let logId: string | null = null;
+    try {
+      const created = await prisma.adminNotificationLog.create({
+        data: {
+          type: params.type,
+          dedupeKey: params.dedupeKey,
+          destinationPhone: params.phone,
+          status: 'PENDING',
+          relatedEntity: params.relatedEntity,
+          relatedEntityId: params.relatedEntityId,
+          messagePreview: params.message.slice(0, 500),
+          payload: params.payload ? JSON.stringify(params.payload) : null,
+        },
+        select: { id: true },
+      });
+      logId = created.id;
+    } catch (err) {
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+        return;
+      }
+      throw err;
+    }
+
+    try {
+      await whatsappService.sendPlatformMessage(params.phone, params.message);
+      await prisma.adminNotificationLog.update({
+        where: { id: logId! },
+        data: { status: 'SENT', errorMessage: null },
+      });
+    } catch (err: any) {
+      const errorMessage = err?.message || 'Falha ao enviar notificação ao cliente.';
+      console.error(`[AdminNotification] ${params.type} CUSTOMER FAILED:`, errorMessage);
+      await prisma.adminNotificationLog.update({
+        where: { id: logId! },
+        data: { status: 'FAILED', errorMessage: errorMessage.slice(0, 500) },
+      });
+    }
   }
 
   private async dispatch(params: {
