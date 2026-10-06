@@ -71,11 +71,12 @@ async function persistPaymentStatus(orgId: string, paymentStatus: 'LATE' | 'SUSP
     settings.suspendedAt = new Date().toISOString();
   }
 
+  // Suspensão por falta de pagamento NÃO desativa a organização no login —
+  // o cliente precisa conseguir autenticar, pagar e ser reativado pelo webhook.
   const updated = await prisma.organization.update({
     where: { id: orgId },
     data: {
       settings: JSON.stringify(settings),
-      ...(paymentStatus === 'SUSPENDED' ? { isActive: false } : {}),
     },
     select: { id: true, createdAt: true, settings: true, isActive: true, slug: true },
   });
@@ -288,10 +289,19 @@ export class SubscriptionLifecycleJob {
     // --- Após carência: suspensão automática ---
     if (
       subscription.status === 'SUSPENDED' &&
-      org.isActive &&
       subscription.daysPastDue >= SUBSCRIPTION_GRACE_DAYS
     ) {
-      await persistPaymentStatus(org.id, 'SUSPENDED');
+      let settings: Record<string, unknown> = {};
+      try {
+        settings = org.settings ? JSON.parse(org.settings) : {};
+      } catch {
+        settings = {};
+      }
+      // Só auto-suspende se ainda não estiver marcado como SUSPENDED no settings
+      // (evita reaviso diário quando já processado; o notify usa dedupe por dia).
+      if (settings.paymentStatus !== 'SUSPENDED') {
+        await persistPaymentStatus(org.id, 'SUSPENDED');
+      }
 
       const title = 'Acesso suspenso por falta de pagamento';
       const message =

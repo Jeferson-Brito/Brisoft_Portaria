@@ -566,9 +566,10 @@ export class SuperAdminService {
   }
 
   async suspendSubscription(orgId: string) {
-    const updated = await this.updateOrganization(orgId, {
-      isActive: false,
-      paymentStatus: 'SUSPENDED',
+    const info = await subscriptionService.suspendSubscription(orgId);
+    const org = await prisma.organization.findUnique({
+      where: { id: orgId },
+      select: { id: true, name: true },
     });
     const admin = await prisma.user.findFirst({
       where: { organizationId: orgId, deletedAt: null, role: { in: ['ADMIN', 'SUPERVISOR'] } },
@@ -578,14 +579,14 @@ export class SuperAdminService {
     adminNotificationService.notifyQuietly(() =>
       adminNotificationService.notifySubscriptionPending({
         organizationId: orgId,
-        organizationName: updated.name,
+        organizationName: org?.name || 'Empresa',
         status: 'SUSPENDED',
         reason: 'A assinatura desta empresa foi suspensa.',
         adminName: admin?.name,
         adminEmail: admin?.email,
       })
     );
-    return updated;
+    return { ...org, subscription: info };
   }
 
   // ─── Métricas do SaaS Master ────────────────────────────────

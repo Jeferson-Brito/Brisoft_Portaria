@@ -300,6 +300,8 @@ export class SubscriptionService {
     settings.currentPeriodEnd = currentPeriodEnd.toISOString();
     settings.monthlyPrice = currentPlanPrice();
     settings.paymentHistory = history.slice(0, 36);
+    delete settings.lateSince;
+    delete settings.suspendedAt;
 
     const updated = await prisma.organization.update({
       where: { id: orgId },
@@ -320,7 +322,8 @@ export class SubscriptionService {
   }
 
   /**
-   * Suspende assinatura
+   * Suspende assinatura por inadimplência.
+   * Mantém a organização ativa no login para permitir pagamento e reativação automática.
    */
   async suspendSubscription(orgId: string): Promise<SubscriptionInfo> {
     const org = await prisma.organization.findUnique({ where: { id: orgId } });
@@ -332,11 +335,11 @@ export class SubscriptionService {
     } catch (e) {}
 
     settings.paymentStatus = 'SUSPENDED';
+    settings.suspendedAt = new Date().toISOString();
 
     const updated = await prisma.organization.update({
       where: { id: orgId },
       data: {
-        isActive: false,
         settings: JSON.stringify(settings),
       },
       select: { id: true, createdAt: true, settings: true, isActive: true, slug: true },
