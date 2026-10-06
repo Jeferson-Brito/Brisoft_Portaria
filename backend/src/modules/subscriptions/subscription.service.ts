@@ -318,6 +318,13 @@ export class SubscriptionService {
     // Emite evento em tempo real para desbloquear o app imediatamente
     realtimeService.emitToOrganization(orgId, 'subscription:updated', info);
 
+    // Push + alerta no app (cobre casos em que o WebSocket estava em segundo plano)
+    void realtimeService.notifyAlert(orgId, {
+      title: 'Assinatura ativada',
+      message: 'Pagamento confirmado. O acesso da empresa foi liberado por mais 30 dias.',
+      type: 'INFO',
+    });
+
     return info;
   }
 

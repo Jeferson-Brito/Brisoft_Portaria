@@ -119,7 +119,7 @@ const matchesDateFilter = (dateString: string, filter: DateFilterType) => {
 };
 
 export const DashboardScreen: React.FC = () => {
-  const { user, signOut, isSubscriptionBlocked, refreshSubscription } = useAuth();
+  const { user, signOut, isSubscriptionBlocked, refreshSubscription, watchPaymentActivation, patchUser } = useAuth();
   const insets = useSafeAreaInsets();
   const scrollRef = useRef<ScrollView>(null);
   const [showScrollTop, setShowScrollTop] = useState(false);
@@ -148,6 +148,16 @@ export const DashboardScreen: React.FC = () => {
       } else {
         await Linking.openURL(STRIPE_PAYMENT_URL);
       }
+
+      // Enquanto o usuário paga no navegador, o WebSocket pode cair —
+      // observamos o status até o webhook liberar o acesso.
+      watchPaymentActivation(() => {
+        setIsBlockedModalOpen(false);
+        Alert.alert(
+          'Pagamento confirmado',
+          'O acesso da empresa foi liberado com sucesso!'
+        );
+      });
     } catch (err) {
       Alert.alert('Erro', 'Não foi possível abrir o navegador.');
     }
@@ -352,13 +362,19 @@ export const DashboardScreen: React.FC = () => {
     // Desbloqueio e sincronização em tempo real quando o webhook do Stripe ou SuperAdmin atualizar
     const unsubSubscription = addListener('subscription:updated', (payload: any) => {
       console.log('Realtime subscription updated:', payload);
-      refreshSubscription();
+      if (payload && typeof payload === 'object' && payload.status) {
+        void patchUser({ subscription: payload });
+      }
+      void refreshSubscription();
       fetchOrgProfile();
       fetchSummaryAndRequests();
-      Alert.alert(
-        'Assinatura Atualizada! 🎉',
-        'O acesso completo da empresa foi liberado com sucesso no sistema!'
-      );
+      if (payload?.status === 'ACTIVE' && payload?.isBlocked !== true) {
+        setIsBlockedModalOpen(false);
+        Alert.alert(
+          'Assinatura atualizada',
+          'O acesso completo da empresa foi liberado com sucesso!'
+        );
+      }
     });
 
     return () => {
@@ -369,9 +385,12 @@ export const DashboardScreen: React.FC = () => {
       unsubAlert();
       unsubSubscription();
     };
-  }, [addListener, fetchSummaryAndRequests, fetchOrgProfile, refreshSubscription]);
+  }, [addListener, fetchSummaryAndRequests, fetchOrgProfile, refreshSubscription, patchUser]);
 
-  useForegroundRefresh(() => fetchSummaryAndRequests(true), 120000);
+  useForegroundRefresh(() => {
+    fetchSummaryAndRequests(true);
+    void refreshSubscription().catch(() => undefined);
+  }, 120000);
 
   // Reset da barra de ações compactas e botão voltar ao topo na troca de aba
   useEffect(() => {

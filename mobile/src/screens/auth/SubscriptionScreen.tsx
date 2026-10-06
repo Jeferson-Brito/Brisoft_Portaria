@@ -46,7 +46,7 @@ function formatDate(value?: string | null) {
 }
 
 export const SubscriptionScreen: React.FC<{ onBack?: () => void }> = ({ onBack }) => {
-  const { user, refreshSubscription } = useAuth();
+  const { user, refreshSubscription, watchPaymentActivation, patchUser } = useAuth();
   const sub = user?.subscription;
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isOpeningPayment, setIsOpeningPayment] = useState(false);
@@ -107,6 +107,9 @@ export const SubscriptionScreen: React.FC<{ onBack?: () => void }> = ({ onBack }
       const response = await api.get('/subscriptions/payment-link');
       const url = response.data?.paymentUrl || FALLBACK_PAYMENT_LINK;
       await openExternal(url);
+      watchPaymentActivation(() => {
+        Alert.alert('Pagamento confirmado', `O plano de ${companyName} está ativo.`);
+      });
     } catch {
       const params = [];
       if (user?.organizationId) params.push(`client_reference_id=${user.organizationId}`);
@@ -114,6 +117,9 @@ export const SubscriptionScreen: React.FC<{ onBack?: () => void }> = ({ onBack }
       const url = params.length ? `${FALLBACK_PAYMENT_LINK}?${params.join('&')}` : FALLBACK_PAYMENT_LINK;
       try {
         await openExternal(url);
+        watchPaymentActivation(() => {
+          Alert.alert('Pagamento confirmado', `O plano de ${companyName} está ativo.`);
+        });
       } catch {
         Alert.alert('Erro', 'Não foi possível abrir o pagamento.');
       }
@@ -128,6 +134,9 @@ export const SubscriptionScreen: React.FC<{ onBack?: () => void }> = ({ onBack }
       const response = await api.get('/subscriptions/current');
       const info = response.data?.data;
       setHistory(Array.isArray(info?.paymentHistory) ? info.paymentHistory : []);
+      if (info) {
+        await patchUser({ subscription: info });
+      }
       await refreshSubscription();
       if (info?.status === 'ACTIVE' && info?.isBlocked !== true) {
         Alert.alert('Pagamento encontrado', `O plano de ${companyName} está ativo.`);

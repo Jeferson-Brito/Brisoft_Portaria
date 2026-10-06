@@ -1,10 +1,12 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
+import { AppState, AppStateStatus } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { api, setOnUnauthorizedCallback, setMemoryToken } from '../config/api';
 import { registerForPushNotificationsAsync } from '../services/notifications.service';
 import { clearSessionSecrets, getSessionValue, setSessionValue } from '../services/secure-session';
 import { setPhotoAccessToken } from '../utils/photo';
 import { clearScreenCache } from '../utils/screenCache';
+import { startPaymentActivationWatch } from '../utils/paymentActivationWatch';
 
 export interface Subscription {
   plan: 'TRIAL' | 'BASIC' | 'ENTERPRISE';
@@ -42,6 +44,8 @@ interface AuthContextData {
   register: (data: RegisterData) => Promise<void>;
   refreshSubscription: () => Promise<any>;
   patchUser: (partial: Partial<User>) => Promise<void>;
+  /** Após abrir o Stripe: observa o webhook e libera o acesso assim que confirmar. */
+  watchPaymentActivation: (onActivated?: () => void) => () => void;
 }
 
 export interface RegisterData {
@@ -167,6 +171,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Atualiza os dados de subscription do usuário logado
   const refreshSubscription = async () => {
+    // Preferir /subscriptions/current (fonte da verdade do billing) e complementar com /auth/me
+    let subscriptionFromBilling: Subscription | null = null;
+    try {
+      const billingRes = await api.get('/subscriptions/current');
+      subscriptionFromBilling = billingRes.data?.data || null;
+    } catch {
+      subscriptionFromBilling = null;
+    }
+
     const response = await api.get('/auth/me');
     const freshUser = response.data.data.user;
     let nextUser: User | null = null;
@@ -184,7 +197,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         whatsappVerified: freshUser.whatsappVerified ?? current?.whatsappVerified ?? false,
         phone: freshUser.phone ?? current?.phone ?? null,
         resident: freshUser.resident ?? current?.resident ?? null,
-        subscription: freshUser.subscription ?? current?.subscription ?? null,
+        subscription: subscriptionFromBilling || freshUser.subscription || current?.subscription || null,
       };
       return nextUser;
     });
@@ -210,8 +223,39 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (next) await setSessionValue('user', JSON.stringify(next));
   };
 
+  const paymentWatchStopRef = useRef<(() => void) | null>(null);
+
+  const watchPaymentActivation = (onActivated?: () => void) => {
+    paymentWatchStopRef.current?.();
+    const stop = startPaymentActivationWatch({
+      onActivated: async (subscription) => {
+        await patchUser({ subscription: subscription as Subscription });
+        await refreshSubscription();
+        onActivated?.();
+      },
+    });
+    paymentWatchStopRef.current = stop;
+    return stop;
+  };
+
+  // Ao voltar do segundo plano (ex.: após Stripe), sincroniza assinatura
+  useEffect(() => {
+    const onChange = (state: AppStateStatus) => {
+      if (state === 'active' && token) {
+        void refreshSubscription().catch(() => undefined);
+      }
+    };
+    const sub = AppState.addEventListener('change', onChange);
+    return () => {
+      sub.remove();
+      paymentWatchStopRef.current?.();
+    };
+  }, [token]);
+
   const signOut = async () => {
     try {
+      paymentWatchStopRef.current?.();
+      paymentWatchStopRef.current = null;
       await clearSessionSecrets();
     } finally {
       clearScreenCache();
@@ -224,7 +268,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   setPhotoAccessToken(token);
 
   return (
-    <AuthContext.Provider value={{ user, token, isLoading, isSubscriptionBlocked, signIn, signOut, register, refreshSubscription, patchUser }}>
+    <AuthContext.Provider
+      value={{
+        user,
+        token,
+        isLoading,
+        isSubscriptionBlocked,
+        signIn,
+        signOut,
+        register,
+        refreshSubscription,
+        patchUser,
+        watchPaymentActivation,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );

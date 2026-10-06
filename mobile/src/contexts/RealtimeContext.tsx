@@ -41,13 +41,17 @@ interface RealtimeContextData {
 const RealtimeContext = createContext<RealtimeContextData>({} as RealtimeContextData);
 
 export const RealtimeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { user, token } = useAuth();
+  const { user, token, patchUser, refreshSubscription } = useAuth();
   const [isConnected, setIsConnected] = useState(false);
   const [activeAlert, setActiveAlert] = useState<RealtimeAlert | null>(null);
   const [lastEvent, setLastEvent] = useState<{ type: string; data: any } | null>(null);
 
   const socketRef = useRef<Socket | null>(null);
   const listenersRef = useRef<Map<string, Set<(data: any) => void>>>(new Map());
+  const refreshSubscriptionRef = useRef(refreshSubscription);
+  const patchUserRef = useRef(patchUser);
+  refreshSubscriptionRef.current = refreshSubscription;
+  patchUserRef.current = patchUser;
 
   // Registrar callback para eventos em tempo real
   const addListener = useCallback((event: string, callback: (data: any) => void) => {
@@ -170,11 +174,31 @@ export const RealtimeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       notifyListeners('whatsapp:status', status);
     });
 
+    // Evento: Assinatura atualizada (Stripe / SuperAdmin) — aplica imediatamente no Auth
+    socket.on('subscription:updated', (payload: any) => {
+      setLastEvent({ type: 'subscription:updated', data: payload });
+      if (payload && typeof payload === 'object') {
+        void patchUserRef.current({ subscription: payload });
+      }
+      void refreshSubscriptionRef.current().catch(() => undefined);
+      notifyListeners('subscription:updated', payload);
+
+      triggerLocalAlertNotification(
+        'Assinatura atualizada',
+        'O acesso da empresa foi liberado com sucesso.',
+        false
+      );
+      if (Platform.OS !== 'web') {
+        Vibration.vibrate([0, 200, 100, 200]);
+      }
+    });
+
     const handledEvents = new Set([
       'visit_request:created',
       'visit_request:updated',
       'notification:alert',
       'whatsapp:status',
+      'subscription:updated',
     ]);
     socket.onAny((event: string, data: any) => {
       if (handledEvents.has(event)) return;
