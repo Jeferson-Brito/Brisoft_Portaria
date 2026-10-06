@@ -21,7 +21,6 @@ import {
   LogOut,
   Plus,
   Home,
-  Settings,
   User,
   ChevronRight,
   ChevronLeft,
@@ -30,7 +29,6 @@ import {
   BarChart3,
   MessageSquare,
   Package,
-  Bell,
   Building2,
   UserCheck,
   LogIn,
@@ -48,8 +46,6 @@ import {
   CreditCard,
   ExternalLink,
   AlertCircle,
-  HelpCircle,
-  BookOpen,
   Sparkles,
 } from 'lucide-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -79,6 +75,7 @@ import { PlaceTermsProvider, buildPlaceTerms } from '../../utils/placeTerms';
 import { SubscriptionScreen } from '../auth/SubscriptionScreen';
 import { CustomConfirmModal } from '../../components/CustomConfirmModal';
 import { AppHeader } from '../../components/AppHeader';
+import { MainHeaderActions } from '../../components/MainHeaderActions';
 import { ScrollToTopButton } from '../../components/ScrollToTopButton';
 import { OnboardingTutorialModal } from '../../components/OnboardingTutorialModal';
 import { SetupGuideBanner } from '../../components/SetupGuideBanner';
@@ -413,6 +410,16 @@ export const DashboardScreen: React.FC = () => {
   const topInset = Math.max(insets.top, Platform.OS === 'android' ? (StatusBar.currentHeight || 24) : 0);
   const bottomInset = insets.bottom > 0 ? insets.bottom : (Platform.OS === 'android' ? 8 : 6);
 
+  const showNotificationDot = notifications.length > 0 || summary.pendingCount > 0;
+  const tabHeaderActions = (
+    <MainHeaderActions
+      variant="onPrimary"
+      showNotificationDot={showNotificationDot}
+      onNotifications={() => setIsNotificationsModalOpen(true)}
+      onSettings={() => setActiveTab('settings')}
+    />
+  );
+
   const renderContent = () => {
     if (activeTab === 'profile') {
       return (
@@ -421,9 +428,9 @@ export const DashboardScreen: React.FC = () => {
         />
       );
     }
-    if (activeTab === 'pending') return <OpenRequestsScreen />;
-    if (activeTab === 'authorized') return <AuthorizedRequestsScreen />;
-    if (activeTab === 'history') return <VisitorHistoryScreen />;
+    if (activeTab === 'pending') return <OpenRequestsScreen headerRightAction={tabHeaderActions} />;
+    if (activeTab === 'authorized') return <AuthorizedRequestsScreen headerRightAction={tabHeaderActions} />;
+    if (activeTab === 'history') return <VisitorHistoryScreen headerRightAction={tabHeaderActions} />;
     if (activeTab === 'present') return <PresentVisitorsScreen />;
     if (activeTab === 'packages') return <PackagesScreen onBack={() => setActiveTab('dashboard')} />;
     if (activeTab === 'preauthorizations') return <PreAuthorizationsScreen onBack={() => setActiveTab('dashboard')} />;
@@ -434,7 +441,7 @@ export const DashboardScreen: React.FC = () => {
     if (activeTab === 'units') return <ClientsManagementScreen section="units" onBack={() => setActiveTab('settings')} />;
     if (activeTab === 'restrictions') return <RestrictionsScreen onBack={() => setActiveTab('settings')} />;
     if (activeTab === 'amenities') return <AmenitiesScreen onBack={() => setActiveTab('settings')} />;
-    if (activeTab === 'reports') return <ReportsScreen />;
+    if (activeTab === 'reports') return <ReportsScreen headerRightAction={tabHeaderActions} />;
     if (activeTab === 'org_profile') {
       return (
         <OrganizationProfileScreen
@@ -573,34 +580,14 @@ export const DashboardScreen: React.FC = () => {
             </TouchableOpacity>
 
             {/* Ações da Direita */}
-            <View style={styles.headerActions}>
-              <TouchableOpacity
-                style={styles.headerIconButton}
-                onPress={() => setIsTutorialModalOpen(true)}
-                activeOpacity={0.75}
-              >
-                <HelpCircle size={20} color="#0F172A" />
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[styles.headerIconButton, { marginLeft: 8 }]}
-                onPress={() => setIsNotificationsModalOpen(true)}
-                activeOpacity={0.75}
-              >
-                <Bell size={20} color="#0F172A" />
-                {(notifications.length > 0 || summary.pendingCount > 0) && (
-                  <View style={styles.notificationDot} />
-                )}
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[styles.headerIconButton, { marginLeft: 8 }]}
-                onPress={() => setActiveTab('settings')}
-                activeOpacity={0.75}
-              >
-                <Settings size={20} color="#0F172A" />
-              </TouchableOpacity>
-            </View>
+            <MainHeaderActions
+              variant="light"
+              showHelp
+              showNotificationDot={showNotificationDot}
+              onHelp={() => setIsTutorialModalOpen(true)}
+              onNotifications={() => setIsNotificationsModalOpen(true)}
+              onSettings={() => setActiveTab('settings')}
+            />
           </View>
         </View>
 

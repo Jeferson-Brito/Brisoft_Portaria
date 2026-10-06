@@ -91,7 +91,9 @@ const STATUS_FILTERS = [
   { key: 'CANCELLED', label: 'Cancelados' },
 ];
 
-export const VisitorHistoryScreen: React.FC = () => {
+export const VisitorHistoryScreen: React.FC<{
+  headerRightAction?: React.ReactNode;
+}> = ({ headerRightAction }) => {
   const terms = usePlaceTerms();
   const cached = readScreenCache<{ items: HistoryVisitorItem[]; total: number }>('history:ALL');
   const [items, setItems] = useState<HistoryVisitorItem[]>(cached?.items || []);
@@ -320,6 +322,7 @@ export const VisitorHistoryScreen: React.FC = () => {
         title="Histórico"
         subtitle="Todas as solicitações de visitantes"
         badge={totalCount}
+        rightAction={headerRightAction}
       />
 
       {/* Barra de Busca */}

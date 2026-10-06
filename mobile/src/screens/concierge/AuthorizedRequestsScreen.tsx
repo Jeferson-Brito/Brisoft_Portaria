@@ -61,7 +61,9 @@ interface AuthorizedItem {
   };
 }
 
-export const AuthorizedRequestsScreen: React.FC = () => {
+export const AuthorizedRequestsScreen: React.FC<{
+  headerRightAction?: React.ReactNode;
+}> = ({ headerRightAction }) => {
   const terms = usePlaceTerms();
   const cached = readScreenCache<AuthorizedItem[]>('authorized');
   const [items, setItems] = useState<AuthorizedItem[]>(cached || []);
@@ -212,6 +214,7 @@ export const AuthorizedRequestsScreen: React.FC = () => {
         title="Visitas Autorizadas"
         subtitle={`Liberados pelo ${terms.client.toLowerCase()} e aguardando a entrada`}
         badge={items.length}
+        rightAction={headerRightAction}
       />
 
       {/* Top Search Bar */}

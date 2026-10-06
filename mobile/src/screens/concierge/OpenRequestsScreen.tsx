@@ -63,7 +63,10 @@ export interface PendingRequestItem {
   };
 }
 
-export const OpenRequestsScreen: React.FC<{ hideHeader?: boolean }> = ({ hideHeader = false }) => {
+export const OpenRequestsScreen: React.FC<{
+  hideHeader?: boolean;
+  headerRightAction?: React.ReactNode;
+}> = ({ hideHeader = false, headerRightAction }) => {
   const cached = readScreenCache<PendingRequestItem[]>('pending');
   const [requests, setRequests] = useState<PendingRequestItem[]>(cached || []);
   const listRef = useRef<FlatList>(null);
@@ -235,9 +238,18 @@ export const OpenRequestsScreen: React.FC<{ hideHeader?: boolean }> = ({ hideHea
 
   if (isLoading) {
     return (
-      <View style={styles.centerContainer}>
-        <ActivityIndicator size="large" color={colors.primary} />
-        <Text style={styles.loadingText}>Carregando solicitações em aberto...</Text>
+      <View style={styles.container}>
+        {!hideHeader && (
+          <AppHeader
+            title="Aguardando Autorização"
+            subtitle="Solicitações pendentes de liberação no WhatsApp"
+            rightAction={headerRightAction}
+          />
+        )}
+        <View style={styles.centerContainer}>
+          <ActivityIndicator size="large" color={colors.primary} />
+          <Text style={styles.loadingText}>Carregando solicitações em aberto...</Text>
+        </View>
       </View>
     );
   }
@@ -249,6 +261,7 @@ export const OpenRequestsScreen: React.FC<{ hideHeader?: boolean }> = ({ hideHea
           title="Aguardando Autorização"
           subtitle="Solicitações pendentes de liberação no WhatsApp"
           badge={requests.length}
+          rightAction={headerRightAction}
         />
       )}
       <FlatList

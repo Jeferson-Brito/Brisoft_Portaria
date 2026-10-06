@@ -42,7 +42,9 @@ const DAYS_LABELS: Record<DaysFilter, string> = {
   30: 'Últimos 30 dias',
 };
 
-export const ReportsScreen: React.FC = () => {
+export const ReportsScreen: React.FC<{
+  headerRightAction?: React.ReactNode;
+}> = ({ headerRightAction }) => {
   const terms = usePlaceTerms();
   const scrollRef = useRef<ScrollView>(null);
   const [showScrollTop, setShowScrollTop] = useState(false);
@@ -105,7 +107,11 @@ export const ReportsScreen: React.FC = () => {
   return (
     <View style={styles.container}>
       {/* Header padrão do sistema */}
-      <AppHeader title="Relatórios" subtitle="Performance e auditoria da portaria" />
+      <AppHeader
+        title="Relatórios"
+        subtitle="Performance e auditoria da portaria"
+        rightAction={headerRightAction}
+      />
 
       {/* Sub-tabs: Desempenho / Auditoria — abaixo do header */}
       <View style={styles.subTabBarContainer}>
