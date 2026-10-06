@@ -50,6 +50,35 @@ export class BaileysProvider implements IWhatsAppProvider {
   private msgRetryCounterCache = new MemoryCache();
   private reconnectAttempts = 0;
   private reconnectTimer: NodeJS.Timeout | null = null;
+  private activeOrganizationId: string | null = null;
+
+  private markSocketUnavailable(reason?: string) {
+    if (reason) {
+      console.warn(`⚠️ [Baileys] Socket indisponível: ${reason}`);
+    }
+    this.sock = null;
+    this.statusInfo = {
+      status: 'DISCONNECTED',
+      phoneConnected: this.statusInfo.phoneConnected,
+      lastConnectedAt: this.statusInfo.lastConnectedAt,
+    };
+  }
+
+  private isRecoverableSendError(err: any) {
+    const msg = String(err?.message || err || '');
+    return (
+      msg.includes('Connection Closed') ||
+      msg.includes('connection closed') ||
+      msg.includes('Connection Terminated') ||
+      err?.output?.statusCode === 428
+    );
+  }
+
+  private scheduleReconnect(organizationId: string, delayMs: number) {
+    if (!env.WHATSAPP_AUTO_RECONNECT) return;
+    if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
+    this.reconnectTimer = setTimeout(() => this.connect(organizationId), delayMs);
+  }
 
   private getStoreFilePath(): string {
     return this.orgSessionPath
@@ -261,6 +290,7 @@ export class BaileysProvider implements IWhatsAppProvider {
   async connect(organizationId: string): Promise<void> {
     if (this.isConnecting) return;
     this.isConnecting = true;
+    this.activeOrganizationId = organizationId;
 
     // Se já havia um socket ativo, desconecta-o suavemente antes de recriar
     if (this.sock) {
@@ -359,6 +389,9 @@ export class BaileysProvider implements IWhatsAppProvider {
 
         console.warn(`⚠️ [Baileys] Conexão fechada. Status: ${statusCode}, Erro: ${errorMessage}`);
 
+        // Evita enviar mensagem em socket morto com status ainda "CONNECTED"
+        this.markSocketUnavailable(errorMessage || `status ${statusCode}`);
+
         // 1. Se outra instância conectou (Status 440 Conflict / Stream Errored), NÃO reconecta para não derrubar a outra instância em loop!
         if (isReplaced) {
           console.warn('⚠️ [Baileys] Conexão substituída por outra instância ativa (Status 440: Conflict). Interrompendo reconexão para evitar loop.');
@@ -373,11 +406,16 @@ export class BaileysProvider implements IWhatsAppProvider {
         }
 
         if (env.WHATSAPP_AUTO_RECONNECT) {
+          this.statusInfo = {
+            status: 'CONNECTING',
+            phoneConnected: this.statusInfo.phoneConnected,
+            lastConnectedAt: this.statusInfo.lastConnectedAt,
+          };
+
           // Se for reinício exigido pelo Baileys (515), reconecta imediatamente sem penalizar backoff
           if (isRestartRequired) {
             console.log('🔄 [Baileys] Reinício solicitado pelo protocolo (515). Reconectando em 1s...');
-            if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
-            this.reconnectTimer = setTimeout(() => this.connect(organizationId), 1000);
+            this.scheduleReconnect(organizationId, 1000);
             return;
           }
 
@@ -390,8 +428,7 @@ export class BaileysProvider implements IWhatsAppProvider {
 
           if (this.reconnectAttempts <= MAX_ATTEMPTS) {
             console.log(`🔄 Reconectando Baileys (tentativa ${this.reconnectAttempts}/${MAX_ATTEMPTS}) em ${Math.round(delay / 1000)}s...`);
-            if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
-            this.reconnectTimer = setTimeout(() => this.connect(organizationId), delay);
+            this.scheduleReconnect(organizationId, delay);
           } else {
             console.error(`❌ [Baileys] Máximo de tentativas de reconexão atingido (${MAX_ATTEMPTS}). Aguardando intervenção manual.`);
             this.statusInfo = { status: 'DISCONNECTED' };
@@ -732,22 +769,33 @@ export class BaileysProvider implements IWhatsAppProvider {
 
   async sendMessage(toPhone: string, text: string): Promise<{ messageId: string }> {
     if (this.statusInfo.status !== 'CONNECTED' || !this.sock) {
-      throw new Error('WhatsApp não está conectado no momento.');
+      throw new Error('O WhatsApp da plataforma não está conectado no momento. Tente novamente em instantes.');
     }
 
     const jid = await this.sendableJid(toPhone);
     console.log(`🚀 [Baileys] Enviando mensagem de texto para JID: ${jid}...`);
-    const sent = await this.sock.sendMessage(jid, { text });
-    if (sent?.key?.id && sent.message) {
-      this.saveMessageToStore(sent.key.id, sent.message);
+    try {
+      const sent = await this.sock.sendMessage(jid, { text });
+      if (sent?.key?.id && sent.message) {
+        this.saveMessageToStore(sent.key.id, sent.message);
+      }
+      console.log(`✅ [Baileys] Mensagem enviada com sucesso! ID: ${sent?.key?.id}`);
+      return { messageId: sent?.key.id || `msg_${Date.now()}` };
+    } catch (err: any) {
+      if (this.isRecoverableSendError(err)) {
+        this.markSocketUnavailable(err?.message);
+        if (this.activeOrganizationId) {
+          this.scheduleReconnect(this.activeOrganizationId, 1500);
+        }
+        throw new Error('O WhatsApp da plataforma está reconectando. Aguarde alguns segundos e tente novamente.');
+      }
+      throw err;
     }
-    console.log(`✅ [Baileys] Mensagem enviada com sucesso! ID: ${sent?.key?.id}`);
-    return { messageId: sent?.key.id || `msg_${Date.now()}` };
   }
 
   async sendImageMessage(toPhone: string, imageBase64OrUrl: string, caption?: string): Promise<{ messageId: string }> {
     if (this.statusInfo.status !== 'CONNECTED' || !this.sock) {
-      throw new Error('WhatsApp não está conectado no momento.');
+      throw new Error('O WhatsApp da plataforma não está conectado no momento. Tente novamente em instantes.');
     }
 
     const jid = await this.sendableJid(toPhone);
@@ -804,16 +852,27 @@ export class BaileysProvider implements IWhatsAppProvider {
       }
     }
 
-    const sent = await this.sock.sendMessage(jid, {
-      image: imageContent,
-      mimetype: mimeType,
-      caption: caption || '',
-    });
-    if (sent?.key?.id && sent.message) {
-      this.saveMessageToStore(sent.key.id, sent.message);
+    try {
+      const sent = await this.sock.sendMessage(jid, {
+        image: imageContent,
+        mimetype: mimeType,
+        caption: caption || '',
+      });
+      if (sent?.key?.id && sent.message) {
+        this.saveMessageToStore(sent.key.id, sent.message);
+      }
+      console.log(`✅ [Baileys] Imagem enviada com sucesso! ID: ${sent?.key?.id}`);
+      return { messageId: sent?.key.id || `img_${Date.now()}` };
+    } catch (err: any) {
+      if (this.isRecoverableSendError(err)) {
+        this.markSocketUnavailable(err?.message);
+        if (this.activeOrganizationId) {
+          this.scheduleReconnect(this.activeOrganizationId, 1500);
+        }
+        throw new Error('O WhatsApp da plataforma está reconectando. Aguarde alguns segundos e tente novamente.');
+      }
+      throw err;
     }
-    console.log(`✅ [Baileys] Imagem enviada com sucesso! ID: ${sent?.key?.id}`);
-    return { messageId: sent?.key.id || `img_${Date.now()}` };
   }
 
   onMessageReceived(callback: (msg: IncomingMessageEvent) => Promise<void>): void {

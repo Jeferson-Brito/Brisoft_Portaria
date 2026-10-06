@@ -60,8 +60,14 @@ export class VerificationService {
       );
     } catch (err: any) {
       await prisma.verificationCode.delete({ where: { id: record.id } }).catch(() => {});
+      const raw = String(err?.message || '');
+      const isTechnical =
+        !raw ||
+        /connection closed|connection terminated|timed out|ECONNRESET|socket hang up|statusCode/i.test(raw);
       throw new AppError(
-        err?.message || 'O WhatsApp da plataforma não está conectado.',
+        isTechnical
+          ? 'O WhatsApp da plataforma está indisponível ou reconectando. Aguarde alguns segundos e tente novamente.'
+          : raw,
         503,
         'PLATFORM_WHATSAPP_OFFLINE'
       );
