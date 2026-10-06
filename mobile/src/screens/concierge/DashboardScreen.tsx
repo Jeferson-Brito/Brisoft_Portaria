@@ -913,20 +913,29 @@ export const DashboardScreen: React.FC = () => {
                         style={[
                           styles.accessCard,
                           isPickedUp ? styles.accessCardPickedUp : styles.accessCardPackage,
+                          isSubscriptionBlocked && styles.accessCardBlocked,
                         ]}
-                        onPress={() => setPackageDetailModal({ visible: true, package: req })}
-                        activeOpacity={0.85}
+                        onPress={() =>
+                          handleGuardedAction(() =>
+                            setPackageDetailModal({ visible: true, package: req })
+                          )
+                        }
+                        activeOpacity={isSubscriptionBlocked ? 1 : 0.85}
                       >
                         {/* Lado Esquerdo: Ícone de Encomenda */}
                         <View
                           style={[
                             styles.accessCardIconBox,
-                            isPickedUp
-                              ? styles.accessCardIconBoxEntered
-                              : { backgroundColor: '#EDE9FE' },
+                            isSubscriptionBlocked
+                              ? styles.accessCardIconBoxBlocked
+                              : isPickedUp
+                                ? styles.accessCardIconBoxEntered
+                                : { backgroundColor: '#EDE9FE' },
                           ]}
                         >
-                          {isPickedUp ? (
+                          {isSubscriptionBlocked ? (
+                            <Lock size={20} color="#94A3B8" />
+                          ) : isPickedUp ? (
                             <CheckCircle size={22} color="#16A34A" />
                           ) : (
                             <Package size={22} color="#7C3AED" />
@@ -936,30 +945,46 @@ export const DashboardScreen: React.FC = () => {
                         {/* Conteúdo Central */}
                         <View style={styles.accessCardContent}>
                           <View style={styles.accessCardTopRow}>
-                            <Text style={styles.accessVisitorName} numberOfLines={1}>
+                            <Text
+                              style={[
+                                styles.accessVisitorName,
+                                isSubscriptionBlocked && styles.accessTextBlocked,
+                              ]}
+                              numberOfLines={1}
+                            >
                               {item.title}
                             </Text>
 
                             <View
                               style={[
                                 styles.accessBadge,
-                                isPickedUp
-                                  ? { backgroundColor: '#DCFCE7' }
-                                  : { backgroundColor: '#EDE9FE' },
+                                isSubscriptionBlocked
+                                  ? styles.accessBadgeBlocked
+                                  : isPickedUp
+                                    ? { backgroundColor: '#DCFCE7' }
+                                    : { backgroundColor: '#EDE9FE' },
                               ]}
                             >
                               <Text
                                 style={[
                                   styles.accessBadgeText,
-                                  isPickedUp ? { color: '#15803D' } : { color: '#7C3AED' },
+                                  isSubscriptionBlocked
+                                    ? styles.accessBadgeTextBlocked
+                                    : isPickedUp
+                                      ? { color: '#15803D' }
+                                      : { color: '#7C3AED' },
                                 ]}
                               >
-                                {isPickedUp ? 'Retirada' : 'Aguardando Retirada'}
+                                {isSubscriptionBlocked
+                                  ? 'Bloqueado'
+                                  : isPickedUp
+                                    ? 'Retirada'
+                                    : 'Aguardando Retirada'}
                               </Text>
                             </View>
                           </View>
 
-                          <View style={styles.accessCardMiddleRow}>
+                          <View style={[styles.accessCardMiddleRow, isSubscriptionBlocked && { opacity: 0.55 }]}>
                             {item.destName ? (
                               <View style={styles.accessDestTag}>
                                 <Building2 size={12} color="#475569" style={{ marginRight: 4 }} />
@@ -986,7 +1011,7 @@ export const DashboardScreen: React.FC = () => {
                             ) : null}
                           </View>
 
-                          <View style={styles.accessCardBottomRow}>
+                          <View style={[styles.accessCardBottomRow, isSubscriptionBlocked && { opacity: 0.55 }]}>
                             <View style={[styles.accessReasonBadge, { backgroundColor: '#F3E8FF' }]}>
                               <Text style={[styles.accessReasonText, { color: '#6B21A8' }]}>
                                 Encomenda
@@ -1004,13 +1029,29 @@ export const DashboardScreen: React.FC = () => {
                         <TouchableOpacity
                           style={[
                             styles.compactEntryBtn,
-                            { backgroundColor: isPickedUp ? '#64748B' : '#7C3AED' },
+                            {
+                              backgroundColor: isSubscriptionBlocked
+                                ? '#94A3B8'
+                                : isPickedUp
+                                  ? '#64748B'
+                                  : '#7C3AED',
+                            },
                           ]}
-                          onPress={() => setPackageDetailModal({ visible: true, package: req })}
+                          onPress={() =>
+                            handleGuardedAction(() =>
+                              setPackageDetailModal({ visible: true, package: req })
+                            )
+                          }
                           activeOpacity={0.85}
                         >
-                          <Package size={13} color="#FFFFFF" style={{ marginRight: 4 }} />
-                          <Text style={styles.compactEntryBtnText}>VER</Text>
+                          {isSubscriptionBlocked ? (
+                            <Lock size={13} color="#FFFFFF" style={{ marginRight: 4 }} />
+                          ) : (
+                            <Package size={13} color="#FFFFFF" style={{ marginRight: 4 }} />
+                          )}
+                          <Text style={styles.compactEntryBtnText}>
+                            {isSubscriptionBlocked ? 'BLOQUEADO' : 'VER'}
+                          </Text>
                         </TouchableOpacity>
                       </TouchableOpacity>
                     );
@@ -1040,27 +1081,38 @@ export const DashboardScreen: React.FC = () => {
                       key={`visit-${req.id}`}
                       style={[
                         styles.accessCard,
-                        isPending && styles.accessCardPending,
-                        isAuthorized && styles.accessCardAuthorized,
-                        isEntered && styles.accessCardEntered,
-                        isExited && styles.accessCardExited,
-                        isDenied && styles.accessCardDenied,
+                        !isSubscriptionBlocked && isPending && styles.accessCardPending,
+                        !isSubscriptionBlocked && isAuthorized && styles.accessCardAuthorized,
+                        !isSubscriptionBlocked && isEntered && styles.accessCardEntered,
+                        !isSubscriptionBlocked && isExited && styles.accessCardExited,
+                        !isSubscriptionBlocked && isDenied && styles.accessCardDenied,
+                        isSubscriptionBlocked && styles.accessCardBlocked,
                       ]}
-                      onPress={() => setDetailModal({ visible: true, request: req })}
-                      activeOpacity={0.85}
+                      onPress={() =>
+                        handleGuardedAction(() => setDetailModal({ visible: true, request: req }))
+                      }
+                      activeOpacity={isSubscriptionBlocked ? 1 : 0.85}
                     >
                       {/* Lado Esquerdo: Ícone / Avatar de Status */}
                       <View
                         style={[
                           styles.accessCardIconBox,
-                          isPending && styles.accessCardIconBoxPending,
-                          isAuthorized && styles.accessCardIconBoxAuthorized,
-                          isEntered && styles.accessCardIconBoxEntered,
-                          isExited && styles.accessCardIconBoxExited,
-                          isDenied && styles.accessCardIconBoxDenied,
+                          isSubscriptionBlocked
+                            ? styles.accessCardIconBoxBlocked
+                            : isPending
+                              ? styles.accessCardIconBoxPending
+                              : isAuthorized
+                                ? styles.accessCardIconBoxAuthorized
+                                : isEntered
+                                  ? styles.accessCardIconBoxEntered
+                                  : isExited
+                                    ? styles.accessCardIconBoxExited
+                                    : styles.accessCardIconBoxDenied,
                         ]}
                       >
-                        {isExited ? (
+                        {isSubscriptionBlocked ? (
+                          <Lock size={20} color="#94A3B8" />
+                        ) : isExited ? (
                           <CheckCircle size={22} color="#059669" />
                         ) : isAuthorized ? (
                           <CircleCheck size={22} color="#16A34A" />
@@ -1077,45 +1129,65 @@ export const DashboardScreen: React.FC = () => {
                       <View style={styles.accessCardContent}>
                         {/* Linha 1: Nome do Visitante + Badge */}
                         <View style={styles.accessCardTopRow}>
-                          <Text style={styles.accessVisitorName} numberOfLines={1}>
+                          <Text
+                            style={[
+                              styles.accessVisitorName,
+                              isSubscriptionBlocked && styles.accessTextBlocked,
+                            ]}
+                            numberOfLines={1}
+                          >
                             {visitorName}
                           </Text>
 
                           <View
                             style={[
                               styles.accessBadge,
-                              isPending && styles.accessBadgePending,
-                              isAuthorized && styles.accessBadgeAuthorized,
-                              isEntered && styles.accessBadgeEntered,
-                              isExited && styles.accessBadgeExited,
-                              isDenied && styles.accessBadgeDenied,
+                              isSubscriptionBlocked
+                                ? styles.accessBadgeBlocked
+                                : isPending
+                                  ? styles.accessBadgePending
+                                  : isAuthorized
+                                    ? styles.accessBadgeAuthorized
+                                    : isEntered
+                                      ? styles.accessBadgeEntered
+                                      : isExited
+                                        ? styles.accessBadgeExited
+                                        : styles.accessBadgeDenied,
                             ]}
                           >
                             <Text
                               style={[
                                 styles.accessBadgeText,
-                                isPending && styles.accessBadgeTextPending,
-                                isAuthorized && styles.accessBadgeTextAuthorized,
-                                isEntered && styles.accessBadgeTextEntered,
-                                isExited && styles.accessBadgeTextExited,
-                                isDenied && styles.accessBadgeTextDenied,
+                                isSubscriptionBlocked
+                                  ? styles.accessBadgeTextBlocked
+                                  : isPending
+                                    ? styles.accessBadgeTextPending
+                                    : isAuthorized
+                                      ? styles.accessBadgeTextAuthorized
+                                      : isEntered
+                                        ? styles.accessBadgeTextEntered
+                                        : isExited
+                                          ? styles.accessBadgeTextExited
+                                          : styles.accessBadgeTextDenied,
                               ]}
                             >
-                              {isExited
-                                ? 'Finalizada'
-                                : isPending
-                                ? 'Aguardando'
-                                : isAuthorized
-                                ? 'Autorizado'
-                                : isEntered
-                                ? 'No Local'
-                                : 'Recusado'}
+                              {isSubscriptionBlocked
+                                ? 'Bloqueado'
+                                : isExited
+                                  ? 'Finalizada'
+                                  : isPending
+                                    ? 'Aguardando'
+                                    : isAuthorized
+                                      ? 'Autorizado'
+                                      : isEntered
+                                        ? 'No Local'
+                                        : 'Recusado'}
                             </Text>
                           </View>
                         </View>
 
                         {/* Linha 2: Morador & Unidade */}
-                        <View style={styles.accessCardMiddleRow}>
+                        <View style={[styles.accessCardMiddleRow, isSubscriptionBlocked && { opacity: 0.55 }]}>
                           <View style={styles.accessClientTag}>
                             <User size={12} color="#64748B" style={{ marginRight: 4 }} />
                             <Text style={styles.accessClientText} numberOfLines={1}>
@@ -1132,7 +1204,7 @@ export const DashboardScreen: React.FC = () => {
                         </View>
 
                         {/* Linha 3: Motivo / Tag + Horário */}
-                        <View style={styles.accessCardBottomRow}>
+                        <View style={[styles.accessCardBottomRow, isSubscriptionBlocked && { opacity: 0.55 }]}>
                           <View style={styles.accessReasonBadge}>
                             <Text style={styles.accessReasonText}>{reason}</Text>
                           </View>
@@ -1151,7 +1223,11 @@ export const DashboardScreen: React.FC = () => {
                             styles.compactEntryBtn,
                             isSubscriptionBlocked && { backgroundColor: '#94A3B8' },
                           ]}
-                          onPress={() => handleGuardedAction(() => handleRegisterEntry(req.id, req.visitor?.name))}
+                          onPress={() =>
+                            handleGuardedAction(() =>
+                              handleRegisterEntry(req.id, req.visitor?.name)
+                            )
+                          }
                           disabled={entryProcessingId === req.id}
                           activeOpacity={0.85}
                         >
@@ -1171,6 +1247,11 @@ export const DashboardScreen: React.FC = () => {
                           )}
                         </TouchableOpacity>
                       )}
+                      {!isAuthorized && isSubscriptionBlocked ? (
+                        <View style={styles.compactEntryBtnBlockedOnly}>
+                          <Lock size={14} color="#94A3B8" />
+                        </View>
+                      ) : null}
                     </TouchableOpacity>
                   );
                 })
@@ -2482,6 +2563,33 @@ const styles = StyleSheet.create({
   },
   accessCardExited: {
     borderLeftColor: '#059669', // Verde esmeralda para saída finalizada
+  },
+  accessCardBlocked: {
+    backgroundColor: '#F8FAFC',
+    borderColor: '#E2E8F0',
+    borderLeftColor: '#94A3B8',
+    opacity: 0.78,
+  },
+  accessCardIconBoxBlocked: {
+    backgroundColor: '#E2E8F0',
+  },
+  accessTextBlocked: {
+    color: '#64748B',
+  },
+  accessBadgeBlocked: {
+    backgroundColor: '#E2E8F0',
+  },
+  accessBadgeTextBlocked: {
+    color: '#64748B',
+  },
+  compactEntryBtnBlockedOnly: {
+    width: 36,
+    height: 36,
+    borderRadius: 8,
+    backgroundColor: '#E2E8F0',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 4,
   },
   accessCardIconBox: {
     width: 44,
