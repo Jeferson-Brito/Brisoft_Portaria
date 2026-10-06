@@ -8,10 +8,11 @@ import { clearScreenCache } from '../utils/screenCache';
 
 export interface Subscription {
   plan: 'TRIAL' | 'BASIC' | 'ENTERPRISE';
-  status: 'TRIAL' | 'ACTIVE' | 'SUSPENDED' | 'CANCELLED' | 'EXPIRED';
+  status: 'TRIAL' | 'ACTIVE' | 'SUSPENDED' | 'CANCELLED' | 'EXPIRED' | 'PENDING';
   trialEndsAt: string | null;
   currentPeriodEnd?: string | null;
   daysRemaining: number | null;
+  isBlocked?: boolean;
 }
 
 export interface User {
@@ -56,7 +57,7 @@ export interface RegisterData {
 const AuthContext = createContext<AuthContextData>({} as AuthContextData);
 
 // Status que bloqueiam o uso do app (exceto SUPER_ADMIN)
-const BLOCKED_STATUSES = ['EXPIRED', 'SUSPENDED', 'CANCELLED'];
+const BLOCKED_STATUSES = ['EXPIRED', 'SUSPENDED', 'CANCELLED', 'PENDING'];
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
@@ -103,7 +104,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const isSubscriptionBlocked =
     user?.role !== 'SUPER_ADMIN' &&
     !!user?.subscription &&
-    (BLOCKED_STATUSES.includes(user.subscription.status) || (user.subscription as any).isBlocked === true);
+    (BLOCKED_STATUSES.includes(user.subscription.status) || user.subscription.isBlocked === true);
 
   const signIn = async (email: string, password: string, remember = true) => {
     try {

@@ -2,6 +2,7 @@ import { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { authMiddleware } from '../../middlewares/auth.middleware.js';
 import { requireRole } from '../../middlewares/rbac.middleware.js';
+import { subscriptionGuard } from '../../middlewares/subscription.middleware.js';
 import { restrictionService } from './restriction.service.js';
 import { AppError } from '../../core/errors/app-error.js';
 
@@ -26,6 +27,7 @@ function handleError(reply: FastifyReply, err: any) {
 
 export async function restrictionRoutes(app: FastifyInstance) {
   app.addHook('preHandler', authMiddleware);
+  app.addHook('preHandler', subscriptionGuard);
 
   app.get('/', {
     preHandler: [requireRole(['ADMIN', 'SUPERVISOR', 'CONCIERGE'])],

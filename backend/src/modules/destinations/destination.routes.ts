@@ -8,10 +8,9 @@ const destinationController = new DestinationController();
 
 export async function destinationRoutes(app: FastifyInstance) {
   app.addHook('preHandler', authMiddleware);
+  // Destinos: listagem e mutações bloqueadas com assinatura inadimplente
   app.addHook('preHandler', async (request, reply) => {
-    if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(request.method)) {
-      return subscriptionGuard(request, reply);
-    }
+    return subscriptionGuard(request, reply);
   });
 
   // Listar destinos (Porteiro, Supervisor, Admin)

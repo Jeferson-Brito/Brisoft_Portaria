@@ -9,9 +9,7 @@ const clientController = new ClientController();
 export async function clientRoutes(app: FastifyInstance) {
   app.addHook('preHandler', authMiddleware);
   app.addHook('preHandler', async (request, reply) => {
-    if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(request.method)) {
-      return subscriptionGuard(request, reply);
-    }
+    return subscriptionGuard(request, reply);
   });
 
   // Busca rápida de clientes para o Porteiro (Nome, Unidade, Telefone, Código)

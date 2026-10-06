@@ -1,6 +1,7 @@
 import { FastifyInstance } from 'fastify';
 import { AuthController } from './auth.controller.js';
 import { authMiddleware } from '../../middlewares/auth.middleware.js';
+import { subscriptionGuard } from '../../middlewares/subscription.middleware.js';
 
 const authController = new AuthController();
 
@@ -58,13 +59,13 @@ export async function authRoutes(app: FastifyInstance) {
   });
 
   app.post('/whatsapp-code', {
-    preHandler: [authMiddleware],
+    preHandler: [authMiddleware, subscriptionGuard],
     config: { rateLimit: { max: 5, timeWindow: '10 minutes' } },
     handler: authController.sendOwnWhatsappCode.bind(authController),
   });
 
   app.post('/whatsapp-code/confirm', {
-    preHandler: [authMiddleware],
+    preHandler: [authMiddleware, subscriptionGuard],
     config: { rateLimit: { max: 8, timeWindow: '10 minutes' } },
     handler: authController.confirmOwnWhatsappCode.bind(authController),
   });
@@ -75,13 +76,13 @@ export async function authRoutes(app: FastifyInstance) {
   });
 
   app.post('/change-password/request', {
-    preHandler: [authMiddleware],
+    preHandler: [authMiddleware, subscriptionGuard],
     config: { rateLimit: { max: 5, timeWindow: '15 minutes' } },
     handler: authController.requestPasswordChange.bind(authController),
   });
 
   app.post('/change-password/confirm', {
-    preHandler: [authMiddleware],
+    preHandler: [authMiddleware, subscriptionGuard],
     config: { rateLimit: { max: 8, timeWindow: '15 minutes' } },
     handler: authController.confirmPasswordChange.bind(authController),
   });

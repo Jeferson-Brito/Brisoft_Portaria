@@ -26,6 +26,8 @@ import {
   Shield,
   HelpCircle,
   Trees,
+  AlertTriangle,
+  Lock,
 } from 'lucide-react-native';
 import { useAuth } from '../../contexts/AuthContext';
 import { api } from '../../config/api';
@@ -62,7 +64,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
   bottomInset,
   onOpenTutorial,
 }) => {
-  const { user, signOut, refreshSubscription } = useAuth();
+  const { user, signOut, refreshSubscription, isSubscriptionBlocked } = useAuth();
   const terms = usePlaceTerms();
   const scrollRef = useRef<ScrollView>(null);
   const [showScrollTop, setShowScrollTop] = useState(false);
@@ -81,6 +83,24 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
   const isTrial = sub?.status === 'TRIAL';
   const isPro = sub?.status === 'ACTIVE';
   const trialDays = sub?.daysRemaining ?? 7;
+
+  const notifyBlocked = useCallback(() => {
+    Alert.alert(
+      'Assinatura pendente',
+      'Regularize o pagamento em Assinatura para liberar cadastros, perfil e demais configurações.'
+    );
+  }, []);
+
+  const navigateGuarded = useCallback(
+    (screen: Parameters<SettingsScreenProps['onNavigate']>[0]) => {
+      if (isSubscriptionBlocked && screen !== 'subscription') {
+        notifyBlocked();
+        return;
+      }
+      onNavigate(screen);
+    },
+    [isSubscriptionBlocked, notifyBlocked, onNavigate]
+  );
 
   // Carrega status rápido do WhatsApp
   const checkWhatsApp = useCallback(async () => {
@@ -194,33 +214,91 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
         </View>
       </View>
 
-      <TouchableOpacity style={styles.companyLine} onPress={() => onNavigate('profile')} activeOpacity={0.7}>
-        <Building size={16} color={colors.primary} />
-        <Text style={styles.orgText} numberOfLines={1}>{orgProfile.companyName || 'Portaria principal'}</Text>
-        <Text style={styles.link}>Meu perfil</Text>
-        <ChevronRight size={16} color="#94A3B8" />
+      {isSubscriptionBlocked ? (
+        <TouchableOpacity
+          style={styles.blockedBanner}
+          onPress={() => onNavigate('subscription')}
+          activeOpacity={0.85}
+        >
+          <AlertTriangle size={16} color="#B91C1C" />
+          <Text style={styles.blockedBannerText}>
+            Pagamento pendente. Cadastros, perfil e configurações estão bloqueados. Toque para regularizar.
+          </Text>
+          <ChevronRight size={16} color="#B91C1C" />
+        </TouchableOpacity>
+      ) : null}
+
+      <TouchableOpacity
+        style={[styles.companyLine, isSubscriptionBlocked && styles.itemDisabled]}
+        onPress={() => navigateGuarded('profile')}
+        activeOpacity={0.7}
+      >
+        <Building size={16} color={isSubscriptionBlocked ? '#94A3B8' : colors.primary} />
+        <Text style={[styles.orgText, isSubscriptionBlocked && styles.textDisabled]} numberOfLines={1}>
+          {orgProfile.companyName || 'Portaria principal'}
+        </Text>
+        <Text style={[styles.link, isSubscriptionBlocked && styles.textDisabled]}>
+          {isSubscriptionBlocked ? 'Bloqueado' : 'Meu perfil'}
+        </Text>
+        {isSubscriptionBlocked ? (
+          <Lock size={14} color="#94A3B8" />
+        ) : (
+          <ChevronRight size={16} color="#94A3B8" />
+        )}
       </TouchableOpacity>
 
       {isAdmin && (
         <View style={styles.statusRow}>
-          <TouchableOpacity style={styles.statusCard} onPress={() => onNavigate('whatsapp')} activeOpacity={0.8}>
-            {whatsappStatus === 'CONNECTED' ? <Wifi size={16} color="#16A34A" /> : <WifiOff size={16} color="#DC2626" />}
-            <Text style={styles.statusCardTitle}>{isSuperAdmin ? 'WhatsApp da plataforma' : 'WhatsApp'}</Text>
-            <Text style={[styles.statusCardSubtitle, { color: whatsappStatus === 'CONNECTED' ? '#15803D' : '#B91C1C' }]} numberOfLines={1}>
-              {whatsappStatus === 'CONNECTED'
-                ? connectedPhone || 'Conectado'
-                : whatsappStatus === 'LOADING'
-                  ? 'Verificando...'
-                  : isSuperAdmin
-                    ? 'Ler QR Code'
-                    : 'Desconectado'}
+          <TouchableOpacity
+            style={[styles.statusCard, isSubscriptionBlocked && styles.itemDisabled]}
+            onPress={() => navigateGuarded('whatsapp')}
+            activeOpacity={0.8}
+          >
+            {isSubscriptionBlocked ? (
+              <Lock size={16} color="#94A3B8" />
+            ) : whatsappStatus === 'CONNECTED' ? (
+              <Wifi size={16} color="#16A34A" />
+            ) : (
+              <WifiOff size={16} color="#DC2626" />
+            )}
+            <Text style={[styles.statusCardTitle, isSubscriptionBlocked && styles.textDisabled]}>
+              {isSuperAdmin ? 'WhatsApp da plataforma' : 'WhatsApp'}
+            </Text>
+            <Text
+              style={[
+                styles.statusCardSubtitle,
+                {
+                  color: isSubscriptionBlocked
+                    ? '#94A3B8'
+                    : whatsappStatus === 'CONNECTED'
+                      ? '#15803D'
+                      : '#B91C1C',
+                },
+              ]}
+              numberOfLines={1}
+            >
+              {isSubscriptionBlocked
+                ? 'Bloqueado'
+                : whatsappStatus === 'CONNECTED'
+                  ? connectedPhone || 'Conectado'
+                  : whatsappStatus === 'LOADING'
+                    ? 'Verificando...'
+                    : isSuperAdmin
+                      ? 'Ler QR Code'
+                      : 'Desconectado'}
             </Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.statusCard} onPress={() => onNavigate('subscription')} activeOpacity={0.8}>
             <Sparkles size={16} color={isPro ? colors.primary : '#D97706'} />
             <Text style={styles.statusCardTitle}>Assinatura</Text>
             <Text style={styles.statusCardSubtitle} numberOfLines={1}>
-              {isPro ? 'Plano ativo' : isTrial ? `${trialDays} dias` : 'Regularizar'}
+              {isSubscriptionBlocked
+                ? 'Regularizar'
+                : isPro
+                  ? 'Plano ativo'
+                  : isTrial
+                    ? `${trialDays} dias`
+                    : 'Regularizar'}
             </Text>
           </TouchableOpacity>
         </View>
@@ -229,52 +307,58 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
       {(isAdmin || isSupervisor) && (
         <View style={styles.group}>
           <Text style={styles.groupLabel}>Cadastros</Text>
-          <View style={styles.groupBox}>
+          <View style={[styles.groupBox, isSubscriptionBlocked && styles.groupBoxDisabled]}>
             <MenuRow
-              icon={<Users size={18} color={colors.primary} />}
-              iconBg={colors.primarySoft}
+              icon={<Users size={18} color={isSubscriptionBlocked ? '#94A3B8' : colors.primary} />}
+              iconBg={isSubscriptionBlocked ? '#F1F5F9' : colors.primarySoft}
               title={terms.clients}
               subtitle="Cadastro, busca e acesso ao aplicativo"
-              onPress={() => onNavigate('residents')}
+              onPress={() => navigateGuarded('residents')}
+              disabled={isSubscriptionBlocked}
             />
             <MenuRow
-              icon={<Building size={18} color="#0F766E" />}
-              iconBg="#CCFBF1"
+              icon={<Building size={18} color={isSubscriptionBlocked ? '#94A3B8' : '#0F766E'} />}
+              iconBg={isSubscriptionBlocked ? '#F1F5F9' : '#CCFBF1'}
               title={terms.units}
               subtitle="Cadastro, busca e edição"
-              onPress={() => onNavigate('units')}
+              onPress={() => navigateGuarded('units')}
+              disabled={isSubscriptionBlocked}
             />
             <MenuRow
-              icon={<UserCheck size={18} color="#1D4ED8" />}
-              iconBg="#EFF6FF"
+              icon={<UserCheck size={18} color={isSubscriptionBlocked ? '#94A3B8' : '#1D4ED8'} />}
+              iconBg={isSubscriptionBlocked ? '#F1F5F9' : '#EFF6FF'}
               title="Equipe da portaria"
               subtitle="Porteiros, supervisores e acessos"
-              onPress={() => onNavigate('users_mgmt')}
+              onPress={() => navigateGuarded('users_mgmt')}
+              disabled={isSubscriptionBlocked}
             />
             <MenuRow
-              icon={<Shield size={18} color="#B91C1C" />}
-              iconBg="#FEE2E2"
+              icon={<Shield size={18} color={isSubscriptionBlocked ? '#94A3B8' : '#B91C1C'} />}
+              iconBg={isSubscriptionBlocked ? '#F1F5F9' : '#FEE2E2'}
               title="Lista de restrição"
               subtitle="Pessoas com entrada bloqueada"
-              onPress={() => onNavigate('restrictions')}
+              onPress={() => navigateGuarded('restrictions')}
               last={!isAdmin}
+              disabled={isSubscriptionBlocked}
             />
             {isAdmin && (
               <>
                 <MenuRow
-                  icon={<Building size={18} color="#B45309" />}
-                  iconBg="#FEF3C7"
+                  icon={<Building size={18} color={isSubscriptionBlocked ? '#94A3B8' : '#B45309'} />}
+                  iconBg={isSubscriptionBlocked ? '#F1F5F9' : '#FEF3C7'}
                   title="Perfil do estabelecimento"
                   subtitle="Nome, endereço e tipo do local"
-                  onPress={() => onNavigate('org_profile')}
+                  onPress={() => navigateGuarded('org_profile')}
+                  disabled={isSubscriptionBlocked}
                 />
                 <MenuRow
-                  icon={<Trees size={18} color={colors.primary} />}
-                  iconBg={colors.primarySoft}
+                  icon={<Trees size={18} color={isSubscriptionBlocked ? '#94A3B8' : colors.primary} />}
+                  iconBg={isSubscriptionBlocked ? '#F1F5F9' : colors.primarySoft}
                   title="Áreas comuns"
                   subtitle="Salão, churrasqueira e reservas"
-                  onPress={() => onNavigate('amenities')}
+                  onPress={() => navigateGuarded('amenities')}
                   last
+                  disabled={isSubscriptionBlocked}
                 />
               </>
             )}
@@ -323,14 +407,23 @@ const MenuRow: React.FC<{
   subtitle?: string;
   onPress: () => void;
   last?: boolean;
-}> = ({ icon, iconBg, title, subtitle, onPress, last }) => (
-  <TouchableOpacity style={[styles.row, !last && styles.rowDivider]} onPress={onPress} activeOpacity={0.7}>
+  disabled?: boolean;
+}> = ({ icon, iconBg, title, subtitle, onPress, last, disabled }) => (
+  <TouchableOpacity
+    style={[styles.row, !last && styles.rowDivider, disabled && styles.rowDisabled]}
+    onPress={onPress}
+    activeOpacity={0.7}
+  >
     <View style={[styles.rowIcon, { backgroundColor: iconBg }]}>{icon}</View>
     <View style={styles.rowText}>
-      <Text style={styles.rowTitle}>{title}</Text>
-      {subtitle ? <Text style={styles.rowSub} numberOfLines={1}>{subtitle}</Text> : null}
+      <Text style={[styles.rowTitle, disabled && styles.textDisabled]}>{title}</Text>
+      {subtitle ? (
+        <Text style={[styles.rowSub, disabled && styles.textDisabled]} numberOfLines={1}>
+          {disabled ? 'Disponível após regularizar o pagamento' : subtitle}
+        </Text>
+      ) : null}
     </View>
-    <ChevronRight size={16} color="#94A3B8" />
+    {disabled ? <Lock size={14} color="#94A3B8" /> : <ChevronRight size={16} color="#94A3B8" />}
   </TouchableOpacity>
 );
 
@@ -372,6 +465,37 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     minHeight: 48,
     marginBottom: 14,
+  },
+  blockedBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#FEF2F2',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#FECACA',
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    marginBottom: 12,
+  },
+  blockedBannerText: {
+    flex: 1,
+    color: '#991B1B',
+    fontSize: 13,
+    fontWeight: '600',
+    lineHeight: 18,
+  },
+  itemDisabled: {
+    opacity: 0.72,
+  },
+  textDisabled: {
+    color: '#94A3B8',
+  },
+  groupBoxDisabled: {
+    opacity: 0.92,
+  },
+  rowDisabled: {
+    opacity: 0.85,
   },
   orgText: { flex: 1, color: colors.textPrimary, fontWeight: '600' },
   link: { color: colors.primary, fontWeight: '700', fontSize: 13 },

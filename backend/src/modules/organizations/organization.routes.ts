@@ -2,6 +2,7 @@ import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { prisma } from '../../lib/prisma.js';
 import { authMiddleware } from '../../middlewares/auth.middleware.js';
 import { requireRole } from '../../middlewares/rbac.middleware.js';
+import { subscriptionGuard } from '../../middlewares/subscription.middleware.js';
 
 function readSettings(raw?: string | null) {
   if (!raw) return {};
@@ -73,7 +74,7 @@ export async function organizationRoutes(app: FastifyInstance) {
   });
 
   // Atualiza o tipo de empresa / estabelecimento e os rótulos de atendimento
-  app.patch('/current', { preHandler: [requireRole(['ADMIN'])] }, async (req: FastifyRequest, reply: FastifyReply) => {
+  app.patch('/current', { preHandler: [requireRole(['ADMIN']), subscriptionGuard] }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { organizationId } = (req as any).user;
     const body = req.body as {
       name?: string;

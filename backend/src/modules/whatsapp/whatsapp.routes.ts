@@ -2,6 +2,7 @@ import { FastifyInstance } from 'fastify';
 import { WhatsAppController } from './whatsapp.controller.js';
 import { authMiddleware } from '../../middlewares/auth.middleware.js';
 import { requireRole } from '../../middlewares/rbac.middleware.js';
+import { subscriptionGuard } from '../../middlewares/subscription.middleware.js';
 import { env } from '../../config/env.js';
 
 const whatsAppController = new WhatsAppController();
@@ -17,13 +18,13 @@ export async function whatsAppRoutes(app: FastifyInstance) {
 
   // Conectar e gerar QR Code (Somente Admin - Seção 19)
   app.post('/connect', {
-    preHandler: [requireRole(['ADMIN'])],
+    preHandler: [requireRole(['ADMIN']), subscriptionGuard],
     handler: whatsAppController.connect.bind(whatsAppController),
   });
 
   // Desconectar sessão (Somente Admin)
   app.post('/disconnect', {
-    preHandler: [requireRole(['ADMIN'])],
+    preHandler: [requireRole(['ADMIN']), subscriptionGuard],
     handler: whatsAppController.disconnect.bind(whatsAppController),
   });
 
@@ -39,24 +40,25 @@ export async function whatsAppRoutes(app: FastifyInstance) {
         }
       },
       requireRole(['ADMIN']),
+      subscriptionGuard,
     ],
     handler: whatsAppController.simulateIncoming.bind(whatsAppController),
   });
 
   // Enviar mensagem de teste para verificar entrega no celular real
   app.post('/test-send', {
-    preHandler: [requireRole(['ADMIN'])],
+    preHandler: [requireRole(['ADMIN']), subscriptionGuard],
     handler: whatsAppController.testSend.bind(whatsAppController),
   });
 
   // Templates de mensagens (Admin)
   app.get('/templates', {
-    preHandler: [requireRole(['ADMIN', 'SUPERVISOR'])],
+    preHandler: [requireRole(['ADMIN', 'SUPERVISOR']), subscriptionGuard],
     handler: whatsAppController.getTemplates.bind(whatsAppController),
   });
 
   app.put('/templates', {
-    preHandler: [requireRole(['ADMIN'])],
+    preHandler: [requireRole(['ADMIN']), subscriptionGuard],
     handler: whatsAppController.updateTemplate.bind(whatsAppController),
   });
 }

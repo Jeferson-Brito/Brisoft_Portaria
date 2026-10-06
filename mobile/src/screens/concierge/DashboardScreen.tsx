@@ -411,14 +411,41 @@ export const DashboardScreen: React.FC = () => {
   const bottomInset = insets.bottom > 0 ? insets.bottom : (Platform.OS === 'android' ? 8 : 6);
 
   const showNotificationDot = notifications.length > 0 || summary.pendingCount > 0;
+  const openSettings = () => setActiveTab('settings');
+  const openGuardedTab = (tab: typeof activeTab) => handleGuardedAction(() => setActiveTab(tab));
   const tabHeaderActions = (
     <MainHeaderActions
       variant="onPrimary"
       showNotificationDot={showNotificationDot}
       onNotifications={() => setIsNotificationsModalOpen(true)}
-      onSettings={() => setActiveTab('settings')}
+      onSettings={openSettings}
     />
   );
+
+  useEffect(() => {
+    if (!isSubscriptionBlocked) return;
+    const blockedWhenUnpaid = [
+      'profile',
+      'users_mgmt',
+      'clients_mgmt',
+      'residents',
+      'units',
+      'restrictions',
+      'amenities',
+      'org_profile',
+      'whatsapp',
+      'packages',
+      'preauthorizations',
+      'pending',
+      'authorized',
+      'history',
+      'reports',
+      'present',
+    ];
+    if (blockedWhenUnpaid.includes(activeTab)) {
+      setActiveTab('dashboard');
+    }
+  }, [isSubscriptionBlocked, activeTab]);
 
   const renderContent = () => {
     if (activeTab === 'profile') {
@@ -470,7 +497,13 @@ export const DashboardScreen: React.FC = () => {
             onBack={() => setActiveTab('dashboard')}
           />
           <SettingsScreen
-            onNavigate={(screen) => setActiveTab(screen)}
+            onNavigate={(screen) => {
+              if (screen === 'subscription') {
+                setActiveTab(screen);
+                return;
+              }
+              handleGuardedAction(() => setActiveTab(screen));
+            }}
             orgProfile={orgProfile}
             bottomInset={bottomInset}
             onOpenTutorial={() => setIsTutorialModalOpen(true)}
@@ -563,7 +596,7 @@ export const DashboardScreen: React.FC = () => {
             {/* Avatar + Saudação */}
             <TouchableOpacity
               style={styles.userProfileRow}
-              onPress={() => setActiveTab('profile')}
+              onPress={() => openGuardedTab('profile')}
               activeOpacity={0.8}
             >
               <View style={styles.avatarCircle}>
@@ -586,7 +619,7 @@ export const DashboardScreen: React.FC = () => {
               showNotificationDot={showNotificationDot}
               onHelp={() => setIsTutorialModalOpen(true)}
               onNotifications={() => setIsNotificationsModalOpen(true)}
-              onSettings={() => setActiveTab('settings')}
+              onSettings={openSettings}
             />
           </View>
         </View>

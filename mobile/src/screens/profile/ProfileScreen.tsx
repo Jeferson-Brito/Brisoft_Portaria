@@ -65,7 +65,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   onLogout,
   logoutLabel = 'Sair da conta',
 }) => {
-  const { user, patchUser, refreshSubscription, signOut } = useAuth();
+  const { user, patchUser, refreshSubscription, signOut, isSubscriptionBlocked } = useAuth();
   const insets = useSafeAreaInsets();
   const bottomPad = (insets.bottom > 0 ? insets.bottom : Platform.OS === 'android' ? 8 : 6) + (embedded ? 72 : 78);
   const [name, setName] = useState(user?.name || '');
@@ -127,6 +127,13 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   };
 
   const sendWhatsappCode = async () => {
+    if (isSubscriptionBlocked) {
+      Alert.alert(
+        'Assinatura pendente',
+        'Regularize o pagamento para alterar o WhatsApp.'
+      );
+      return;
+    }
     if (phoneDigits.length !== 11 || phoneDigits[2] !== '9') {
       setPhoneError('Informe o DDD e o celular com o 9 (11 dígitos).');
       return;
@@ -173,6 +180,13 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   };
 
   const openPasswordModal = () => {
+    if (isSubscriptionBlocked) {
+      Alert.alert(
+        'Assinatura pendente',
+        'Regularize o pagamento para alterar a senha e outros dados do perfil.'
+      );
+      return;
+    }
     if (!isConfirmed) {
       Alert.alert('Confirme o WhatsApp', 'Confirme seu WhatsApp antes de alterar a senha.');
       return;
@@ -250,6 +264,13 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   };
 
   const handleSave = async () => {
+    if (isSubscriptionBlocked) {
+      Alert.alert(
+        'Assinatura pendente',
+        'Regularize o pagamento para editar o perfil.'
+      );
+      return;
+    }
     if (!name.trim()) {
       Alert.alert('Atenção', 'O nome não pode ficar em branco.');
       return;
@@ -306,10 +327,23 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
             </View>
           </View>
 
-          <TouchableOpacity style={styles.changePasswordTopBtn} onPress={openPasswordModal} activeOpacity={0.85}>
+          <TouchableOpacity
+            style={[styles.changePasswordTopBtn, isSubscriptionBlocked && { opacity: 0.45 }]}
+            onPress={openPasswordModal}
+            activeOpacity={0.85}
+          >
             <KeyRound size={18} color="#165337" style={{ marginRight: 8 }} />
             <Text style={styles.changePasswordTopBtnText}>Alterar senha</Text>
           </TouchableOpacity>
+
+          {isSubscriptionBlocked ? (
+            <View style={styles.blockedBanner}>
+              <AlertTriangle size={16} color="#B91C1C" style={{ marginRight: 8 }} />
+              <Text style={styles.blockedBannerText}>
+                Assinatura pendente. Edição de perfil, WhatsApp e senha bloqueadas até a regularização.
+              </Text>
+            </View>
+          ) : null}
 
           {successMessage ? (
             <View style={styles.successBanner}>
@@ -323,11 +357,12 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
 
             <Text style={styles.fieldLabel}>Nome completo</Text>
             <TextInput
-              style={styles.input}
+              style={[styles.input, isSubscriptionBlocked && styles.inputDisabled]}
               value={name}
               onChangeText={setName}
               placeholder="Seu nome"
               placeholderTextColor="#94A3B8"
+              editable={!isSubscriptionBlocked}
             />
 
             <Text style={styles.fieldLabel}>E-mail de login</Text>
@@ -344,7 +379,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
             </Text>
 
             <Text style={styles.fieldLabel}>Número</Text>
-            <View style={[styles.phoneRow, !isConfirmed && styles.phoneRowWarn]}>
+            <View style={[styles.phoneRow, !isConfirmed && styles.phoneRowWarn, isSubscriptionBlocked && styles.inputDisabled]}>
               <Phone size={16} color="#64748B" style={{ marginRight: 8 }} />
               <TextInput
                 style={styles.phoneInput}
@@ -353,6 +388,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                 placeholder="(83) 99999-9999"
                 placeholderTextColor="#94A3B8"
                 keyboardType="phone-pad"
+                editable={!isSubscriptionBlocked}
               />
               <View style={styles.statusIconWrap}>
                 {isConfirmed ? (
@@ -364,7 +400,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
             </View>
             {phoneError ? <Text style={styles.fieldError}>{phoneError}</Text> : null}
 
-            {needsVerification ? (
+            {needsVerification && !isSubscriptionBlocked ? (
               <>
                 <TouchableOpacity
                   style={[styles.secondaryBtn, isCodeBusy && { opacity: 0.7 }]}
@@ -418,9 +454,9 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
           {extraSections}
 
           <TouchableOpacity
-            style={[styles.saveBtn, isSaving && { opacity: 0.7 }]}
+            style={[styles.saveBtn, (isSaving || isSubscriptionBlocked) && { opacity: 0.7 }]}
             onPress={handleSave}
-            disabled={isSaving}
+            disabled={isSaving || isSubscriptionBlocked}
             activeOpacity={0.85}
           >
             {isSaving ? (
@@ -599,6 +635,23 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     fontSize: 14,
   },
+  blockedBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1,
+    borderColor: '#FECACA',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 14,
+  },
+  blockedBannerText: {
+    flex: 1,
+    color: '#991B1B',
+    fontSize: 13,
+    fontWeight: '600',
+    lineHeight: 18,
+  },
   successBanner: {
     backgroundColor: 'rgba(22, 163, 74, 0.1)',
     borderRadius: 12,
@@ -648,6 +701,10 @@ const styles = StyleSheet.create({
     minHeight: 48,
     color: '#0F172A',
     fontSize: 15,
+  },
+  inputDisabled: {
+    backgroundColor: '#F1F5F9',
+    opacity: 0.85,
   },
   disabledInputBox: {
     borderWidth: 1,
