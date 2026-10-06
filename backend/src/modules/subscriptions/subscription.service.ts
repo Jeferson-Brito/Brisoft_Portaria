@@ -197,6 +197,26 @@ export class SubscriptionService {
     // Emite evento em tempo real para o app mobile travar as ações instantaneamente
     realtimeService.emitToOrganization(orgId, 'subscription:updated', info);
 
+    void import('../../services/admin-notification.service.js')
+      .then(async ({ adminNotificationService }) => {
+        const admin = await prisma.user.findFirst({
+          where: { organizationId: orgId, deletedAt: null, role: { in: ['ADMIN', 'SUPERVISOR'] } },
+          orderBy: [{ role: 'asc' }, { createdAt: 'asc' }],
+          select: { name: true, email: true },
+        });
+        await adminNotificationService.notifyTrialEnded({
+          organizationId: orgId,
+          organizationName: org.name,
+          adminName: admin?.name,
+          adminEmail: admin?.email,
+          createdAt: org.createdAt,
+          plan: info.plan,
+        });
+      })
+      .catch((err) => {
+        console.error('[AdminNotification] Falha ao avisar fim de teste:', err?.message || err);
+      });
+
     return info;
   }
 

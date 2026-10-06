@@ -73,6 +73,9 @@ async function bootstrap() {
     // Inicia a rotina de exclusão automática de fotos antigas (> 30 dias corridos)
     storageRetentionService.startAutoCleanup();
 
+    const { adminNotificationJob } = await import('./services/admin-notification.job.js');
+    adminNotificationJob.start();
+
     // Restaura automaticamente sessões salvas do WhatsApp Baileys (apenas em produção para evitar conflito com Render)
     if (env.NODE_ENV === 'production' || process.env.ENABLE_LOCAL_WHATSAPP === 'true') {
       await whatsappService.autoRestoreSessions();

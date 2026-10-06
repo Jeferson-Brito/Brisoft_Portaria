@@ -500,3 +500,24 @@ model TrialClaim {
 
   @@map("trial_claims")
 }
+
+// Histórico de notificações administrativas enviadas pelo WhatsApp da plataforma.
+model AdminNotificationLog {
+  id              String   @id @default(uuid())
+  type            String
+  dedupeKey       String
+  destinationPhone String
+  status          String   // PENDING | SENT | FAILED
+  relatedEntity   String?
+  relatedEntityId String?
+  messagePreview  String?
+  providerMessageId String?
+  errorMessage    String?
+  payload         String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([type, dedupeKey])
+  @@index([status, createdAt])
+  @@map("admin_notification_logs")
+}

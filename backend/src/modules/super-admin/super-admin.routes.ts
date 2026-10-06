@@ -165,6 +165,31 @@ export async function superAdminRoutes(app: FastifyInstance) {
     return reply.send({ success: true, message: 'Valor do plano atualizado.', data: { price: updated } });
   });
 
+  app.get('/admin-notifications', async (_req, reply) => {
+    const config = await service.getAdminNotificationConfig();
+    return reply.send({ success: true, data: config });
+  });
+
+  app.put('/admin-notifications', async (req: FastifyRequest, reply: FastifyReply) => {
+    try {
+      const body = (req.body as { phone?: string | null; enabled?: boolean; clearPhone?: boolean }) || {};
+      const config = await service.saveAdminNotificationConfig(body);
+      return reply.send({
+        success: true,
+        message: 'Configuração de notificações administrativas salva.',
+        data: config,
+      });
+    } catch (err: any) {
+      return reply.status(err.statusCode || 500).send({
+        success: false,
+        error: {
+          code: err.code || 'INTERNAL_ERROR',
+          message: err.message || 'Não foi possível salvar a configuração.',
+        },
+      });
+    }
+  });
+
   app.post('/subscriptions/:orgId/suspend', async (req: FastifyRequest, reply: FastifyReply) => {
     const { orgId } = req.params as { orgId: string };
     const updated = await service.suspendSubscription(orgId);

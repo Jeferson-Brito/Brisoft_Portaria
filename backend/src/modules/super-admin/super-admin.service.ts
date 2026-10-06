@@ -1,6 +1,7 @@
 import { prisma } from '../../lib/prisma.js';
 import { subscriptionService, rememberPlanPrice } from '../subscriptions/subscription.service.js';
 import { whatsappService } from '../../services/whatsapp/whatsapp.service.js';
+import { adminNotificationService } from '../../services/admin-notification.service.js';
 import { AppError } from '../../core/errors/app-error.js';
 import { invalidateSubscriptionCache } from '../../middlewares/subscription.middleware.js';
 import { invalidateAuthCache } from '../../middlewares/auth.middleware.js';
@@ -376,6 +377,18 @@ export class SuperAdminService {
       },
     });
 
+    adminNotificationService.notifyQuietly(() =>
+      adminNotificationService.notifyNewUser({
+        userId: user.id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        organizationId: user.organizationId,
+        organizationName: user.organization?.name || org.name,
+        createdAt: user.createdAt,
+      })
+    );
+
     return user;
   }
 
@@ -544,11 +557,35 @@ export class SuperAdminService {
     return price;
   }
 
+  async getAdminNotificationConfig() {
+    return adminNotificationService.getConfig();
+  }
+
+  async saveAdminNotificationConfig(data: { phone?: string | null; enabled?: boolean; clearPhone?: boolean }) {
+    return adminNotificationService.saveConfig(data);
+  }
+
   async suspendSubscription(orgId: string) {
-    return this.updateOrganization(orgId, {
+    const updated = await this.updateOrganization(orgId, {
       isActive: false,
       paymentStatus: 'SUSPENDED',
     });
+    const admin = await prisma.user.findFirst({
+      where: { organizationId: orgId, deletedAt: null, role: { in: ['ADMIN', 'SUPERVISOR'] } },
+      orderBy: [{ role: 'asc' }, { createdAt: 'asc' }],
+      select: { name: true, email: true },
+    });
+    adminNotificationService.notifyQuietly(() =>
+      adminNotificationService.notifySubscriptionPending({
+        organizationId: orgId,
+        organizationName: updated.name,
+        status: 'SUSPENDED',
+        reason: 'A assinatura desta empresa foi suspensa.',
+        adminName: admin?.name,
+        adminEmail: admin?.email,
+      })
+    );
+    return updated;
   }
 
   // ─── Métricas do SaaS Master ────────────────────────────────

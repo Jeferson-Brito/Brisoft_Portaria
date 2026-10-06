@@ -5,6 +5,7 @@ import { Role } from '../../middlewares/rbac.middleware.js';
 import { invalidateAuthCache } from '../../middlewares/auth.middleware.js';
 import { placeTermsFromSettings } from '../../utils/placeTerms.js';
 import { retiredEmail } from '../../utils/email.js';
+import { adminNotificationService } from '../../services/admin-notification.service.js';
 
 export interface CreateUserParams {
   organizationId: string;
@@ -133,8 +134,21 @@ export class UserService {
         isActive: true,
         clientId: true,
         createdAt: true,
+        organization: { select: { name: true } },
       },
     });
+
+    adminNotificationService.notifyQuietly(() =>
+      adminNotificationService.notifyNewUser({
+        userId: user.id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        organizationId: user.organizationId,
+        organizationName: user.organization?.name || 'Empresa',
+        createdAt: user.createdAt,
+      })
+    );
 
     return user;
   }

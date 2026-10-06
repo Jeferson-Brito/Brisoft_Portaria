@@ -6,6 +6,7 @@ import { subscriptionService } from '../subscriptions/subscription.service.js';
 import { cnpjExistsAtRevenue, isValidCnpj, isValidCpf, onlyDigits } from '../../utils/cnpj.js';
 import { isDisposableEmail, isGmailAddress, normalizeEmail } from '../../utils/email.js';
 import { verificationService } from '../../services/verification.service.js';
+import { adminNotificationService } from '../../services/admin-notification.service.js';
 import { formatWhatsAppNumber, sameWhatsappNumber } from '../../utils/phone.util.js';
 
 export interface LoginParams {
@@ -159,6 +160,25 @@ export class AuthService {
         });
 
         return { organization, admin };
+      });
+
+      adminNotificationService.notifyQuietly(async () => {
+        await adminNotificationService.notifyNewOrganization({
+          organizationId: result.organization.id,
+          organizationName: result.organization.name,
+          adminName: result.admin.name,
+          adminEmail: result.admin.email,
+          createdAt: result.organization.createdAt,
+        });
+        await adminNotificationService.notifyNewUser({
+          userId: result.admin.id,
+          name: result.admin.name,
+          email: result.admin.email,
+          role: result.admin.role,
+          organizationId: result.organization.id,
+          organizationName: result.organization.name,
+          createdAt: result.admin.createdAt,
+        });
       });
 
       return {
