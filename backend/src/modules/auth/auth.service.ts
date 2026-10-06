@@ -8,6 +8,7 @@ import { isDisposableEmail, isGmailAddress, normalizeEmail } from '../../utils/e
 import { verificationService } from '../../services/verification.service.js';
 import { adminNotificationService } from '../../services/admin-notification.service.js';
 import { formatWhatsAppNumber, sameWhatsappNumber } from '../../utils/phone.util.js';
+import { invalidateAuthCache } from '../../middlewares/auth.middleware.js';
 
 export interface LoginParams {
   email: string;
@@ -445,12 +446,22 @@ export class AuthService {
     if (await this.whatsappAlreadyUsed(whatsappNumber, user.id)) {
       throw new AppError('Este número de WhatsApp já está cadastrado.', 409, 'PHONE_IN_USE');
     }
-    await verificationService.matches({
+    await verificationService.consume({
       email: user.email,
       phone: whatsappNumber,
       purpose: 'WHATSAPP_CONFIRM',
       code,
     });
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        phone: whatsappNumber,
+        whatsappNumber,
+        whatsappVerifiedAt: new Date(),
+      },
+    });
+    invalidateAuthCache(user.id);
+    return { phone: whatsappNumber, whatsappVerified: true };
   }
 
   async completeProfile(userId: string, newPassword: string, phone: string, code: string) {
@@ -465,12 +476,21 @@ export class AuthService {
     if (await this.whatsappAlreadyUsed(whatsappNumber, user.id)) {
       throw new AppError('Este número de WhatsApp já está cadastrado.', 409, 'PHONE_IN_USE');
     }
-    await verificationService.consume({
-      email: user.email,
-      phone: whatsappNumber,
-      purpose: 'WHATSAPP_CONFIRM',
-      code,
-    });
+
+    const alreadyVerified =
+      Boolean(user.whatsappVerifiedAt) &&
+      Boolean(user.whatsappNumber) &&
+      sameWhatsappNumber(user.whatsappNumber || '', whatsappNumber);
+
+    if (!alreadyVerified) {
+      await verificationService.consume({
+        email: user.email,
+        phone: whatsappNumber,
+        purpose: 'WHATSAPP_CONFIRM',
+        code,
+      });
+    }
+
     const passwordHash = await bcrypt.hash(newPassword, 12);
     await prisma.user.update({
       where: { id: user.id },
@@ -488,6 +508,7 @@ export class AuthService {
         data: { whatsappNumber },
       });
     }
+    invalidateAuthCache(user.id);
     return this.getProfile(user.id);
   }
 

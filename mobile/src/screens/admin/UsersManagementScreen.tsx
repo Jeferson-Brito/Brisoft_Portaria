@@ -105,13 +105,19 @@ export const UsersManagementScreen: React.FC<UsersManagementScreenProps> = ({ on
   };
 
   const handleCreateUser = async () => {
-    if (!name.trim() || !email.trim() || !password.trim()) {
-      Alert.alert('Atenção', 'Preencha o nome, e-mail e senha do usuário.');
+    if (!name.trim() || !email.trim() || !password.trim() || !phone.trim()) {
+      Alert.alert('Atenção', 'Preencha nome, e-mail, senha e WhatsApp do usuário.');
       return;
     }
 
-    if (password.trim().length < 6) {
-      Alert.alert('Atenção', 'A senha deve conter no mínimo 6 caracteres.');
+    const phoneDigits = phone.replace(/\D/g, '');
+    if (phoneDigits.length < 10) {
+      Alert.alert('Atenção', 'Informe o WhatsApp com DDD para recuperação de senha.');
+      return;
+    }
+
+    if (password.trim().length < 8) {
+      Alert.alert('Atenção', 'A senha deve conter no mínimo 8 caracteres.');
       return;
     }
 
@@ -122,11 +128,14 @@ export const UsersManagementScreen: React.FC<UsersManagementScreenProps> = ({ on
         email: email.trim(),
         password: password.trim(),
         role: isSupervisor ? 'CONCIERGE' : role,
-        phone: phone.trim() || undefined,
+        phone: phone.trim(),
       });
 
       if (res.data.success) {
-        Alert.alert('Sucesso', 'Membro cadastrado com sucesso!');
+        Alert.alert(
+          'Sucesso',
+          'Membro cadastrado. Peça para ele confirmar o WhatsApp em Meu Perfil para poder recuperar a senha.'
+        );
         setIsModalOpen(false);
         setName('');
         setEmail('');
@@ -484,7 +493,7 @@ export const UsersManagementScreen: React.FC<UsersManagementScreenProps> = ({ on
               </View>
 
               <View style={styles.formGroup}>
-                <Text style={styles.inputLabel}>Senha de Acesso * (Mínimo 6 caracteres)</Text>
+                <Text style={styles.inputLabel}>Senha de Acesso * (Mínimo 8 caracteres)</Text>
                 <PasswordField
                   containerStyle={styles.input}
                   placeholder="Digite a senha provisória"
@@ -495,15 +504,18 @@ export const UsersManagementScreen: React.FC<UsersManagementScreenProps> = ({ on
               </View>
 
               <View style={styles.formGroup}>
-                <Text style={styles.inputLabel}>Telefone / WhatsApp (Opcional)</Text>
+                <Text style={styles.inputLabel}>WhatsApp * (recuperação de senha)</Text>
                 <TextInput
                   style={styles.input}
-                  placeholder="11999998888"
+                  placeholder="(83) 99999-9999"
                   placeholderTextColor="#94A3B8"
                   value={phone}
                   onChangeText={setPhone}
                   keyboardType="phone-pad"
                 />
+                <Text style={styles.helperHint}>
+                  O usuário precisa confirmar este número em Meu Perfil para recuperar a senha.
+                </Text>
               </View>
 
               {isAdmin && (
@@ -934,6 +946,12 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#1E293B',
     marginBottom: 6,
+  },
+  helperHint: {
+    marginTop: 6,
+    fontSize: 11,
+    color: '#64748B',
+    lineHeight: 15,
   },
   input: {
     backgroundColor: '#F8FAFC',

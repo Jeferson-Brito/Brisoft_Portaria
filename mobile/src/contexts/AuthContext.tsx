@@ -179,6 +179,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         organizationName: freshUser.organization?.name || current?.organizationName,
         clientId: freshUser.clientId ?? current?.clientId ?? null,
         whatsappNumber: freshUser.whatsappNumber ?? current?.whatsappNumber ?? null,
+        whatsappVerified: freshUser.whatsappVerified ?? current?.whatsappVerified ?? false,
         phone: freshUser.phone ?? current?.phone ?? null,
         resident: freshUser.resident ?? current?.resident ?? null,
         subscription: freshUser.subscription ?? current?.subscription ?? null,

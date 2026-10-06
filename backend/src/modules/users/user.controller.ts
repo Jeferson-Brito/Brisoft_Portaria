@@ -8,7 +8,7 @@ const createUserSchema = z.object({
   email: z.string().email('E-mail inválido'),
   password: z.string().min(8, 'Senha deve ter no mínimo 8 caracteres'),
   role: z.enum(['ADMIN', 'SUPERVISOR', 'CONCIERGE', 'CLIENT']),
-  phone: z.string().optional(),
+  phone: z.string().min(10, 'Informe o WhatsApp com DDD para recuperação de senha.'),
   clientId: z.string().optional(),
 });
 

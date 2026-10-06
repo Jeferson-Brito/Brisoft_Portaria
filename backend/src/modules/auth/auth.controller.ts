@@ -357,8 +357,12 @@ export class AuthController {
       });
     }
     try {
-      await authService.confirmOwnWhatsappCode(request.user.sub, parsed.data.phone, parsed.data.code);
-      return reply.send({ success: true });
+      const data = await authService.confirmOwnWhatsappCode(
+        request.user.sub,
+        parsed.data.phone,
+        parsed.data.code
+      );
+      return reply.send({ success: true, data });
     } catch (err: any) {
       return reply.status(err.statusCode || 500).send({
         success: false,
