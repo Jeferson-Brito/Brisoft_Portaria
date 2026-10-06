@@ -20,6 +20,38 @@ function usesSecureStore() {
   return Platform.OS === 'ios' || Platform.OS === 'android';
 }
 
+function usesWebSessionStore() {
+  return Platform.OS === 'web' && typeof sessionStorage !== 'undefined';
+}
+
+function readWebSession(key: SessionKey): string | null {
+  if (!usesWebSessionStore()) return null;
+  try {
+    return sessionStorage.getItem(SECURE_KEYS[key]);
+  } catch {
+    return null;
+  }
+}
+
+function writeWebSession(key: SessionKey, value: string) {
+  if (!usesWebSessionStore()) return false;
+  try {
+    sessionStorage.setItem(SECURE_KEYS[key], value);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function clearWebSession(key: SessionKey) {
+  if (!usesWebSessionStore()) return;
+  try {
+    sessionStorage.removeItem(SECURE_KEYS[key]);
+  } catch {
+    // ignore
+  }
+}
+
 export async function getSessionValue(key: SessionKey): Promise<string | null> {
   if (usesSecureStore()) {
     try {
@@ -29,6 +61,9 @@ export async function getSessionValue(key: SessionKey): Promise<string | null> {
       // segue para a leitura antiga
     }
   }
+
+  const fromWeb = readWebSession(key);
+  if (fromWeb) return fromWeb;
 
   for (const legacy of LEGACY_KEYS[key]) {
     const old = await AsyncStorage.getItem(legacy);
@@ -40,6 +75,9 @@ export async function getSessionValue(key: SessionKey): Promise<string | null> {
       } catch {
         // mantém o valor antigo se o cofre recusar o tamanho
       }
+    } else if (usesWebSessionStore()) {
+      writeWebSession(key, old);
+      await AsyncStorage.removeItem(legacy).catch(() => {});
     }
     return old;
   }
@@ -57,6 +95,12 @@ export async function setSessionValue(key: SessionKey, value: string) {
       // aparelhos sem cofre disponível continuam no armazenamento do app
     }
   }
+
+  if (writeWebSession(key, value)) {
+    await Promise.all(LEGACY_KEYS[key].map((legacy) => AsyncStorage.removeItem(legacy).catch(() => {})));
+    return;
+  }
+
   await AsyncStorage.setItem(LEGACY_KEYS[key][0], value);
 }
 
@@ -66,6 +110,7 @@ export async function clearSessionSecrets() {
       if (usesSecureStore()) {
         await SecureStore.deleteItemAsync(SECURE_KEYS[key]).catch(() => {});
       }
+      clearWebSession(key);
       await Promise.all(LEGACY_KEYS[key].map((legacy) => AsyncStorage.removeItem(legacy)));
     })
   );

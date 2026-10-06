@@ -350,23 +350,29 @@ export class AuthService {
     const rawEmail = email.trim().toLowerCase();
     const canonicalEmail = normalizeEmail(rawEmail);
     const user = await this.findUserByEmail(rawEmail, canonicalEmail);
-    if (!user || !user.whatsappVerifiedAt || !user.whatsappNumber) {
-      throw new AppError('Esta conta não tem um WhatsApp confirmado para receber o código.', 400, 'WHATSAPP_NOT_VERIFIED');
+
+    // Sempre responde de forma genérica ao cliente (anti-enumeração).
+    // Só envia o código quando a conta existe e tem WhatsApp confirmado.
+    if (user?.whatsappVerifiedAt && user.whatsappNumber) {
+      try {
+        await verificationService.send({
+          email: user.email,
+          phone: user.whatsappNumber,
+          purpose: 'PASSWORD_RESET',
+          userId: user.id,
+          organizationId: user.organizationId,
+        });
+      } catch (err: any) {
+        console.error('[Auth] Falha ao enviar código de reset:', err?.message || err);
+      }
     }
-    await verificationService.send({
-      email: user.email,
-      phone: user.whatsappNumber,
-      purpose: 'PASSWORD_RESET',
-      userId: user.id,
-      organizationId: user.organizationId,
-    });
   }
 
   async checkResetCode(email: string, code: string) {
     const rawEmail = email.trim().toLowerCase();
     const user = await this.findUserByEmail(rawEmail, normalizeEmail(rawEmail));
     if (!user) {
-      throw new AppError('Não encontramos uma conta com esse e-mail.', 404, 'USER_NOT_FOUND');
+      throw new AppError('Código incorreto ou expirado. Peça um novo código.', 400, 'CODE_INVALID');
     }
     await verificationService.matches({
       email: user.email,
@@ -384,7 +390,7 @@ export class AuthService {
     const canonicalEmail = normalizeEmail(rawEmail);
     const user = await this.findUserByEmail(rawEmail, canonicalEmail);
     if (!user) {
-      throw new AppError('Não encontramos uma conta com esse e-mail.', 404, 'USER_NOT_FOUND');
+      throw new AppError('Código incorreto ou expirado. Peça um novo código.', 400, 'CODE_INVALID');
     }
 
     await verificationService.consume({

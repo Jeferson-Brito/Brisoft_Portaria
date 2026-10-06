@@ -281,11 +281,14 @@ export class RealtimeService {
     }
   }
 
-  // Notifica alteração no status de pareamento do WhatsApp
+  // Notifica alteração no status de pareamento do WhatsApp (sem QR na sala compartilhada)
   public notifyWhatsAppStatus(organizationId: string, status: any) {
     if (!this.io) return;
+    const { qrCode: _qrCode, ...safeStatus } = status || {};
     this.io.to(`org_${organizationId}`).emit('whatsapp:status', {
-      ...status,
+      ...safeStatus,
+      // Indica que há QR disponível sem expor a imagem na sala da organização
+      hasQrCode: Boolean(status?.qrCode),
       emittedAt: new Date().toISOString(),
     });
   }

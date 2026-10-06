@@ -53,8 +53,11 @@ export class PackagesController {
       return reply.status(400).send({ success: false, message: 'Informe o código de retirada ou confirme a liberação direta.' });
     }
 
-    if (allowDirect && !['SUPER_ADMIN', 'ADMIN', 'SUPERVISOR', 'CONCIERGE'].includes(role)) {
-      return reply.status(403).send({ success: false, message: 'Você não possui permissão para liberar a encomenda sem o código.' });
+    if (allowDirect && !['SUPER_ADMIN', 'ADMIN', 'SUPERVISOR'].includes(role)) {
+      return reply.status(403).send({
+        success: false,
+        message: 'Apenas administrador ou supervisor pode liberar a encomenda sem o código.',
+      });
     }
 
     try {

@@ -308,11 +308,18 @@ export class AuthController {
     }
     try {
       await authService.requestPasswordReset(parsed.data.email);
-      return reply.send({ success: true, message: 'Código enviado para o WhatsApp confirmado desta conta.' });
+      return reply.send({
+        success: true,
+        message:
+          'Se a conta existir e tiver WhatsApp confirmado, enviaremos um código. Verifique o WhatsApp.',
+      });
     } catch (err: any) {
-      return reply.status(err.statusCode || 500).send({
-        success: false,
-        error: { code: err.code || 'INTERNAL_ERROR', message: err.message || 'Não foi possível enviar o código.' },
+      // Mantém resposta genérica mesmo em falhas internas inesperadas.
+      console.error('[Auth] forgotPassword:', err?.message || err);
+      return reply.send({
+        success: true,
+        message:
+          'Se a conta existir e tiver WhatsApp confirmado, enviaremos um código. Verifique o WhatsApp.',
       });
     }
   }

@@ -14,6 +14,7 @@ import {
   Image,
   ImageBackground,
   Dimensions,
+  Alert,
 } from 'react-native';
 import {
   Mail,
@@ -64,9 +65,14 @@ export const LoginScreen: React.FC<{ onRegisterPress?: () => void }> = ({ onRegi
     try {
       setIsLoading(true);
       setErrorMessage(null);
-      await api.post('/auth/forgot-password', { email: email.trim() });
+      const res = await api.post('/auth/forgot-password', { email: email.trim() });
       setResetCode('');
       setResetStep('code');
+      Alert.alert(
+        'Verifique o WhatsApp',
+        res.data?.message ||
+          'Se a conta existir e tiver WhatsApp confirmado, enviaremos um código.'
+      );
     } catch (err: any) {
       setErrorMessage(err.response?.data?.error?.message || 'Não foi possível enviar o código.');
     } finally {

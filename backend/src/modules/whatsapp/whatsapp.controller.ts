@@ -15,6 +15,12 @@ const updateTemplateSchema = z.object({
 });
 
 export class WhatsAppController {
+  private sanitizeStatusForRole(status: any, role: string) {
+    if (role === 'ADMIN' || role === 'SUPER_ADMIN') return status;
+    const { qrCode: _qrCode, ...safe } = status || {};
+    return safe;
+  }
+
   // Retorna status atual da conexão e QR Code se aguardando pareamento (Seção 19 e 44)
   async getStatus(request: FastifyRequest, reply: FastifyReply) {
     try {
@@ -23,7 +29,7 @@ export class WhatsAppController {
 
       return reply.status(200).send({
         success: true,
-        data: status,
+        data: this.sanitizeStatusForRole(status, request.user.role),
       });
     } catch (err: any) {
       return reply.status(500).send({
@@ -33,7 +39,7 @@ export class WhatsAppController {
     }
   }
 
-  // Iniciar conexão com WhatsApp e emitir QR Code (Seção 19)
+  // Iniciar conexão com WhatsApp e emitir QR Code (Somente Admin)
   async connect(request: FastifyRequest, reply: FastifyReply) {
     try {
       const provider = whatsappService.getProvider(request.user.organizationId);
@@ -43,7 +49,7 @@ export class WhatsAppController {
       return reply.status(200).send({
         success: true,
         message: 'Conexão iniciada. Escaneie o QR Code no WhatsApp se exibido.',
-        data: status,
+        data: this.sanitizeStatusForRole(status, request.user.role),
       });
     } catch (err: any) {
       return reply.status(500).send({

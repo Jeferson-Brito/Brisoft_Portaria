@@ -113,9 +113,10 @@ export class PackagesService {
       },
     });
 
-    // 4. Emite evento em tempo real via WebSocket
+    // 4. Emite evento em tempo real via WebSocket (sem código de retirada)
+    const { pickupCode: _createdPickupCode, ...safeCreatedPackage } = pkg as any;
     realtimeService.emitToOrganization(data.organizationId, 'package:created', {
-      package: pkg,
+      package: safeCreatedPackage,
     });
 
     // 5. Notifica o Morador/Responsável pelo WhatsApp automaticamente com foto
@@ -155,7 +156,8 @@ export class PackagesService {
       },
     });
 
-    return packages;
+    // Não devolve o código de retirada nas listagens da staff (só via WhatsApp do morador).
+    return packages.map(({ pickupCode: _pickupCode, ...rest }) => rest);
   }
 
   async listHistory(organizationId: string, limit = 50) {
@@ -171,7 +173,7 @@ export class PackagesService {
       },
     });
 
-    return packages;
+    return packages.map(({ pickupCode: _pickupCode, ...rest }) => rest);
   }
 
   async pickup(
@@ -218,9 +220,10 @@ export class PackagesService {
       },
     });
 
-    // Emite evento em tempo real
+    // Emite evento em tempo real (sem código de retirada)
+    const { pickupCode: _pickupCode, ...safePackage } = updated as any;
     realtimeService.emitToOrganization(organizationId, 'package:picked_up', {
-      package: updated,
+      package: safePackage,
     });
 
     if (directPickup === true) {

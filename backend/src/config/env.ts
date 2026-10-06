@@ -49,3 +49,14 @@ if (env.NODE_ENV === 'production') {
     throw new Error('JWT_REFRESH_SECRET deve ser próprio, ter pelo menos 32 caracteres e ser diferente do JWT_SECRET.');
   }
 }
+
+const apiLooksLocal = /localhost|127\.0\.0\.1/i.test(env.API_URL);
+if (
+  env.NODE_ENV !== 'test' &&
+  !apiLooksLocal &&
+  (DEFAULT_SECRETS.has(env.JWT_SECRET) || DEFAULT_SECRETS.has(env.JWT_REFRESH_SECRET))
+) {
+  throw new Error(
+    'JWT_SECRET/JWT_REFRESH_SECRET padrão não podem ser usados fora de localhost. Defina segredos próprios no .env.'
+  );
+}

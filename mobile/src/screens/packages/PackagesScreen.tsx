@@ -38,6 +38,7 @@ import {
 import * as ImagePicker from 'expo-image-picker';
 import { colors } from '../../theme/colors';
 import { usePlaceTerms } from '../../utils/placeTerms';
+import { useAuth } from '../../contexts/AuthContext';
 import { api } from '../../config/api';
 import { AppHeader } from '../../components/AppHeader';
 import { ScrollToTopButton } from '../../components/ScrollToTopButton';
@@ -50,6 +51,8 @@ interface PackagesScreenProps {
 
 export const PackagesScreen: React.FC<PackagesScreenProps> = ({ onBack }) => {
   const terms = usePlaceTerms();
+  const { user } = useAuth();
+  const canDirectPickup = user?.role === 'ADMIN' || user?.role === 'SUPERVISOR' || user?.role === 'SUPER_ADMIN';
   const [activeSubTab, setActiveSubTab] = useState<'pending' | 'history'>('pending');
   const [searchQuery, setSearchQuery] = useState('');
   const listRef = useRef<FlatList>(null);
@@ -750,17 +753,19 @@ export const PackagesScreen: React.FC<PackagesScreenProps> = ({ onBack }) => {
               )}
             </TouchableOpacity>
 
-            {/* Ação 2: Entregar sem código se o morador não tiver celular no momento */}
-            <TouchableOpacity
-              style={styles.directCollectSecondaryBtn}
-              onPress={handleConfirmDirectPickup}
-              disabled={isPickingUp}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.directCollectSecondaryText}>
-                Entregar Sem Código (Coleta Presencial)
-              </Text>
-            </TouchableOpacity>
+            {/* Ação 2: Entregar sem código — só admin/supervisor */}
+            {canDirectPickup ? (
+              <TouchableOpacity
+                style={styles.directCollectSecondaryBtn}
+                onPress={handleConfirmDirectPickup}
+                disabled={isPickingUp}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.directCollectSecondaryText}>
+                  Entregar Sem Código (Coleta Presencial)
+                </Text>
+              </TouchableOpacity>
+            ) : null}
 
             <TouchableOpacity
               style={styles.confirmPopupCancelBtn}
